@@ -112,8 +112,8 @@ export function MarketReference() {
 
   return (
     <div>
-      <h2 className="text-xl font-semibold mb-4">市场参考</h2>
-      <div className="mt-2">
+      <h2 className="text-lg font-semibold mb-2">市场</h2>
+      <div>
         {loading ? (
           <div className="flex justify-center py-4 space-y-2">
             <div className="h-5 w-5 border-t-2 border-blue-500 rounded-full animate-spin"></div>
@@ -131,19 +131,19 @@ export function MarketReference() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             {cryptoData.map((crypto) => (
-              <div key={crypto.symbol} className="p-3 border rounded-lg hover:shadow-md transition-shadow duration-200">
-                <div className="flex justify-between items-center mb-2">
-                  <div className="flex items-center gap-2">
-                    <CryptoIcon symbol={crypto.symbol} size={20} />
-                    <div className="font-medium">{crypto.name} ({crypto.symbol})</div>
+              <div key={crypto.symbol} className="p-2 border rounded-lg hover:shadow-sm transition-shadow duration-200">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-1">
+                    <CryptoIcon symbol={crypto.symbol} size={16} />
+                    <div className="font-medium text-sm">{crypto.name}</div>
                   </div>
-                  <div className="text-lg font-bold">
+                  <div className="text-base font-bold">
                     ${crypto.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: crypto.currentPrice < 10 ? 4 : 2 })}
                   </div>
                 </div>
-                <div className="flex justify-between text-sm">
+                <div className="flex justify-between text-xs mt-1">
                   <div>
                     <span className="text-muted-foreground">24h: </span>
                     <span className={getPriceChangeClass(crypto.dayChange)}>
@@ -161,25 +161,6 @@ export function MarketReference() {
             ))}
           </div>
         )}
-        <div className="text-xs text-muted-foreground text-right mt-2 flex justify-end items-center gap-1">
-          {!loading && !error && cryptoData.length > 0 && (
-            <>
-              <span>最后更新: {new Date(cryptoData[0].lastUpdated).toLocaleString()}</span>
-              <button 
-                onClick={() => window.location.reload()} 
-                className="ml-2 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                title="刷新数据"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 2v6h-6"></path>
-                  <path d="M3 12a9 9 0 0 1 15-6.7l3-3.3"></path>
-                  <path d="M3 22v-6h6"></path>
-                  <path d="M21 12a9 9 0 0 1-15 6.7l-3 3.3"></path>
-                </svg>
-              </button>
-            </>
-          )}
-        </div>
       </div>
     </div>
   )
