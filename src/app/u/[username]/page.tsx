@@ -2,7 +2,7 @@
 
 import { useParams } from 'next/navigation'
 import { useEffect, useState } from "react"
-import "@/styles/finance-theme.css"
+import { ThemeToggle } from "@/components/theme-toggle"
 import {
   LineChart,
   Line,
@@ -14,6 +14,15 @@ import {
   ResponsiveContainer
 } from "recharts"
 import { MarketReference } from "@/components/market-reference"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 
 // Import the interfaces and types from the main page
 // K线图数据类型
@@ -49,9 +58,8 @@ interface KlineResponse {
 interface ChartDataPoint {
   date: string;
   fundReturnPct: number; // 策略收益百分比变化率
-  btcPricePct: number;   // BTC价格百分比变化率
   fundReturn: number;    // 策略收益绝对值
-  btcPrice: number;      // BTC价格绝对值
+  [key: string]: string | number; // 动态比较资产数据
 }
 
 // 策略实时估值数据类型
@@ -93,9 +101,10 @@ interface HoldingStrategyResponse {
 interface FundDataItem {
   "开始日期": string;
   "初始本金": number;
-  "初始BTC价格": number;
+  "初始价格": string;
   "可用金额": number;
   "市值": number;
+  "对比": string;
   "备注": string;
 }
 
@@ -111,7 +120,6 @@ export default function UserPage() {
   const username = params.username as string;
 
   const [baseInfoResponse, setBaseInfoResponse] = useState<BaseInfoResponse | null>(null);
-  const [btcKlineData, setBtcKlineData] = useState<KlineResponse | null>(null);
   const [fundRealtimeData, setFundRealtimeData] = useState<FundRealtimeResponse | null>(null);
   const [holdingStrategies, setHoldingStrategies] = useState<HoldingStrategyResponse | null>(null);
   const [historicalHoldings, setHistoricalHoldings] = useState<HoldingStrategyResponse | null>(null);
@@ -124,12 +132,16 @@ export default function UserPage() {
   const [error, setError] = useState<string | null>(null);
   
   // 用于控制曲线的显示/隐藏
-  const [visibleLines, setVisibleLines] = useState({
+  const [visibleLines, setVisibleLines] = useState<Record<string, boolean>>({
     fundReturnPct: true,
-    btcPricePct: true,
-    fundReturn: true,
-    btcPrice: true
+    fundReturn: true
   });
+  
+  // 存储比较资产列表
+  const [comparisonAssets, setComparisonAssets] = useState<string[]>([]);
+  
+  // 存储比较资产数据
+  const [assetDataMaps, setAssetDataMaps] = useState<Map<string, Map<string, number>>>(new Map());
   
   // 图表模式：百分比模式或绝对值模式
   const [chartMode, setChartMode] = useState<'percentage' | 'absolute'>('percentage');
@@ -190,8 +202,8 @@ export default function UserPage() {
     fetchPageData();
   }, [username]);
   
-  // 获取BTC价格数据 - 在获取到实时数据后调用
-  const fetchBtcData = async (startDate: string, endDate: string) => {
+  // 获取比较资产数据 - 在获取到实时数据后调用
+  const fetchComparisonData = async (asset: string, startDate: string, endDate: string, assetDataMaps: Map<string, Map<string, number>>) => {
     try {
       // 计算需要获取的天数
       const start = new Date(startDate);
@@ -199,27 +211,53 @@ export default function UserPage() {
       const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 3600 * 24)) + 3; // 加3天确保覆盖全部时间
       const bars = Math.max(daysDiff, 100); // 获取足够多的数据
       
-      const response = await fetch(`/api/kline/btcusdt?interval=1D&bars=${bars}`);
+      // 将资产名称转换为小写并添加usdt后缀
+      const symbol = `${asset.toLowerCase()}usdt`;
+      const response = await fetch(`/api/kline/${symbol}?interval=1D&bars=${bars}`);
       
       if (!response.ok) {
-        throw new Error(`BTC API request failed with status ${response.status}`);
+        throw new Error(`${asset} API request failed with status ${response.status}`);
       }
       
       const data = await response.json();
-      setBtcKlineData(data);
+      
+      // 处理返回的数据并存入assetDataMaps
+      if (data?.success && data.data?.candles) {
+        const assetKey = asset.toLowerCase();
+        // 创建该资产的数据映射
+        const assetDataMap = new Map<string, number>();
+        assetDataMaps.set(assetKey, assetDataMap);
+        
+        // 按日期排序数据
+        const sortedData = [...data.data.candles].sort((a, b) => {
+          return new Date(a.datetime).getTime() - new Date(b.datetime).getTime();
+        });
+        
+        // 将数据存入映射
+        sortedData.forEach(item => {
+          if (item.datetime && item.close) {
+            const dateKey = new Date(item.datetime).toISOString().split('T')[0];
+            assetDataMap.set(dateKey, item.close);
+          }
+        });
+        
+        console.log(`已获取${asset}数据，共${assetDataMap.size}条`);
+      }
+      
+      return data;
     } catch (err) {
-      console.error('Error fetching BTC data:', err);
-      // 不设置页面错误状态，因为这只是图表数据
+      console.error(`Error fetching ${asset} data:`, err);
+      return null;
     }
   };
-  
+
   // 获取策略实时估值数据
   useEffect(() => {
     async function fetchFundRealtimeData() {
       try {
         // 直接使用路由参数中的username
-        if (!username) {
-          return; // 如果username为空，不进行请求
+        if (!username || !baseInfoResponse) {
+          return; // 如果username为空或基本信息未加载，不进行请求
         }
         
         // 同时获取持仓策略数据
@@ -255,7 +293,7 @@ export default function UserPage() {
         const data = await response.json();
         setFundRealtimeData(data);
         
-        // 如果获取到实时数据，则获取对应时间范围的BTC数据
+        // 如果获取到实时数据，则获取对应时间范围的比较资产数据
         if (data.success && data.data.length > 0) {
           // 将数据按日期排序（从早到晚）
           const sortedData = [...data.data].sort((a, b) => {
@@ -266,10 +304,39 @@ export default function UserPage() {
           const earliestDate = sortedData[0]["日期"];
           const latestDate = sortedData[sortedData.length - 1]["日期"];
           
-          console.log('策略数据日期范围:', earliestDate, '至', latestDate);
-          
-          // 获取该时间范围的BTC数据
-          await fetchBtcData(earliestDate, latestDate);
+          // 获取基本信息以解析对比字段
+          if (baseInfoResponse && baseInfoResponse.success && baseInfoResponse.data.length > 0) {
+            const comparisonString = baseInfoResponse.data[0]["对比"] || "";
+            const assets = comparisonString ? comparisonString.split(',').map(asset => asset.trim()).filter(asset => asset) : [];
+            
+            // 更新比较资产列表
+            setComparisonAssets(assets);
+            
+            // 初始化可见性设置
+            const newVisibleLines: Record<string, boolean> = {
+              fundReturnPct: true,
+              fundReturn: true
+            };
+            
+            // 创建共享的比较资产日期到数据的映射
+            const newAssetDataMaps = new Map<string, Map<string, number>>();
+            
+            // 为每个资产获取数据
+            for (const asset of assets) {
+              // 添加每个资产的可见性设置
+              newVisibleLines[`${asset.toLowerCase()}PricePct`] = true;
+              newVisibleLines[`${asset.toLowerCase()}Price`] = true;
+              
+              // 获取资产数据
+              await fetchComparisonData(asset, earliestDate, latestDate, newAssetDataMaps);
+            }
+            
+            // 将资产数据保存到状态
+            setAssetDataMaps(newAssetDataMaps);
+            
+            // 更新可见性设置
+            setVisibleLines(newVisibleLines);
+          }
         }
       } catch (err) {
         console.error('Error fetching fund realtime data:', err);
@@ -277,8 +344,10 @@ export default function UserPage() {
       }
     }
     
-    fetchFundRealtimeData();
-  }, [username]);
+    if (username && baseInfoResponse) {
+      fetchFundRealtimeData();
+    }
+  }, [username, baseInfoResponse]);
   
   // 生成图表数据
   useEffect(() => {
@@ -313,20 +382,8 @@ export default function UserPage() {
         }
       });
       
-      // 创建BTC日期到数据的映射
-      const btcDataMap = new Map<string, number>();
-      if (btcKlineData?.success && btcKlineData.data?.candles) {
-        const sortedBtcData = [...btcKlineData.data.candles].sort((a, b) => {
-          return new Date(a.datetime).getTime() - new Date(b.datetime).getTime();
-        });
-        
-        sortedBtcData.forEach(item => {
-          if (item.datetime && item.close) {
-            const dateKey = new Date(item.datetime).toISOString().split('T')[0];
-            btcDataMap.set(dateKey, item.close);
-          }
-        });
-      }
+      // 使用状态中保存的比较资产数据
+      console.log('使用比较资产数据，映射大小:', assetDataMaps.size, '资产列表:', comparisonAssets);
       
       // 获取所有日期并排序
       const allDates = [...new Set([...fundDataMap.keys()])];
@@ -334,12 +391,30 @@ export default function UserPage() {
       
       // 获取初始值，用于计算百分比变化
       let initialFundValue: number | undefined;
-      let initialBtcValue: number | undefined;
+      const initialAssetValues = new Map<string, number>();
       
       // 使用baseInfoResponse中的初始值
       if (baseInfoResponse?.data && baseInfoResponse.data.length > 0) {
         initialFundValue = baseInfoResponse.data[0]["初始本金"];
-        initialBtcValue = baseInfoResponse.data[0]["初始BTC价格"];
+        
+        // 对比资产列表
+        const comparisonString = baseInfoResponse.data[0]["对比"] || "";
+        const assets = comparisonString.split(',').map(asset => asset.trim()).filter(asset => asset);
+        
+        // 解析初始价格字段，同样是逗号分隔
+        const initialPricesString = baseInfoResponse.data[0]["初始价格"] || "";
+        const initialPrices = initialPricesString.split(',').map(price => price.trim());
+        
+        // 为每个资产设置初始价格
+        assets.forEach((asset, index) => {
+          const assetKey = asset.toLowerCase();
+          if (index < initialPrices.length) {
+            const priceValue = parseFloat(initialPrices[index]);
+            if (!isNaN(priceValue)) {
+              initialAssetValues.set(assetKey, priceValue);
+            }
+          }
+        });
       }
       
       // 如果没有初始值，使用第一个数据点
@@ -348,12 +423,16 @@ export default function UserPage() {
         initialFundValue = fundDataMap.get(firstDateKey);
       }
       
-      // 如果没有BTC初始值，尝试找到最早的BTC数据
-      if (initialBtcValue === undefined && btcDataMap.size > 0) {
-        // 获取所有BTC日期并排序
-        const btcDates = [...btcDataMap.keys()].sort();
-        if (btcDates.length > 0) {
-          initialBtcValue = btcDataMap.get(btcDates[0]);
+      // 处理其他比较资产的初始值
+      for (const [asset, dataMap] of assetDataMaps.entries()) {
+        if (!initialAssetValues.has(asset) && dataMap.size > 0) {
+          const assetDates = [...dataMap.keys()].sort();
+          if (assetDates.length > 0) {
+            const firstValue = dataMap.get(assetDates[0]);
+            if (firstValue !== undefined) {
+              initialAssetValues.set(asset, firstValue);
+            }
+          }
         }
       }
       
@@ -362,66 +441,93 @@ export default function UserPage() {
         initialFundValue = 10000; // 默认初始资金
       }
       
-      if (initialBtcValue === undefined) {
-        initialBtcValue = 60000; // 默认BTC初始值
+      // 为其他比较资产设置默认初始值
+      for (const asset of comparisonAssets) {
+        const assetKey = asset.toLowerCase();
+        if (!initialAssetValues.has(assetKey)) {
+          initialAssetValues.set(assetKey, 1000); // 默认初始值
+        }
       }
       
       // 为每个策略日期创建数据点
       allDates.forEach(dateKey => {
         const fundValue = fundDataMap.get(dateKey);
-        let btcValue = btcDataMap.get(dateKey);
         
-        // 如果当天没有BTC数据，尝试找前一天的
-        if (btcValue === undefined && btcDataMap.size > 0) {
-          // 创建日期对象并减去一天
-          const prevDate = new Date(dateKey);
-          prevDate.setDate(prevDate.getDate() - 1);
-          const prevDateKey = prevDate.toISOString().split('T')[0];
-          btcValue = btcDataMap.get(prevDateKey);
+        // 创建数据点对象
+        const dataPoint: ChartDataPoint = {
+          date: dateKey,
+          fundReturnPct: 0,
+          fundReturn: 0
+        };
+        
+        // 处理所有比较资产的数据
+        for (const asset of comparisonAssets) {
+          const assetKey = asset.toLowerCase();
+          const assetDataMap = assetDataMaps.get(assetKey) || new Map<string, number>();
+          let assetValue = assetDataMap.get(dateKey);
           
-          // 如果还是没有，再往前找一天
-          if (btcValue === undefined) {
+          // 如果当天没有资产数据，尝试找前一天的
+          if (assetValue === undefined && assetDataMap.size > 0) {
+            // 创建日期对象并减去一天
+            const prevDate = new Date(dateKey);
             prevDate.setDate(prevDate.getDate() - 1);
-            const prevDateKey2 = prevDate.toISOString().split('T')[0];
-            btcValue = btcDataMap.get(prevDateKey2);
+            const prevDateKey = prevDate.toISOString().split('T')[0];
+            assetValue = assetDataMap.get(prevDateKey);
+            
+            // 如果还是没有，再往前找一天
+            if (assetValue === undefined) {
+              prevDate.setDate(prevDate.getDate() - 1);
+              const prevDateKey2 = prevDate.toISOString().split('T')[0];
+              assetValue = assetDataMap.get(prevDateKey2);
+            }
           }
-        }
-        
-        // 如果还是没有BTC数据，使用前面数据点的BTC值
-        if (btcValue === undefined && newChartData.length > 0) {
-          // 使用前一个数据点的原始BTC值（非百分比）
-          const lastBtcPct = newChartData[newChartData.length - 1].btcPricePct;
-          // 将百分比转换回原始值
-          btcValue = initialBtcValue! * (1 + lastBtcPct / 100);
-        }
-        
-        // 如果还是没有BTC数据，使用一个默认值
-        if (btcValue === undefined) {
-          // 如果有其他BTC数据，使用平均值
-          if (btcDataMap.size > 0) {
-            const btcValues = Array.from(btcDataMap.values());
-            const avgBtcValue = btcValues.reduce((sum, value) => sum + value, 0) / btcValues.length;
-            btcValue = avgBtcValue;
-          } else {
-            // 完全没有BTC数据时的最后备选
-            btcValue = 60000;
+          
+          // 如果还是没有资产数据，使用前面数据点的值
+          if (assetValue === undefined && newChartData.length > 0) {
+            // 使用前一个数据点的百分比
+            const lastPctKey = `${assetKey}PricePct`;
+            const lastPct = newChartData[newChartData.length - 1][lastPctKey] as number;
+            // 将百分比转换回原始值
+            const initialValue = initialAssetValues.get(assetKey) || 0;
+            assetValue = initialValue * (1 + lastPct / 100);
           }
+          
+          // 如果还是没有资产数据，使用一个默认值
+          if (assetValue === undefined) {
+            // 如果有其他数据，使用平均值
+            if (assetDataMap.size > 0) {
+              const values = Array.from(assetDataMap.values());
+              const avgValue = values.reduce((sum, value) => sum + value, 0) / values.length;
+              assetValue = avgValue;
+            } else {
+              // 完全没有数据时的最后备选
+              assetValue = initialAssetValues.get(assetKey) || 1000;
+            }
+          }
+          
+          // 计算百分比和绝对值
+          const initialValue = initialAssetValues.get(assetKey) || 1000;
+          const pctChange = ((assetValue / initialValue) - 1) * 100;
+          
+          // 添加到数据点
+          dataPoint[`${assetKey}PricePct`] = pctChange;
+          dataPoint[`${assetKey}Price`] = assetValue;
         }
         
         // 只要有策略数据，就添加数据点
-        if (fundValue !== undefined && initialFundValue !== undefined && initialBtcValue !== undefined) {
-          // 计算百分比变化
+        if (fundValue !== undefined && initialFundValue !== undefined) {
+          // 计算策略百分比变化
           const fundReturnPct = ((fundValue / initialFundValue) - 1) * 100;
-          const btcPricePct = ((btcValue / initialBtcValue) - 1) * 100;
           
-          const date = new Date(dateKey).toLocaleDateString();
-          newChartData.push({
-            date,
-            fundReturnPct,
-            btcPricePct,
-            fundReturn: fundValue,
-            btcPrice: btcValue
-          });
+          // 设置策略数据
+          dataPoint.fundReturnPct = fundReturnPct;
+          dataPoint.fundReturn = fundValue;
+          
+          // 格式化日期显示
+          dataPoint.date = new Date(dateKey).toLocaleDateString();
+          
+          // 添加数据点
+          newChartData.push(dataPoint);
         }
       });
       
@@ -430,14 +536,14 @@ export default function UserPage() {
         setChartData(newChartData);
       }
     }
-  }, [btcKlineData, fundRealtimeData, baseInfoResponse]);
+  }, [fundRealtimeData, baseInfoResponse, assetDataMaps, comparisonAssets]);
 
   // 渲染UI
   return (
     <div className="container mx-auto py-6 md:py-10 px-4 md:px-6 space-y-6 md:space-y-8">
       { !username || loading ? (
         <div className="flex flex-col justify-center items-center py-4 space-y-2 h-[50vh]">
-          <div className="h-10 w-10 border-t-2 border-blue-500 rounded-full animate-spin"></div>
+          <div className="h-10 w-10 border-t-2 border-primary rounded-full animate-spin"></div>
           <p className="text-sm text-muted-foreground mt-2">加载数据中...</p>
         </div>
       ) : error ? (
@@ -450,23 +556,26 @@ export default function UserPage() {
           {/* 市场参考板块 */}
           <MarketReference />
           
-          {/* 标题区域 - 恢复为轻量样式 */}
-          <div className="finance-animate-in">
-            <h1 className="text-3xl md:text-4xl font-bold">CRYPTO趋势策略</h1>
-            <p className="text-base md:text-lg text-muted-foreground mt-2">{baseInfoResponse.data[0]["备注"]}</p>
+          {/* 标题区域 */}
+          <div className="animate-in fade-in duration-700 flex justify-between items-start">
+            <div>
+              <h1 className="text-3xl md:text-4xl font-bold">CRYPTO趋势策略</h1>
+              <p className="text-base md:text-lg text-muted-foreground mt-2">{baseInfoResponse.data[0]["备注"]}</p>
+            </div>
+            <ThemeToggle />
           </div>
           
-          <div className="finance-grid finance-grid-2 finance-animate-in">
-            <div className="finance-card">
-              <div className="finance-card-header">
-                <h3 className="finance-card-title">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="finance-icon-lg">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in duration-700">
+            <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
+              <div className="p-4 flex flex-col space-y-1.5 border-b">
+                <h3 className="font-semibold leading-none tracking-tight flex items-center gap-2 md:text-lg">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-6 w-6">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   概况
                 </h3>
               </div>
-              <div className="finance-card-content">
+              <div className="p-4">
                 <dl className="space-y-3">
                   <div className="flex justify-between items-center">
                     <dt className="text-muted-foreground font-medium">实时市值</dt>
@@ -474,7 +583,7 @@ export default function UserPage() {
                       {`$${calculateTotalMarketValue().toLocaleString()}`}
                     </dd>
                   </div>
-                  <div className="finance-divider" style={{margin: '0.5rem 0'}}></div>
+                  <div className="h-px bg-border my-2"></div>
                   <div className="flex justify-between items-center">
                     <dt className="text-muted-foreground">初始本金</dt>
                     <dd className="">${baseInfoResponse.data[0]["初始本金"].toLocaleString()}</dd>
@@ -504,16 +613,16 @@ export default function UserPage() {
               </div>
             </div>
             
-            <div className="finance-card">
-              <div className="finance-card-header">
-                <h3 className="finance-card-title">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="finance-icon-lg">
+            <div className="rounded-lg border bg-card text-card-foreground shadow-sm">
+              <div className="p-4 flex flex-col space-y-1.5 border-b">
+                <h3 className="font-semibold leading-none tracking-tight flex items-center gap-2 md:text-lg">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-6 w-6">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
                   </svg>
                   收益
                 </h3>
               </div>
-              <div className="finance-card-content">
+              <div className="p-4">
                 <dl className="space-y-1 md:space-y-2">
                   <div className="flex justify-between">
                     <dt className="text-muted-foreground font-medium">实时盈亏</dt>
@@ -553,7 +662,7 @@ export default function UserPage() {
                       })()}
                     </dd>
                   </div>
-                  <div className="finance-divider" style={{margin: '0.5rem 0'}}></div>
+                  <div className="h-px bg-border my-2"></div>
                   <div className="flex justify-between">
                     <dt className="text-muted-foreground">7日盈亏</dt>
                     <dd className="font-medium">
@@ -750,39 +859,33 @@ export default function UserPage() {
           </div>
         </div>
       ) : (
-        <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded">
+        <div className="bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-900 text-yellow-700 dark:text-yellow-400 px-4 py-3 rounded-lg">
           <p>未能获取数据</p>
         </div>
       )}
       
       {!loading && !error && baseInfoResponse && baseInfoResponse.success && (
-        <div className="finance-card finance-animate-in">
-          <div className="finance-card-header flex flex-col md:flex-row md:justify-between md:items-center px-4 py-3">
-            <div className="flex items-center mb-2 md:mb-0">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="finance-icon-lg mr-2">
+        <div className="rounded-lg border bg-card text-card-foreground shadow-sm animate-in fade-in duration-700">
+          <div className="p-4 flex flex-col md:flex-row md:justify-between items-center border-b">
+            <div className="flex items-center mb-4 md:mb-0">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-6 w-6 mr-2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
               </svg>
-              <h3 className="finance-card-title m-0 text-sm md:text-base">
-                {chartMode === 'percentage' ? '策略收益率与BTC涨跌幅对比' : '策略收益与BTC价格对比'}
+              <h3 className="font-semibold leading-none tracking-tight md:text-lg">
+                收益曲线
               </h3>
             </div>
-            <div className="finance-time-selector self-start md:self-auto">
-              <button
-                className={`${chartMode === 'percentage' ? 'active' : ''}`}
-                onClick={() => setChartMode('percentage')}
-              >
-                收益率对比
-              </button>
-              <button
-                className={`${chartMode === 'absolute' ? 'active' : ''}`}
-                onClick={() => setChartMode('absolute')}
-              >
-                绝对值对比
-              </button>
+            <div className="self-start md:self-auto">
+              <Tabs value={chartMode} onValueChange={(value) => setChartMode(value as 'percentage' | 'absolute')}>
+                <TabsList>
+                  <TabsTrigger value="percentage">收益率对比</TabsTrigger>
+                  <TabsTrigger value="absolute">绝对值对比</TabsTrigger>
+                </TabsList>
+              </Tabs>
             </div>
           </div>
-          <div className="finance-card-content">
-            <div className="finance-chart-container h-60 sm:h-72 md:h-80">
+          <div className="p-4">
+            <div className="h-60 sm:h-72 md:h-80">
             {chartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart
@@ -810,8 +913,8 @@ export default function UserPage() {
                     />
                   }
                   
-                  {/* 绝对值模式下的右侧Y轴（BTC价格） */}
-                  {chartMode === 'absolute' && 
+                  {/* 绝对值模式下的右侧Y轴（比较资产价格） */}
+                  {chartMode === 'absolute' && comparisonAssets.length > 0 && 
                     <YAxis 
                       yAxisId="right" 
                       orientation="right"
@@ -834,15 +937,23 @@ export default function UserPage() {
                         if (name === "策略收益率") {
                           return [`${numValue.toFixed(1)}%`, "策略收益率"];
                         }
-                        if (name === "BTC涨跌幅") {
-                          return [`${numValue.toFixed(1)}%`, "BTC涨跌幅"];
+                        
+                        // 处理比较资产的百分比
+                        for (const asset of comparisonAssets) {
+                          if (name === `${asset}涨跌幅`) {
+                            return [`${numValue.toFixed(1)}%`, `${asset}涨跌幅`];
+                          }
                         }
                       } else {
                         if (name === "策略收益") {
                           return [`$${numValue.toLocaleString()}`, "策略收益"];
                         }
-                        if (name === "BTC价格") {
-                          return [`$${numValue.toLocaleString()}`, "BTC价格"];
+                        
+                        // 处理比较资产的绝对值
+                        for (const asset of comparisonAssets) {
+                          if (name === `${asset}价格`) {
+                            return [`$${numValue.toLocaleString()}`, `${asset}价格`];
+                          }
                         }
                       }
                       return [value, name];
@@ -851,22 +962,72 @@ export default function UserPage() {
                   <Legend 
                     onClick={(e) => {
                       // 处理图例点击事件
-                      const dataKey = e.dataKey as keyof typeof visibleLines;
+                      const dataKey = e.dataKey as string;
                       if (dataKey in visibleLines) {
                         setVisibleLines(prev => ({
                           ...prev,
-                          [dataKey]: !prev[dataKey as keyof typeof visibleLines]
+                          [dataKey]: !prev[dataKey]
                         }));
                       }
                     }}
                     wrapperStyle={{ cursor: 'pointer', fontSize: '12px', marginTop: '4px' }}
-                    payload={chartMode === 'percentage' ? [
-                      { value: '策略收益率', type: 'line', color: 'var(--chart-1)', dataKey: 'fundReturnPct', inactive: !visibleLines.fundReturnPct },
-                      { value: 'BTC涨跌幅', type: 'line', color: 'var(--chart-2)', dataKey: 'btcPricePct', inactive: !visibleLines.btcPricePct }
-                    ] : [
-                      { value: '策略收益', type: 'line', color: 'var(--chart-1)', dataKey: 'fundReturn', inactive: !visibleLines.fundReturn },
-                      { value: 'BTC价格', type: 'line', color: 'var(--chart-2)', dataKey: 'btcPrice', inactive: !visibleLines.btcPrice }
-                    ]}
+                    payload={
+                      (() => {
+                        // 创建图例数组
+                        const legendItems = [];
+                        
+                        // 添加策略收益图例
+                        if (chartMode === 'percentage') {
+                          legendItems.push({ 
+                            value: '策略收益率', 
+                            type: 'line' as const, 
+                            color: 'var(--chart-1)', 
+                            dataKey: 'fundReturnPct', 
+                            inactive: !visibleLines.fundReturnPct 
+                          });
+                          
+                          // 添加比较资产的百分比图例
+                          comparisonAssets.forEach((asset, index) => {
+                            const assetKey = asset.toLowerCase();
+                            const colorIndex = (index % 4) + 2; // 使用不同的颜色
+                            const dataKey = `${assetKey}PricePct`;
+                            
+                            legendItems.push({
+                              value: `${asset}涨跌幅`,
+                              type: 'line' as const,
+                              color: `var(--chart-${colorIndex})`,
+                              dataKey: dataKey,
+                              inactive: !visibleLines[dataKey]
+                            });
+                          });
+                        } else {
+                          legendItems.push({ 
+                            value: '策略收益', 
+                            type: 'line' as const, 
+                            color: 'var(--chart-1)', 
+                            dataKey: 'fundReturn', 
+                            inactive: !visibleLines.fundReturn 
+                          });
+                          
+                          // 添加比较资产的绝对值图例
+                          comparisonAssets.forEach((asset, index) => {
+                            const assetKey = asset.toLowerCase();
+                            const colorIndex = (index % 4) + 2; // 使用不同的颜色
+                            const dataKey = `${assetKey}Price`;
+                            
+                            legendItems.push({
+                              value: `${asset}价格`,
+                              type: 'line' as const,
+                              color: `var(--chart-${colorIndex})`,
+                              dataKey: dataKey,
+                              inactive: !visibleLines[dataKey]
+                            });
+                          });
+                        }
+                        
+                        return legendItems;
+                      })()
+                    }
                   />
                   {/* 百分比模式 - 策略收益率 */}
                   {chartMode === 'percentage' && 
@@ -883,20 +1044,27 @@ export default function UserPage() {
                     />
                   }
                   
-                  {/* 百分比模式 - BTC涨跌幅 */}
-                  {chartMode === 'percentage' && 
-                    <Line
-                      yAxisId="main"
-                      type="monotone"
-                      dataKey="btcPricePct"
-                      name="BTC涨跌幅"
-                      stroke="var(--chart-2)"
-                      strokeWidth={2}
-                      dot={false}
-                      activeDot={{ r: 8 }}
-                      hide={!visibleLines.btcPricePct}
-                    />
-                  }
+                  {/* 百分比模式 - 比较资产涨跌幅 */}
+                  {chartMode === 'percentage' && comparisonAssets.map((asset, index) => {
+                    const assetKey = asset.toLowerCase();
+                    const colorIndex = (index % 4) + 2; // 使用不同的颜色
+                    const dataKey = `${assetKey}PricePct`;
+                    
+                    return (
+                      <Line
+                        key={dataKey}
+                        yAxisId="main"
+                        type="monotone"
+                        dataKey={dataKey}
+                        name={`${asset}涨跌幅`}
+                        stroke={`var(--chart-${colorIndex})`}
+                        dot={false}
+                        activeDot={{ r: 6 }}
+                        strokeWidth={2}
+                        hide={!visibleLines[dataKey]}
+                      />
+                    );
+                  })}
                   
                   {/* 绝对值模式 - 策略收益 */}
                   {chartMode === 'absolute' && 
@@ -913,20 +1081,27 @@ export default function UserPage() {
                     />
                   }
                   
-                  {/* 绝对值模式 - BTC价格 */}
-                  {chartMode === 'absolute' && 
-                    <Line
-                      yAxisId="right"
-                      type="monotone"
-                      dataKey="btcPrice"
-                      name="BTC价格"
-                      stroke="var(--chart-2)"
-                      strokeWidth={2}
-                      dot={false}
-                      activeDot={{ r: 8 }}
-                      hide={!visibleLines.btcPrice}
-                    />
-                  }
+                  {/* 绝对值模式 - 比较资产价格 */}
+                  {chartMode === 'absolute' && comparisonAssets.map((asset, index) => {
+                    const assetKey = asset.toLowerCase();
+                    const colorIndex = (index % 4) + 2; // 使用不同的颜色
+                    const dataKey = `${assetKey}Price`;
+                    
+                    return (
+                      <Line
+                        key={dataKey}
+                        yAxisId="right"
+                        type="monotone"
+                        dataKey={dataKey}
+                        name={`${asset}价格`}
+                        stroke={`var(--chart-${colorIndex})`}
+                        dot={false}
+                        activeDot={{ r: 6 }}
+                        strokeWidth={2}
+                        hide={!visibleLines[dataKey]}
+                      />
+                    );
+                  })}
                 </LineChart>
               </ResponsiveContainer>
             ) : (
@@ -941,56 +1116,51 @@ export default function UserPage() {
 
       {/* 持仓策略模块 */}
       {!loading && !error && baseInfoResponse && baseInfoResponse.success && holdingStrategies && holdingStrategies.success && historicalHoldings && historicalHoldings.success && (
-        <div className="finance-card finance-animate-in">
-          <div className="finance-card-header flex justify-between items-center">
-            <h3 className="finance-card-title">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="finance-icon-lg">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5" />
-              </svg>
-              持仓策略
-            </h3>
-            
-            {/* 标签页切换 - 放在右侧 */}
-            <div className="finance-time-selector self-start md:self-auto">
-              <button 
-                onClick={() => setActiveHoldingTab('current')}
-                className={`${activeHoldingTab === 'current' ? 'active' : ''}`}
-              >
-                当前持仓
-                <span className={`ml-1 inline-flex items-center justify-center w-5 h-5 text-xs font-medium rounded-full bg-muted text-muted-foreground`}>{holdingStrategies.data.length}</span>
-              </button>
-              <button 
-                onClick={() => setActiveHoldingTab('historical')}
-                className={`${activeHoldingTab === 'historical' ? 'active' : ''}`}
-              >
-                历史持仓
-                <span className={`ml-1 inline-flex items-center justify-center w-5 h-5 text-xs font-medium rounded-full bg-muted text-muted-foreground}`}>{historicalHoldings.data.length}</span>
-              </button>
+        <div className="rounded-lg border bg-card text-card-foreground shadow-sm animate-in fade-in duration-700">
+          <Tabs value={activeHoldingTab} onValueChange={(value) => setActiveHoldingTab(value as 'current' | 'historical')}>
+            <div className="p-4 flex flex-col md:flex-row justify-between items-center border-b">
+              <h3 className="font-semibold leading-none tracking-tight flex items-center gap-2 md:text-lg mb-4 md:mb-0">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-6 w-6">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5" />
+                </svg>
+                持仓策略
+              </h3>
+              
+              <div className="self-start md:self-auto">
+                <TabsList>
+                  <TabsTrigger value="current">
+                    当前持仓
+                    <span className="ml-1 inline-flex items-center justify-center w-5 h-5 text-xs font-medium rounded-full bg-muted text-muted-foreground">{holdingStrategies.data.length}</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="historical">
+                    历史持仓
+                    <span className="ml-1 inline-flex items-center justify-center w-5 h-5 text-xs font-medium rounded-full bg-muted text-muted-foreground">{historicalHoldings.data.length}</span>
+                  </TabsTrigger>
+                </TabsList>
+              </div>
             </div>
-          </div>
-          <div>
-            {/* 当前持仓标签页 */}
-            {activeHoldingTab === 'current' && holdingStrategies.data.length > 0 ? (
+                <TabsContent value="current">
+                  {holdingStrategies.data.length > 0 ? (
               <>
 
               {/* 桌面版表格 - 在中等及以上屏幕显示 */}
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="finance-table text-sm" style={{tableLayout: 'auto', minWidth: '100%'}}>
-                    <thead>
-                      <tr>
-                        <th style={{width: '10%', textAlign: 'left'}}>标的</th>
-                        <th style={{width: '8%', textAlign: 'left'}}>策略</th>
-                        <th style={{width: '10%', textAlign: 'center'}}>开仓日期</th>
-                        <th style={{width: '8%', textAlign: 'right'}}>仓位</th>
-                        <th style={{width: '8%', textAlign: 'right'}}>占比</th>
-                        <th style={{width: '10%', textAlign: 'right'}}>成本</th>
-                        <th style={{width: '10%', textAlign: 'right'}}>市值</th>
-                        <th style={{width: '10%', textAlign: 'right'}}>盈亏</th>
-                        <th style={{width: '16%', textAlign: 'right'}}>备注</th>
-                        <th style={{width: '10%', textAlign: 'right'}}>更新于</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead style={{width: '10%'}}>标的</TableHead>
+                        <TableHead style={{width: '8%'}}>策略</TableHead>
+                        <TableHead className="text-center" style={{width: '10%'}}>开仓日期</TableHead>
+                        <TableHead className="text-right" style={{width: '8%'}}>仓位</TableHead>
+                        <TableHead className="text-right" style={{width: '8%'}}>占比</TableHead>
+                        <TableHead className="text-right" style={{width: '10%'}}>成本</TableHead>
+                        <TableHead className="text-right" style={{width: '10%'}}>市值</TableHead>
+                        <TableHead className="text-right" style={{width: '10%'}}>盈亏</TableHead>
+                        <TableHead className="text-right" style={{width: '16%'}}>备注</TableHead>
+                        <TableHead className="text-right" style={{width: '10%'}}>更新于</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {holdingStrategies.data.map((strategy, index) => {
                         // 处理进场价格和市值数据
                         const entryPrice = strategy["进场"];
@@ -1013,22 +1183,22 @@ export default function UserPage() {
                         const proportion = marketValue / totalMarketValue;
                         
                         return (
-                          <tr key={index}>
-                            <td className="font-medium">{strategy["标的"]}</td>
-                            <td>{strategy["策略"] || '-'}</td>
-                            <td className="text-center">{strategy["进场日期"] || "-"}</td>
-                            <td className="text-right">{strategy["仓位"] || "-"}</td>
-                            <td className="text-right">
+                          <TableRow key={index}>
+                            <TableCell className="font-medium">{strategy["标的"]}</TableCell>
+                            <TableCell>{strategy["策略"] || '-'}</TableCell>
+                            <TableCell className="text-center">{strategy["进场日期"] || "-"}</TableCell>
+                            <TableCell className="text-right">{strategy["仓位"] || "-"}</TableCell>
+                            <TableCell className="text-right">
                               <div className="flex flex-col items-end">
                                 <span>{(proportion * 100).toFixed(2)}%</span>
-                                <div className="finance-progress-bar w-16 mt-1">
-                                  <div className="finance-progress-value" style={{width: `${Math.min(proportion * 100, 100)}%`}}></div>
+                                <div className="w-16 mt-1 h-2 bg-muted rounded-full overflow-hidden">
+                                  <div className="h-full bg-primary rounded-full" style={{width: `${Math.min(proportion * 100, 100)}%`}}></div>
                                 </div>
                               </div>
-                            </td>
-                            <td className="text-right font-medium">${holdingCost ? holdingCost.toLocaleString(undefined, {maximumFractionDigits: 2}) : "-"}</td>
-                            <td className="text-right font-medium">${marketValue ? marketValue.toLocaleString(undefined, {maximumFractionDigits: 2}) : "-"}</td>
-                            <td className="text-right">
+                            </TableCell>
+                            <TableCell className="text-right font-medium">${holdingCost ? holdingCost.toLocaleString(undefined, {maximumFractionDigits: 2}) : "-"}</TableCell>
+                            <TableCell className="text-right font-medium">${marketValue ? marketValue.toLocaleString(undefined, {maximumFractionDigits: 2}) : "-"}</TableCell>
+                            <TableCell className="text-right">
                               <div className={`flex flex-col items-end ${profit >= 0 ? "text-green-600" : "text-red-600"}`}>
                                 <span className="font-medium">
                                   {profit >= 0 ? "+" : ""}
@@ -1039,14 +1209,14 @@ export default function UserPage() {
                                   {profitPercent.toFixed(2)}%
                                 </span>
                               </div>
-                            </td>
-                            <td className="text-right text-muted-foreground">{strategy["备注"] || '-'}</td>
-                            <td className="text-right text-sm">{strategy["更新日期"] || '-'}</td>
-                          </tr>
+                            </TableCell>
+                            <TableCell className="text-right text-muted-foreground">{strategy["备注"] || '-'}</TableCell>
+                            <TableCell className="text-right text-sm">{strategy["更新日期"] || '-'}</TableCell>
+                          </TableRow>
                         );
                       })}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
                 
                 {/* 移动版卡片布局 - 在小屏幕显示 */}
@@ -1070,7 +1240,7 @@ export default function UserPage() {
                     const proportion = marketValue / (baseInfoResponse?.data[0]["市值"] || 0);
                     
                     return (
-                      <div key={index} className="finance-card p-3">
+                      <div key={index} className="rounded-lg border bg-card text-card-foreground shadow-sm p-3">
                         {/* 标题栏 */}
                         <div className="flex justify-between items-center border-b pb-2 mb-2">
                           <div className="flex items-center gap-2">
@@ -1178,37 +1348,38 @@ export default function UserPage() {
                   })}
                 </div>
               </>
-            ) : activeHoldingTab === 'current' ? (
+            ) : (
               <div className="py-12 text-center">
                 <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-muted-foreground opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                 </svg>
                 <p className="mt-4 text-muted-foreground">当前无持仓</p>
               </div>
-            ) : null}
-            
-            {/* 历史持仓标签页 */}
-            {activeHoldingTab === 'historical' && historicalHoldings.data.length > 0 ? (
+                  )}
+                </TabsContent>
+                
+                <TabsContent value="historical">
+                  {historicalHoldings.data.length > 0 ? (
               <>
 
               {/* 桌面版表格 - 在中等及以上屏幕显示 */}
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="finance-table text-sm" style={{tableLayout: 'auto', minWidth: '100%'}}>
-                    <thead>
-                      <tr>
-                        <th style={{width: '10%', textAlign: 'left'}}>标的</th>
-                        <th style={{width: '8%', textAlign: 'left'}}>策略</th>
-                        <th style={{width: '10%', textAlign: 'center'}}>开仓日期</th>
-                        <th style={{width: '8%', textAlign: 'right'}}>仓位</th>
-                        <th style={{width: '8%', textAlign: 'right'}}>占比</th>
-                        <th style={{width: '10%', textAlign: 'right'}}>成本</th>
-                        <th style={{width: '10%', textAlign: 'right'}}>平仓市值</th>
-                        <th style={{width: '10%', textAlign: 'right'}}>盈亏</th>
-                        <th style={{width: '16%', textAlign: 'right'}}>备注</th>
-                        <th style={{width: '10%', textAlign: 'right'}}>平仓日期</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead style={{width: '10%'}}>标的</TableHead>
+                        <TableHead style={{width: '8%'}}>策略</TableHead>
+                        <TableHead className="text-center" style={{width: '10%'}}>开仓日期</TableHead>
+                        <TableHead className="text-right" style={{width: '8%'}}>仓位</TableHead>
+                        <TableHead className="text-right" style={{width: '8%'}}>占比</TableHead>
+                        <TableHead className="text-right" style={{width: '10%'}}>成本</TableHead>
+                        <TableHead className="text-right" style={{width: '10%'}}>平仓市值</TableHead>
+                        <TableHead className="text-right" style={{width: '10%'}}>盈亏</TableHead>
+                        <TableHead className="text-right" style={{width: '16%'}}>备注</TableHead>
+                        <TableHead className="text-right" style={{width: '10%'}}>平仓日期</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {historicalHoldings.data.map((strategy, index) => {
                         // 处理进场价格和平仓价值数据
                         const entryPrice = typeof strategy["进场"] === 'string' ? parseFloat(strategy["进场"]) : strategy["进场"];
@@ -1242,22 +1413,22 @@ export default function UserPage() {
                         const profitPercent = entryCost > 0 ? (profit / entryCost) * 100 : 0;
                         
                         return (
-                          <tr key={index}>
-                            <td className="font-medium">{strategy["标的"]}</td>
-                            <td>{strategy["策略"]}</td>
-                            <td className="text-center">{strategy["进场日期"]}</td>
-                            <td className="text-right">{strategy["仓位"]}</td>
-                            <td className="text-right">
+                          <TableRow key={index}>
+                            <TableCell className="font-medium">{strategy["标的"]}</TableCell>
+                            <TableCell>{strategy["策略"]}</TableCell>
+                            <TableCell className="text-center">{strategy["进场日期"]}</TableCell>
+                            <TableCell className="text-right">{strategy["仓位"]}</TableCell>
+                            <TableCell className="text-right">
                               <div className="flex flex-col items-end">
                                 <span>{(proportion * 100).toFixed(2)}%</span>
-                                <div className="finance-progress-bar w-16 mt-1">
-                                  <div className="finance-progress-value" style={{width: `${Math.min(proportion * 100, 100)}%`}}></div>
+                                <div className="w-16 mt-1 h-2 bg-muted rounded-full overflow-hidden">
+                                  <div className="h-full bg-primary rounded-full" style={{width: `${Math.min(proportion * 100, 100)}%`}}></div>
                                 </div>
                               </div>
-                            </td>
-                            <td className="text-right">${entryCost ? entryCost.toLocaleString(undefined, {maximumFractionDigits: 2}) : "-"}</td>
-                            <td className="text-right">${closingValue ? closingValue.toLocaleString(undefined, {maximumFractionDigits: 2}) : "-"}</td>
-                            <td className="text-right">
+                            </TableCell>
+                            <TableCell className="text-right">${entryCost ? entryCost.toLocaleString(undefined, {maximumFractionDigits: 2}) : "-"}</TableCell>
+                            <TableCell className="text-right">${closingValue ? closingValue.toLocaleString(undefined, {maximumFractionDigits: 2}) : "-"}</TableCell>
+                            <TableCell className="text-right">
                               <div className={`flex flex-col items-end ${profit >= 0 ? "text-green-600" : "text-red-600"}`}>
                                 <span className="font-medium">
                                   {profit >= 0 ? "+" : ""}
@@ -1268,14 +1439,14 @@ export default function UserPage() {
                                   {profitPercent.toFixed(2)}%
                                 </span>
                               </div>
-                            </td>
-                            <td className="text-right text-muted-foreground">{strategy["备注"] || '-'}</td>
-                            <td className="text-right text-muted-foreground">{strategy["更新日期"]}</td>
-                          </tr>
+                            </TableCell>
+                            <TableCell className="text-right text-muted-foreground">{strategy["备注"] || '-'}</TableCell>
+                            <TableCell className="text-right text-muted-foreground">{strategy["更新日期"]}</TableCell>
+                          </TableRow>
                         );
                       })}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
                 
                 {/* 移动版卡片 - 在小屏幕显示 */}
@@ -1309,7 +1480,7 @@ export default function UserPage() {
                     const profitPercent = entryCost > 0 ? (profit / entryCost) * 100 : 0;
                     
                     return (
-                      <div key={index} className="finance-card p-3">
+                      <div key={index} className="rounded-lg border bg-card text-card-foreground shadow-sm p-3">
                         {/* 标题栏 */}
                         <div className="flex justify-between items-center border-b pb-2 mb-2">
                           <div className="flex items-center gap-2">
@@ -1438,19 +1609,20 @@ export default function UserPage() {
                   })}
                 </div>
               </>
-            ) : activeHoldingTab === 'historical' ? (
+            ) : (
               <div className="py-12 text-center">
                 <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-muted-foreground opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                 </svg>
                 <p className="mt-4 text-muted-foreground">暂无历史持仓记录</p>
               </div>
-            ) : null}
-          </div>
+                  )}
+                </TabsContent>
+          </Tabs>
         </div>
       )}
 
-      {!loading && !error && baseInfoResponse && baseInfoResponse.success && fundRealtimeData && fundRealtimeData.success && (
+      {baseInfoResponse && baseInfoResponse.success && fundRealtimeData && fundRealtimeData.success && (
         <div className="text-center mt-4">
           <p className="text-sm text-muted-foreground mt-1">
             最近更新: {new Date(fundRealtimeData.timestamp).toLocaleString()}

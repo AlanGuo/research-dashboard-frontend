@@ -106,25 +106,25 @@ export function MarketReference() {
   
   // 获取价格变动的CSS类
   const getPriceChangeClass = (change: number | undefined | null) => {
-    if (change === undefined || change === null) return 'text-gray-500'
-    return change >= 0 ? 'text-green-500' : 'text-red-500'
+    if (change === undefined || change === null) return 'text-muted-foreground'
+    return change >= 0 ? 'text-emerald-500 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'
   }
 
   return (
     <div>
       <div>
         {loading ? (
-          <div className="flex justify-center py-4 space-y-2">
-            <div className="h-5 w-5 border-t-2 border-blue-500 rounded-full animate-spin"></div>
+          <div className="flex justify-center py-4 items-center">
+            <div className="h-5 w-5 border-t-2 border-primary rounded-full animate-spin"></div>
             <p className="text-sm text-muted-foreground ml-2">加载市场中...</p>
           </div>
         ) : error ? (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">
+          <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 text-red-700 dark:text-red-400 px-4 py-3 rounded text-sm">
             <p className="font-bold">获取数据失败</p>
             <p className="text-xs mt-1">{error}</p>
             <button 
               onClick={() => window.location.reload()} 
-              className="mt-2 px-3 py-1 bg-red-100 hover:bg-red-200 text-red-800 rounded text-xs"
+              className="mt-2 px-3 py-1 bg-red-100 dark:bg-red-900/50 hover:bg-red-200 dark:hover:bg-red-900/70 text-red-800 dark:text-red-300 rounded text-xs"
             >
               刷新页面
             </button>
@@ -132,7 +132,7 @@ export function MarketReference() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             {cryptoData.map((crypto) => (
-              <div key={crypto.symbol} className="p-2 border rounded-lg hover:shadow-sm transition-shadow duration-200">
+              <div key={crypto.symbol} className="p-2 border rounded-lg hover:shadow-sm transition-shadow duration-200 bg-card text-card-foreground">
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-1">
                     <CryptoIcon symbol={crypto.symbol} size={16} />
