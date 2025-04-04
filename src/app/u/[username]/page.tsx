@@ -24,36 +24,6 @@ import {
 } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 
-// Import the interfaces and types from the main page
-// K线图数据类型
-interface Candle {
-  timestamp: number;
-  datetime: string;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-}
-
-interface KlineResponse {
-  success: boolean;
-  data: {
-    symbol: string;
-    interval: string;
-    count: number;
-    candles: Candle[];
-    marketInfo: {
-      description: string;
-      exchange: string;
-      currency: string;
-      type: string;
-    };
-    lastUpdated: string;
-  };
-  timestamp: string;
-}
-
 // 图表数据类型
 interface ChartDataPoint {
   date: string;
