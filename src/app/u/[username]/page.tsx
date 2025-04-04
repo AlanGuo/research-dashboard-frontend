@@ -1163,8 +1163,8 @@ export default function UserPage() {
                         <th style={{width: '10%', textAlign: 'right'}}>成本</th>
                         <th style={{width: '10%', textAlign: 'right'}}>平仓价值</th>
                         <th style={{width: '10%', textAlign: 'right'}}>盈亏</th>
-                        <th style={{width: '10%', textAlign: 'right'}}>平仓日期</th>
                         <th style={{width: '16%', textAlign: 'right'}}>备注</th>
+                        <th style={{width: '10%', textAlign: 'right'}}>平仓日期</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1224,8 +1224,8 @@ export default function UserPage() {
                                 </span>
                               </div>
                             </td>
-                            <td className="text-right text-muted-foreground">{strategy["更新日期"]}</td>
                             <td className="text-right text-muted-foreground">{strategy["备注"] || '-'}</td>
+                            <td className="text-right text-muted-foreground">{strategy["更新日期"]}</td>
                           </tr>
                         );
                       })}
