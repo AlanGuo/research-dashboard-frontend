@@ -1,0 +1,16 @@
+{
+  "apps" : [
+    {
+      "name"      : "funding-curve-frontend",
+      "script"    : "next start",  
+      "instances" : 1,
+      "exec_mode" : "cluster",
+      "error_file": "logs/funding-curve-frontend.stderr.log",
+      "out_file"  : "logs/funding-curve-frontend.log",
+      "mergeLogs" : false,
+      "env": {
+        "NODE_ENV": "production"
+      }
+    }
+  ]
+}
