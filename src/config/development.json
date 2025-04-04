@@ -1,6 +1,6 @@
 {
   "api": {
-    "baseUrl": "http://localhost:3001/api"
+    "baseUrl": "http://localhost:3001/v1"
   },
   "features": {
     "debugMode": true,

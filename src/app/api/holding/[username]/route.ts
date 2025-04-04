@@ -14,7 +14,7 @@ export async function GET(
   const except = searchParams.get('except');
   
   try {
-    const apiBaseUrl = config.api?.baseUrl || 'http://localhost:3001/api';
+    const apiBaseUrl = config.api?.baseUrl || 'http://localhost:3001/v1';
     let url = `${apiBaseUrl}/holding/${username}`;
     
     // 构建查询参数

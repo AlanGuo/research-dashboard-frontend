@@ -14,7 +14,7 @@ export async function GET(
     const pair = `${symbolLower}`;
     
     // 使用内部的kline API获取数据
-    const apiBaseUrl = config.api?.baseUrl || 'http://localhost:3001/api';
+    const apiBaseUrl = config.api?.baseUrl || 'http://localhost:3001/v1';
     const response = await fetch(`${apiBaseUrl}/kline/${pair}?interval=1D&bars=8`); // 获取7天+今天的数据
     
     if (!response.ok) {

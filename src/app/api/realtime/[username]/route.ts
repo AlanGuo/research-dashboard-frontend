@@ -9,7 +9,7 @@ export async function GET(
   const { username } = await context.params;
   
   try {
-    const apiBaseUrl = config.api?.baseUrl || 'http://localhost:3001/api';
+    const apiBaseUrl = config.api?.baseUrl || 'http://localhost:3001/v1';
     const response = await fetch(`${apiBaseUrl}/realtime/${username}`);
     
     if (!response.ok) {
