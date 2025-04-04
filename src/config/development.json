@@ -1,0 +1,9 @@
+{
+  "api": {
+    "baseUrl": "http://localhost:3001/api"
+  },
+  "features": {
+    "debugMode": true,
+    "mockData": true
+  }
+}

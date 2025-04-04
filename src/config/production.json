@@ -1,0 +1,10 @@
+{
+  "api": {
+    "baseUrl": "https://api.fundingcurve.com/api"
+  },
+  "features": {
+    "debugMode": false,
+    "mockData": false,
+    "analytics": true
+  }
+}

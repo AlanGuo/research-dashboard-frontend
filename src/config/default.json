@@ -1,0 +1,13 @@
+{
+  "app": {
+    "name": "Funding Curve",
+    "version": "1.0.0"
+  },
+  "api": {
+    "baseUrl": "http://localhost:3001/api"
+  },
+  "features": {
+    "darkMode": true,
+    "analytics": false
+  }
+}
