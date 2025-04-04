@@ -112,12 +112,11 @@ export function MarketReference() {
 
   return (
     <div>
-      <h2 className="text-lg font-semibold mb-2">市场</h2>
       <div>
         {loading ? (
           <div className="flex justify-center py-4 space-y-2">
             <div className="h-5 w-5 border-t-2 border-blue-500 rounded-full animate-spin"></div>
-            <p className="text-sm text-muted-foreground ml-2">加载市场数据中...</p>
+            <p className="text-sm text-muted-foreground ml-2">加载市场中...</p>
           </div>
         ) : error ? (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">

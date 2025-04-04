@@ -56,7 +56,7 @@ interface ChartDataPoint {
 
 // 策略实时估值数据类型
 interface FundRealtimeItem {
-  "可用金额": number;
+  "市值": number;
   "日期": string;
   "备注"?: string;
 }
@@ -92,9 +92,10 @@ interface HoldingStrategyResponse {
 // 定义 API 返回的数据类型
 interface FundDataItem {
   "开始日期": string;
-  "初始本金(U)": number;
+  "初始本金": number;
   "初始BTC价格": number;
-  "当前余额(U)": number;
+  "可用金额": number;
+  "市值": number;
   "备注": string;
 }
 
@@ -133,6 +134,34 @@ export default function UserPage() {
   // 图表模式：百分比模式或绝对值模式
   const [chartMode, setChartMode] = useState<'percentage' | 'absolute'>('percentage');
 
+  // 计算实时市值：可用金额 + 所有当前持仓的市值之和
+  const calculateTotalMarketValue = (): number => {
+    try {
+      if (holdingStrategies && holdingStrategies.success && holdingStrategies.data && baseInfoResponse && baseInfoResponse.success && baseInfoResponse.data && baseInfoResponse.data.length > 0) {
+        const availableFunds = baseInfoResponse.data[0]["可用金额"];
+        if (!availableFunds) throw new Error("可用金额不存在");
+        // 计算所有持仓的市值总和
+        const totalHoldingsValue = holdingStrategies.data.reduce((sum, strategy) => {
+          const marketValue = strategy["实时估值"] || 0;
+          return sum + marketValue;
+        }, 0);
+        
+        // 总市值 = 可用金额 + 持仓市值总和
+        const totalMarketValue = availableFunds + totalHoldingsValue;
+        
+        if (!isNaN(totalMarketValue) && totalMarketValue > 0) {
+          return totalMarketValue;
+        }
+      }
+      
+      // 如果计算有问题，使用 FundDataItem 里的"市值"
+      return baseInfoResponse?.data?.[0]?.["市值"] || 0;
+    } catch (error) {
+      console.error('计算实时市值时出错:', error);
+      return baseInfoResponse?.data?.[0]?.["市值"] || 0;
+    }
+  };
+  
   // 获取策略数据
   useEffect(() => {
     async function fetchPageData() {
@@ -271,12 +300,12 @@ export default function UserPage() {
       const fundDataMap = new Map<string, number>();
       allFundData.forEach(item => {
         // 确保有效的日期和金额
-        if (item["日期"] && item["可用金额"]) {
+        if (item["日期"] && item["市值"]) {
           // 使用标准化的日期格式作为键
           const dateKey = new Date(item["日期"]).toISOString().split('T')[0];
-          const balance = typeof item["可用金额"] === 'string' 
-            ? parseFloat(item["可用金额"]) 
-            : item["可用金额"];
+          const balance = typeof item["市值"] === 'string' 
+            ? parseFloat(item["市值"]) 
+            : item["市值"];
             
           if (!isNaN(balance)) {
             fundDataMap.set(dateKey, balance);
@@ -309,7 +338,7 @@ export default function UserPage() {
       
       // 使用baseInfoResponse中的初始值
       if (baseInfoResponse?.data && baseInfoResponse.data.length > 0) {
-        initialFundValue = baseInfoResponse.data[0]["初始本金(U)"];
+        initialFundValue = baseInfoResponse.data[0]["初始本金"];
         initialBtcValue = baseInfoResponse.data[0]["初始BTC价格"];
       }
       
@@ -440,13 +469,15 @@ export default function UserPage() {
               <div className="finance-card-content">
                 <dl className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <dt className="text-muted-foreground font-medium">当前余额</dt>
-                    <dd className="font-semibold">${baseInfoResponse.data[0]["当前余额(U)"].toLocaleString()}</dd>
+                    <dt className="text-muted-foreground font-medium">实时市值</dt>
+                    <dd className="font-semibold">
+                      {`$${calculateTotalMarketValue().toLocaleString()}`}
+                    </dd>
                   </div>
                   <div className="finance-divider" style={{margin: '0.5rem 0'}}></div>
                   <div className="flex justify-between items-center">
                     <dt className="text-muted-foreground">初始本金</dt>
-                    <dd className="">${baseInfoResponse.data[0]["初始本金(U)"].toLocaleString()}</dd>
+                    <dd className="">${baseInfoResponse.data[0]["初始本金"].toLocaleString()}</dd>
                   </div>
                   <div className="flex justify-between">
                     <dt className="text-muted-foreground">开始日期</dt>
@@ -489,8 +520,10 @@ export default function UserPage() {
                     <dd className="font-semibold">
                       {(() => {
                         try {
-                          const initialCapital = baseInfoResponse.data[0]["初始本金(U)"];
-                          const currentBalance = baseInfoResponse.data[0]["当前余额(U)"];
+                          const initialCapital = baseInfoResponse.data[0]["初始本金"];
+                          
+                          // 计算实时市值
+                          const currentBalance = calculateTotalMarketValue();
                           
                           if (initialCapital && currentBalance) {
                             const initCapNum = typeof initialCapital === 'string' 
@@ -557,14 +590,9 @@ export default function UserPage() {
                             return "-"; // 没有找到足够早的数据点
                           }
                           
-                          // 获取金额并转换为数字
-                          const currentAmount = typeof latestData["可用金额"] === 'string' 
-                            ? parseFloat(latestData["可用金额"]) 
-                            : latestData["可用金额"];
-                            
-                          const weekAgoAmount = typeof weekAgoData["可用金额"] === 'string' 
-                            ? parseFloat(weekAgoData["可用金额"]) 
-                            : weekAgoData["可用金额"];
+                          // 获取金额
+                          const currentAmount = latestData["市值"];
+                          const weekAgoAmount = weekAgoData["市值"];
                           
                           if (isNaN(currentAmount) || isNaN(weekAgoAmount) || weekAgoAmount <= 0) {
                             return "-";
@@ -595,8 +623,10 @@ export default function UserPage() {
                       {(() => {
                         try {
                           // 自行计算年化收益率
-                          const initialCapitalRaw = baseInfoResponse.data[0]["初始本金(U)"];
-                          const currentBalanceRaw = baseInfoResponse.data[0]["当前余额(U)"];
+                          const initialCapitalRaw = baseInfoResponse.data[0]["初始本金"];
+                          
+                          // 计算实时市值
+                          const currentBalanceRaw = calculateTotalMarketValue();
                           
                           // 转换为数字
                           const initialCapital = typeof initialCapitalRaw === 'string' 
@@ -623,12 +653,16 @@ export default function UserPage() {
                           // 计算年化收益率: ((当前余额 / 初始本金) ^ (1/年数) - 1) * 100
                           if (runningTimeYears > 0) {
                             const apr = (Math.pow(currentBalance / initialCapital, 1 / runningTimeYears) - 1) * 100;
-                            return `${apr.toFixed(2)}%`;
+                            // 根据正负值设置颜色
+                            const colorClass = apr >= 0 ? 'text-green-600' : 'text-red-600';
+                            return (
+                              <span className={colorClass}>
+                                {apr.toFixed(2)}%
+                              </span>
+                            );
                           }
-                          
-                          return "-";
                         } catch (error) {
-                          console.error('计算APR时出错:', error);
+                          console.error('计算综合APR时出错:', error);
                           return "-";
                         }
                       })()}
@@ -670,14 +704,16 @@ export default function UserPage() {
                             return "-"; // 没有找到足够早的数据点
                           }
                           
-                          // 获取金额并转换为数字
-                          const currentAmount = typeof latestData["可用金额"] === 'string' 
-                            ? parseFloat(latestData["可用金额"]) 
-                            : latestData["可用金额"];
-                            
-                          const weekAgoAmount = typeof weekAgoData["可用金额"] === 'string' 
-                            ? parseFloat(weekAgoData["可用金额"]) 
-                            : weekAgoData["可用金额"];
+                          // 获取实时市值
+                          let currentAmount = calculateTotalMarketValue();
+                          
+                          // 如果计算有问题，使用实时数据里的"市值"
+                          if (isNaN(currentAmount) || currentAmount <= 0) {
+                            currentAmount = latestData["市值"];
+                          }
+
+                          // 使用历史数据中的市值
+                          const weekAgoAmount = weekAgoData["市值"];
                           
                           if (isNaN(currentAmount) || isNaN(weekAgoAmount) || weekAgoAmount <= 0) {
                             return "-";
@@ -915,20 +951,20 @@ export default function UserPage() {
             </h3>
             
             {/* 标签页切换 - 放在右侧 */}
-            <div className="flex space-x-2">
+            <div className="finance-time-selector self-start md:self-auto">
               <button 
                 onClick={() => setActiveHoldingTab('current')}
-                className={`px-3 py-1 text-sm rounded-md transition-colors ${activeHoldingTab === 'current' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
+                className={`${activeHoldingTab === 'current' ? 'active' : ''}`}
               >
                 当前持仓
-                <span className="ml-1 inline-flex items-center justify-center w-5 h-5 text-xs font-medium rounded-full bg-primary-foreground text-primary">{holdingStrategies.data.length}</span>
+                <span className={`ml-1 inline-flex items-center justify-center w-5 h-5 text-xs font-medium rounded-full bg-muted text-muted-foreground`}>{holdingStrategies.data.length}</span>
               </button>
               <button 
                 onClick={() => setActiveHoldingTab('historical')}
-                className={`px-3 py-1 text-sm rounded-md transition-colors ${activeHoldingTab === 'historical' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
+                className={`${activeHoldingTab === 'historical' ? 'active' : ''}`}
               >
                 历史持仓
-                <span className="ml-1 inline-flex items-center justify-center w-5 h-5 text-xs font-medium rounded-full bg-primary-foreground text-primary">{historicalHoldings.data.length}</span>
+                <span className={`ml-1 inline-flex items-center justify-center w-5 h-5 text-xs font-medium rounded-full bg-muted text-muted-foreground}`}>{historicalHoldings.data.length}</span>
               </button>
             </div>
           </div>
@@ -936,7 +972,8 @@ export default function UserPage() {
             {/* 当前持仓标签页 */}
             {activeHoldingTab === 'current' && holdingStrategies.data.length > 0 ? (
               <>
-                {/* 桌面版表格 - 在中等及以上屏幕显示 */}
+
+              {/* 桌面版表格 - 在中等及以上屏幕显示 */}
                 <div className="hidden md:block overflow-x-auto">
                   <table className="finance-table text-sm" style={{tableLayout: 'auto', minWidth: '100%'}}>
                     <thead>
@@ -950,7 +987,7 @@ export default function UserPage() {
                         <th style={{width: '10%', textAlign: 'right'}}>市值</th>
                         <th style={{width: '10%', textAlign: 'right'}}>盈亏</th>
                         <th style={{width: '16%', textAlign: 'right'}}>备注</th>
-                        <th style={{width: '10%', textAlign: 'right'}}>最近更新</th>
+                        <th style={{width: '10%', textAlign: 'right'}}>更新于</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -969,8 +1006,11 @@ export default function UserPage() {
                         const profit = marketValue - holdingCost;
                         const profitPercent = (profit / holdingCost) * 100;
                         
+                        // 计算实时市值总额
+                        const totalMarketValue = calculateTotalMarketValue();
+                        
                         // 计算比例
-                        const proportion = marketValue / (baseInfoResponse?.data[0]["当前余额(U)"] || 0);
+                        const proportion = marketValue / totalMarketValue;
                         
                         return (
                           <tr key={index}>
@@ -1027,7 +1067,7 @@ export default function UserPage() {
                     const profitPercent = (profit / holdingCost) * 100;
                     
                     // 计算比例
-                    const proportion = marketValue / (baseInfoResponse?.data[0]["当前余额(U)"] || 0);
+                    const proportion = marketValue / (baseInfoResponse?.data[0]["市值"] || 0);
                     
                     return (
                       <div key={index} className="finance-card p-3">
@@ -1150,7 +1190,8 @@ export default function UserPage() {
             {/* 历史持仓标签页 */}
             {activeHoldingTab === 'historical' && historicalHoldings.data.length > 0 ? (
               <>
-                {/* 桌面版表格 - 在中等及以上屏幕显示 */}
+
+              {/* 桌面版表格 - 在中等及以上屏幕显示 */}
                 <div className="hidden md:block overflow-x-auto">
                   <table className="finance-table text-sm" style={{tableLayout: 'auto', minWidth: '100%'}}>
                     <thead>
@@ -1193,7 +1234,11 @@ export default function UserPage() {
                         
                         // 计算盈亏
                         const profit = strategy["盈亏"];
-                        const proportion = entryCost ? entryCost / (baseInfoResponse?.data[0]["当前余额(U)"] || 0) : 0;
+                        
+                        // 计算实时市值总额
+                        const totalMarketValue = calculateTotalMarketValue();
+                        
+                        const proportion = entryCost ? entryCost / totalMarketValue : 0;
                         const profitPercent = entryCost > 0 ? (profit / entryCost) * 100 : 0;
                         
                         return (
@@ -1260,7 +1305,7 @@ export default function UserPage() {
                     
                     // 计算盈亏
                     const profit = strategy["盈亏"];
-                    const proportion = entryCost ? entryCost / (baseInfoResponse?.data[0]["当前余额(U)"] || 0) : 0;
+                    const proportion = entryCost ? entryCost / (baseInfoResponse?.data[0]["市值"] || 0) : 0;
                     const profitPercent = entryCost > 0 ? (profit / entryCost) * 100 : 0;
                     
                     return (
@@ -1408,7 +1453,7 @@ export default function UserPage() {
       {!loading && !error && baseInfoResponse && baseInfoResponse.success && fundRealtimeData && fundRealtimeData.success && (
         <div className="text-center mt-4">
           <p className="text-sm text-muted-foreground mt-1">
-            数据最后更新时间: {new Date(fundRealtimeData.timestamp).toLocaleString()}
+            最近更新: {new Date(fundRealtimeData.timestamp).toLocaleString()}
           </p>
         </div>
       )}
