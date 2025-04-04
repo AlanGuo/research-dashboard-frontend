@@ -17,27 +17,38 @@ export interface Config {
     debugMode?: boolean;
     mockData?: boolean;
     analytics?: boolean;
-    [key: string]: any;
+    [key: string]: boolean | string | number | Record<string, unknown> | undefined;
   };
-  [key: string]: any;
+  [key: string]: string | number | boolean | Record<string, unknown> | undefined;
 }
+
+type RecursivePartial<T> = {
+  [P in keyof T]?: T[P] extends (infer U)[] ? RecursivePartial<U>[] :
+    T[P] extends object ? RecursivePartial<T[P]> : T[P];
+};
 
 /**
  * Deep merge two objects
  */
-function mergeDeep(target: any, source: any): any {
+function mergeDeep<T extends Record<string, unknown>>(target: RecursivePartial<T>, source: RecursivePartial<T>): RecursivePartial<T> {
   const output = { ...target };
   
   if (isObject(target) && isObject(source)) {
     Object.keys(source).forEach(key => {
-      if (isObject(source[key])) {
+      const sourceKey = key as keyof typeof source;
+      const targetKey = key as keyof typeof target;
+      
+      if (isObject(source[sourceKey])) {
         if (!(key in target)) {
-          Object.assign(output, { [key]: source[key] });
+          Object.assign(output, { [key]: source[sourceKey] });
         } else {
-          output[key] = mergeDeep(target[key], source[key]);
+          (output as Record<string, unknown>)[key] = mergeDeep(
+            (target[targetKey] as Record<string, unknown>) || {},
+            (source[sourceKey] as Record<string, unknown>)
+          );
         }
       } else {
-        Object.assign(output, { [key]: source[key] });
+        Object.assign(output, { [key]: source[sourceKey] });
       }
     });
   }
@@ -48,8 +59,8 @@ function mergeDeep(target: any, source: any): any {
 /**
  * Check if value is an object
  */
-function isObject(item: any): boolean {
-  return item && typeof item === 'object' && !Array.isArray(item);
+function isObject(item: unknown): item is Record<string, unknown> {
+  return Boolean(item && typeof item === 'object' && !Array.isArray(item));
 }
 
 /**
@@ -82,16 +93,16 @@ const config: Config = mergeDeep(defaultConfig, getEnvironmentConfig());
  */
 export function getConfigValue<T>(path: string, defaultValue?: T): T {
   const parts = path.split('.');
-  let current: any = config;
+  let current: Record<string, unknown> = config as Record<string, unknown>;
   
   for (const part of parts) {
     if (current[part] === undefined) {
       return defaultValue as T;
     }
-    current = current[part];
+    current = current[part] as Record<string, unknown>;
   }
   
-  return current as T;
+  return current as unknown as T;
 }
 
 /**

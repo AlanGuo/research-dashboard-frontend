@@ -4,6 +4,6 @@
   },
   "features": {
     "debugMode": true,
-    "mockData": true
+    "mockData": false
   }
 }

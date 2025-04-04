@@ -3,7 +3,7 @@ import config from '@/config';
 
 export async function GET(
   request: NextRequest,
-  context: { params: { symbol: string } }
+  context: { params: Promise<{ symbol: string }> }
 ) {
   // 获取URL中的symbol参数
   const { symbol } = await context.params;

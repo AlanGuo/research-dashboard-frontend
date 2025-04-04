@@ -3,7 +3,7 @@ import config from '@/config';
 
 export async function GET(
   request: NextRequest,
-  context: { params: { username: string } }
+  context: { params: Promise<{ username: string }> }
 ) {
   // 获取URL中的username参数
   const { username } = await context.params;
