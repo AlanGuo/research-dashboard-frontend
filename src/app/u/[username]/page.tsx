@@ -947,7 +947,7 @@ export default function UserPage() {
                         <th style={{width: '8%', textAlign: 'right'}}>仓位</th>
                         <th style={{width: '8%', textAlign: 'right'}}>占比</th>
                         <th style={{width: '10%', textAlign: 'right'}}>成本</th>
-                        <th style={{width: '10%', textAlign: 'right'}}>估值</th>
+                        <th style={{width: '10%', textAlign: 'right'}}>市值</th>
                         <th style={{width: '10%', textAlign: 'right'}}>盈亏</th>
                         <th style={{width: '16%', textAlign: 'right'}}>备注</th>
                         <th style={{width: '10%', textAlign: 'right'}}>最近更新</th>
@@ -1097,7 +1097,7 @@ export default function UserPage() {
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
-                              估值
+                              市值
                             </div>
                             <div className="font-medium">${marketValue ? marketValue.toLocaleString(undefined, {maximumFractionDigits: 0}) : "-"}</div>
                           </div>
@@ -1161,7 +1161,7 @@ export default function UserPage() {
                         <th style={{width: '8%', textAlign: 'right'}}>仓位</th>
                         <th style={{width: '8%', textAlign: 'right'}}>占比</th>
                         <th style={{width: '10%', textAlign: 'right'}}>成本</th>
-                        <th style={{width: '10%', textAlign: 'right'}}>平仓成本</th>
+                        <th style={{width: '10%', textAlign: 'right'}}>平仓市值</th>
                         <th style={{width: '10%', textAlign: 'right'}}>盈亏</th>
                         <th style={{width: '16%', textAlign: 'right'}}>备注</th>
                         <th style={{width: '10%', textAlign: 'right'}}>平仓日期</th>
@@ -1336,7 +1336,7 @@ export default function UserPage() {
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
-                                持仓成本
+                                成本
                               </div>
                               <div className="font-medium">
                                 ${entryCost ? entryCost.toLocaleString(undefined, {maximumFractionDigits: 0}) : "-"}
@@ -1347,7 +1347,7 @@ export default function UserPage() {
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
-                                平仓成本
+                                平仓市值
                               </div>
                               <div className="font-medium">
                                 ${closingValue ? closingValue.toLocaleString(undefined, {maximumFractionDigits: 0}) : "-"}
