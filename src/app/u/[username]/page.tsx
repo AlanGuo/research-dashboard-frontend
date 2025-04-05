@@ -23,6 +23,13 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 // 图表数据类型
 interface ChartDataPoint {
@@ -70,6 +77,7 @@ interface HoldingStrategyResponse {
 // 定义 API 返回的数据类型
 interface FundDataItem {
   "开始日期": string;
+  "策略名": string;
   "初始本金": number;
   "初始价格": string;
   "可用金额": number;
@@ -115,6 +123,9 @@ export default function UserPage() {
   
   // 图表模式：百分比模式或绝对值模式
   const [chartMode, setChartMode] = useState<'percentage' | 'absolute'>('percentage');
+  
+  // 在绝对值模式下，当前选中的对比资产
+  const [selectedComparisonAsset, setSelectedComparisonAsset] = useState<string>('');
 
   // 计算实时市值：可用金额 + 所有当前持仓的市值之和
   const calculateTotalMarketValue = (): number => {
@@ -145,6 +156,13 @@ export default function UserPage() {
   };
   
   // 获取策略数据
+  // 当比较资产列表变化时，更新选中的资产
+  useEffect(() => {
+    if (comparisonAssets.length > 0 && !comparisonAssets.includes(selectedComparisonAsset)) {
+      setSelectedComparisonAsset(comparisonAssets[0]);
+    }
+  }, [comparisonAssets, selectedComparisonAsset]);
+
   useEffect(() => {
     async function fetchPageData() {
       try {
@@ -181,8 +199,8 @@ export default function UserPage() {
       const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 3600 * 24)) + 3; // 加3天确保覆盖全部时间
       const bars = Math.max(daysDiff, 100); // 获取足够多的数据
       
-      // 将资产名称转换为小写并添加usdt后缀
-      const symbol = `${asset.toLowerCase()}usdt`;
+      // 将资产名称转换为小写
+      const symbol = asset.toLowerCase();
       const response = await fetch(`/api/kline/${symbol}?interval=1D&bars=${bars}`);
       
       if (!response.ok) {
@@ -243,7 +261,7 @@ export default function UserPage() {
           }
           
           // 获取历史持仓
-          const historicalResponse = await fetch(`/api/holding/${username}?except=持仓`);
+          const historicalResponse = await fetch(`/api/holding/${username}?except=持仓,计划`);
           
           if (historicalResponse.ok) {
             const historicalData = await historicalResponse.json();
@@ -524,12 +542,12 @@ export default function UserPage() {
       ) : baseInfoResponse && baseInfoResponse.success && baseInfoResponse.data.length > 0 ? (
         <div className="space-y-6 md:space-y-8">
           {/* 市场参考板块 */}
-          <MarketReference />
+          <MarketReference comparisonAssets={comparisonAssets} />
           
           {/* 标题区域 */}
           <div className="animate-in fade-in duration-700 flex justify-between items-start">
             <div>
-              <h1 className="text-3xl md:text-4xl font-bold">CRYPTO趋势策略</h1>
+              <h1 className="text-3xl md:text-4xl font-bold">{baseInfoResponse.data[0]["策略名"]}</h1>
               <p className="text-base md:text-lg text-muted-foreground mt-2">{baseInfoResponse.data[0]["备注"]}</p>
             </div>
             <ThemeToggle />
@@ -836,22 +854,44 @@ export default function UserPage() {
       
       {!loading && !error && baseInfoResponse && baseInfoResponse.success && (
         <div className="rounded-lg border bg-card text-card-foreground shadow-sm animate-in fade-in duration-700">
-          <div className="p-4 flex flex-col md:flex-row md:justify-between items-center border-b">
-            <div className="flex items-center mb-4 md:mb-0">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-6 w-6 mr-2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
-              </svg>
-              <h3 className="font-semibold leading-none tracking-tight md:text-lg">
-                收益曲线
-              </h3>
-            </div>
-            <div className="self-start md:self-auto">
-              <Tabs value={chartMode} onValueChange={(value) => setChartMode(value as 'percentage' | 'absolute')}>
-                <TabsList>
-                  <TabsTrigger value="percentage">收益率对比</TabsTrigger>
-                  <TabsTrigger value="absolute">绝对值对比</TabsTrigger>
-                </TabsList>
-              </Tabs>
+          <div className="p-4 border-b">
+            <div className="flex flex-col space-y-4">
+              {/* 标题和选项卡行 */}
+              <div className="flex flex-row justify-between items-center">
+                <div className="flex items-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-6 w-6 mr-2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+                  </svg>
+                  <h3 className="font-semibold leading-none tracking-tight md:text-lg">
+                    收益曲线
+                  </h3>
+                </div>
+                <Tabs value={chartMode} onValueChange={(value) => setChartMode(value as 'percentage' | 'absolute')}>
+                  <TabsList>
+                    <TabsTrigger value="percentage">收益率</TabsTrigger>
+                    <TabsTrigger value="absolute">绝对收益</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
+              
+              {/* 绝对值模式下的对比资产选择器 */}
+              {chartMode === 'absolute' && comparisonAssets.length > 1 && (
+                <div className="flex justify-end">
+                  <Select
+                    value={selectedComparisonAsset}
+                    onValueChange={setSelectedComparisonAsset}
+                  >
+                    <SelectTrigger className="h-7 text-xs w-28">
+                      <SelectValue placeholder="选择资产" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {comparisonAssets.map(asset => (
+                        <SelectItem key={asset} value={asset}>{asset}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           </div>
           <div className="p-4">
@@ -884,7 +924,7 @@ export default function UserPage() {
                   }
                   
                   {/* 绝对值模式下的右侧Y轴（比较资产价格） */}
-                  {chartMode === 'absolute' && comparisonAssets.length > 0 && 
+                  {chartMode === 'absolute' && selectedComparisonAsset && 
                     <YAxis 
                       yAxisId="right" 
                       orientation="right"
@@ -979,20 +1019,20 @@ export default function UserPage() {
                             inactive: !visibleLines.fundReturn 
                           });
                           
-                          // 添加比较资产的绝对值图例
-                          comparisonAssets.forEach((asset, index) => {
+                          // 绝对值模式下只添加选中的比较资产图例
+                          if (selectedComparisonAsset) {
+                            const asset = selectedComparisonAsset;
                             const assetKey = asset.toLowerCase();
-                            const colorIndex = (index % 4) + 2; // 使用不同的颜色
                             const dataKey = `${assetKey}Price`;
                             
                             legendItems.push({
                               value: `${asset}价格`,
                               type: 'line' as const,
-                              color: `var(--chart-${colorIndex})`,
+                              color: 'var(--chart-2)',
                               dataKey: dataKey,
                               inactive: !visibleLines[dataKey]
                             });
-                          });
+                          }
                         }
                         
                         return legendItems;
@@ -1051,10 +1091,10 @@ export default function UserPage() {
                     />
                   }
                   
-                  {/* 绝对值模式 - 比较资产价格 */}
-                  {chartMode === 'absolute' && comparisonAssets.map((asset, index) => {
+                  {/* 绝对值模式 - 比较资产价格（只显示选中的一个） */}
+                  {chartMode === 'absolute' && selectedComparisonAsset && (() => {
+                    const asset = selectedComparisonAsset;
                     const assetKey = asset.toLowerCase();
-                    const colorIndex = (index % 4) + 2; // 使用不同的颜色
                     const dataKey = `${assetKey}Price`;
                     
                     return (
@@ -1064,14 +1104,14 @@ export default function UserPage() {
                         type="monotone"
                         dataKey={dataKey}
                         name={`${asset}价格`}
-                        stroke={`var(--chart-${colorIndex})`}
+                        stroke="var(--chart-2)"
                         dot={false}
                         activeDot={{ r: 6 }}
                         strokeWidth={2}
                         hide={!visibleLines[dataKey]}
                       />
                     );
-                  })}
+                  })()}
                 </LineChart>
               </ResponsiveContainer>
             ) : (
@@ -1137,7 +1177,7 @@ export default function UserPage() {
                         const marketValue = strategy["实时估值"];
                         
                         // 计算持仓成本: 优先使用"进场价值"字段，如果没有则计算"仓位"×"进场"
-                        const holdingCost = strategy["进场价值"] !== undefined ? 
+                        const holdingCost = strategy["进场价值"] ? 
                           strategy["进场价值"] : 
                           (strategy["仓位"] && strategy["进场"]) ? 
                             parseFloat(strategy["仓位"]) * strategy["进场"] : 
