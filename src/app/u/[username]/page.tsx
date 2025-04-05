@@ -193,15 +193,15 @@ export default function UserPage() {
   // 获取比较资产数据 - 在获取到实时数据后调用
   const fetchComparisonData = async (asset: string, startDate: string, endDate: string, assetDataMaps: Map<string, Map<string, number>>) => {
     try {
-      // 计算需要获取的天数
+      // 计算策略运行的天数
       const start = new Date(startDate);
       const end = new Date(endDate);
-      const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 3600 * 24)) + 3; // 加3天确保覆盖全部时间
-      const bars = Math.max(daysDiff, 100); // 获取足够多的数据
+      // 计算实际天数差并加上一些缓冲时间确保数据完整
+      const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 3600 * 24)) + 1; // 加1天作为缓冲
       
       // 将资产名称转换为小写
       const symbol = asset.toLowerCase();
-      const response = await fetch(`/api/kline/${symbol}?interval=1D&bars=${bars}`);
+      const response = await fetch(`/api/kline/${symbol}?interval=1D&bars=${daysDiff}`);
       
       if (!response.ok) {
         throw new Error(`${asset} API request failed with status ${response.status}`);

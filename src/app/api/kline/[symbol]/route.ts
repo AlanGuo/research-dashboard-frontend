@@ -12,7 +12,7 @@ export async function GET(
   // 获取查询参数
   const searchParams = request.nextUrl.searchParams;
   const interval = searchParams.get('interval') || '1D';
-  const bars = parseInt(searchParams.get('bars') || '100', 10);
+  const bars = parseInt(searchParams.get('bars') || '1', 10);
   
   try {
     // 使用内部的kline API获取数据
