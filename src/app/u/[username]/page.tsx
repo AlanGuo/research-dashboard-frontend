@@ -1237,7 +1237,7 @@ export default function UserPage() {
                     const marketValue = strategy["实时估值"];
                     
                     // 计算持仓成本: 优先使用"进场价值"字段，如果没有则计算"仓位"×"进场"
-                    const holdingCost = strategy["进场价值"] !== undefined ? 
+                    const holdingCost = strategy["进场价值"] ? 
                       strategy["进场价值"] : 
                       (strategy["仓位"] && strategy["进场"]) ? 
                         parseFloat(strategy["仓位"]) * strategy["进场"] : 
@@ -1246,8 +1246,9 @@ export default function UserPage() {
                     const profit = marketValue - holdingCost;
                     const profitPercent = (profit / holdingCost) * 100;
                     
-                    // 计算比例
-                    const proportion = marketValue / (baseInfoResponse?.data[0]["市值"] || 0);
+                    // 计算实时市值总额
+                    const totalMarketValue = calculateTotalMarketValue();
+                    const proportion = holdingCost ? holdingCost / totalMarketValue : 0;
                     
                     return (
                       <div key={index} className="rounded-lg border bg-card text-card-foreground shadow-sm p-3">
@@ -1403,9 +1404,9 @@ export default function UserPage() {
                         
                         // 计算平仓价值: 优先取"实时估值"字段，如果该字段为空，则通过"出场"*"仓位"计算得出
                         let closingValue;
-                        if (strategy["实时估值"] !== undefined && strategy["实时估值"] !== null && strategy["实时估值"].toString() !== '') {
+                        if (strategy["实时估值"]) {
                           closingValue = strategy["实时估值"];
-                        } else if (strategy["出场"] !== undefined && strategy["仓位"] !== undefined) {
+                        } else if (strategy["出场"] && strategy["仓位"]) {
                           const exitPrice = strategy["出场"];
                           const position = typeof strategy["仓位"] === 'string' ? parseFloat(strategy["仓位"]) : strategy["仓位"];
                           closingValue = exitPrice * position;
@@ -1474,9 +1475,9 @@ export default function UserPage() {
                     
                     // 计算平仓价值: 优先取"实时估值"字段，如果该字段为空，则通过"出场"*"仓位"计算得出
                     let closingValue;
-                    if (strategy["实时估值"] !== undefined && strategy["实时估值"] !== null && strategy["实时估值"].toString() !== '') {
+                    if (strategy["实时估值"]) {
                       closingValue = strategy["实时估值"];
-                    } else if (strategy["出场"] !== undefined && strategy["仓位"] !== undefined) {
+                    } else if (strategy["出场"] && strategy["仓位"]) {
                       const exitPrice = strategy["出场"];
                       const position = typeof strategy["仓位"] === 'string' ? parseFloat(strategy["仓位"]) : strategy["仓位"];
                       closingValue = exitPrice * position;
@@ -1486,7 +1487,10 @@ export default function UserPage() {
                     
                     // 计算盈亏
                     const profit = strategy["盈亏"];
-                    const proportion = entryCost ? entryCost / (baseInfoResponse?.data[0]["市值"] || 0) : 0;
+                    // 计算实时市值总额
+                    const totalMarketValue = calculateTotalMarketValue();
+
+                    const proportion = entryCost ? entryCost / totalMarketValue : 0;
                     const profitPercent = entryCost > 0 ? (profit / entryCost) * 100 : 0;
                     
                     return (
