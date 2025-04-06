@@ -94,9 +94,6 @@ export default function UserPage() {
   // 存储比较资产列表
   const [comparisonAssets, setComparisonAssets] = useState<string[]>([]);
   
-  // 存储比较资产数据
-  const [assetDataMaps, setAssetDataMaps] = useState<Map<string, Map<string, number>>>(new Map());
-  
   // 图表模式：百分比模式或绝对值模式
   const [chartMode, setChartMode] = useState<'percentage' | 'absolute'>('percentage');
   
@@ -285,16 +282,16 @@ export default function UserPage() {
         const comparisonString = baseInfoResponse.data[0]["对比"] || "";
         const assets = comparisonString ? comparisonString.split(',').map(asset => asset.trim()).filter(asset => asset) : [];
         
-        // 更新比较资产列表（如果有变化）
-        if (JSON.stringify(assets) !== JSON.stringify(comparisonAssets)) {
-          setComparisonAssets(assets);
-        }
+        // 更新比较资产列表
+        setComparisonAssets(assets);
         
         // 获取当前持仓
         const holdingResponse = await fetch(`/api/holding/${username}?status=持仓`);
         
+        let localHoldingStrategies: HoldingStrategyResponse | null = null;
         if (holdingResponse.ok) {
           const holdingData = await holdingResponse.json();
+          localHoldingStrategies = holdingData;
           setHoldingStrategies(holdingData);
         } else {
           console.error(`Holding strategies API request failed with status ${holdingResponse.status}`);
@@ -366,9 +363,9 @@ export default function UserPage() {
         });
         
         // 如果有当前持仓，添加最新的估值
-        if (holdingStrategies?.success && holdingStrategies.data && holdingStrategies.data.length > 0) {
+        if (localHoldingStrategies?.success && localHoldingStrategies.data && localHoldingStrategies.data.length > 0) {
           // 计算当前持仓的总估值
-          const totalCurrentValue = holdingStrategies.data.reduce((sum, strategy) => {
+          const totalCurrentValue = localHoldingStrategies.data.reduce((sum, strategy) => {
             return sum + (strategy["实时估值"] || 0);
           }, 0);
           
@@ -431,6 +428,8 @@ export default function UserPage() {
         fetchComparisonAssetData(baseChartData);
       }
     });
+    // disable eslint warning
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [username, baseInfoResponse]);
   
   // 获取比较资产数据并更新图表
@@ -439,11 +438,10 @@ export default function UserPage() {
     startDate: Date,
     endDate: Date,
     allDates: string[],
-    initialCapital: number,
     newChartData: ChartDataPoint[]
   }) => {
     try {
-      const { assets, startDate, endDate, allDates, initialCapital, newChartData } = baseChartData;
+      const { assets, startDate, endDate, allDates, newChartData } = baseChartData;
       
       if (assets.length === 0) return;
       
@@ -484,9 +482,6 @@ export default function UserPage() {
       );
       
       await Promise.all(fetchPromises);
-      
-      // 将资产数据保存到状态
-      setAssetDataMaps(newAssetDataMaps);
       
       // 复制原始图表数据以添加比较资产数据
       const updatedChartData = [...newChartData];
