@@ -27,9 +27,6 @@ interface ChartDataPoint {
   date: string;
   fundReturnPct: number; // 策略收益百分比，已考虑出入金影响
   fundReturn: number;    // 总市值（包含初始本金、出入金和盈亏）
-  // 以下字段可选添加，但不是必需的
-  // pureProfit?: number;   // 纯收益（不包含出入金）
-  // fundChange?: number;   // 累计出入金
   [key: string]: string | number; // 动态比较资产数据
 }
 
@@ -197,9 +194,6 @@ export default function UserPage() {
         calculatedValue = baseInfoResponse.data[0]["市值"] || 0;
       }
       
-      // 纯收益 = 总市值 - 初始本金 - 净出入金
-      const pureProfit = calculatedValue - initialCapital - netFundChange;
-      
       // 计算当前持仓的总估值
       let totalCurrentHoldingsValue = 0;
       if (holdingStrategies && holdingStrategies.success && holdingStrategies.data) {
@@ -232,6 +226,7 @@ export default function UserPage() {
   // 当相关数据变化时更新总市值
   useEffect(() => {
     updateTotalMarketValue();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseInfoResponse, holdingStrategies, historicalHoldings, username, fundChangeData]);
   
   // 获取出入金数据
@@ -250,24 +245,6 @@ export default function UserPage() {
         
         const data = await response.json();
         setFundChangeData(data);
-        
-        // 计算总入金和总出金
-        if (data.success && data.data) {
-          let deposit = 0;
-          let withdrawal = 0;
-          
-          data.data.forEach((item: { "操作": string; "金额": number }) => {
-            // 如果操作类型是“初始本金”，则忽略该记录
-            if (item["操作"] === "初始本金") {
-              return;
-            }
-            if (item["操作"] === "入金") {
-              deposit += item["金额"];
-            } else if (item["操作"] === "出金") {
-              withdrawal += item["金额"];
-            }
-          });
-        }
       } catch (err) {
         console.error('Error fetching change data:', err);
       }
