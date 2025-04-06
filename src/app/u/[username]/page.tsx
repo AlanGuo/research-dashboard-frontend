@@ -29,19 +29,6 @@ interface ChartDataPoint {
   [key: string]: string | number; // 动态比较资产数据
 }
 
-// 策略实时估值数据类型
-interface FundRealtimeItem {
-  "市值": number;
-  "日期": string;
-  "备注"?: string;
-}
-
-interface FundRealtimeResponse {
-  success: boolean;
-  data: FundRealtimeItem[];
-  timestamp: string;
-}
-
 // 持仓策略数据类型
 interface HoldingStrategyItem {
   "策略": string;
