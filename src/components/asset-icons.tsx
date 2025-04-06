@@ -29,7 +29,8 @@ const isStockSymbol = (symbol: string): boolean => {
 // 重命名为AssetIcon，同时保留CryptoIcon以兼容现有代码
 export const AssetIcon: React.FC<AssetIconProps> = ({ symbol, size = 24, className = "" }) => {
   // 获取标准化的符号
-  const normalizedSymbol = symbol.toUpperCase();
+  // symbol 可能带有USDT，需要去掉
+  const normalizedSymbol = symbol.toUpperCase().replace(/usdt/i, '');
   
   // 资产颜色映射
   const iconColors: Record<string, string> = {
