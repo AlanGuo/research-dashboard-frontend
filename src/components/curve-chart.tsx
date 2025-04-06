@@ -29,8 +29,8 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 // 图表数据类型
 interface ChartDataPoint {
   date: string;
-  fundReturnPct: number; // 策略收益百分比变化率
-  fundReturn: number;    // 策略收益绝对值
+  fundReturnPct: number; // 策略收益百分比，已考虑出入金影响
+  fundReturn: number;    // 总市值（包含初始本金、出入金和盈亏）
   [key: string]: string | number; // 动态比较资产数据
 }
 
@@ -114,7 +114,7 @@ export const CurveChart: React.FC<CurveChartProps> = ({
                 <YAxis 
                   yAxisId="left" 
                   orientation="left"
-                  stroke="var(--chart-1)" 
+                  stroke="#e11d48" /* 使用固定的红色 */
                   tickFormatter={(value) => `$${value.toLocaleString()}`}
                 />
               }
@@ -153,7 +153,7 @@ export const CurveChart: React.FC<CurveChartProps> = ({
                   } else {
                     // 绝对值模式
                     if (name === "策略收益") {
-                      return [`$${numValue.toLocaleString()}`, "策略收益"];
+                      return [`$${numValue.toLocaleString()}`, "策略市值"];
                     }
                     
                     // 处理比较资产的绝对值
@@ -188,7 +188,7 @@ export const CurveChart: React.FC<CurveChartProps> = ({
                       legendItems.push({ 
                         value: '策略收益率', 
                         type: 'line' as const, 
-                        color: 'var(--chart-1)', 
+                        color: '#e11d48', 
                         dataKey: 'fundReturnPct', 
                         inactive: !visibleLines.fundReturnPct 
                       });
@@ -209,9 +209,9 @@ export const CurveChart: React.FC<CurveChartProps> = ({
                       });
                     } else {
                       legendItems.push({ 
-                        value: '策略收益', 
+                        value: '策略市值', 
                         type: 'line' as const, 
-                        color: 'var(--chart-1)', 
+                        color: '#e11d48', 
                         dataKey: 'fundReturn', 
                         inactive: !visibleLines.fundReturn 
                       });
@@ -236,14 +236,14 @@ export const CurveChart: React.FC<CurveChartProps> = ({
                   })()
                 }
               />
-              {/* 百分比模式 - 策略收益率 */}
+              {/* 百分比模式 - 策略收益率 (固定使用红色) */}
               {chartMode === 'percentage' && 
                 <Line
                   yAxisId="main"
                   type="monotone"
                   dataKey="fundReturnPct"
                   name="策略收益率"
-                  stroke="var(--chart-1)"
+                  stroke="#e11d48" /* 使用固定的红色 */
                   strokeWidth={2}
                   dot={false}
                   activeDot={{ r: 8 }}
@@ -273,14 +273,14 @@ export const CurveChart: React.FC<CurveChartProps> = ({
                 );
               })}
               
-              {/* 绝对值模式 - 策略收益 */}
+              {/* 绝对值模式 - 策略收益 (固定使用红色) */}
               {chartMode === 'absolute' && 
                 <Line
                   yAxisId="left"
                   type="monotone"
                   dataKey="fundReturn"
                   name="策略收益"
-                  stroke="var(--chart-1)"
+                  stroke="#e11d48" /* 使用固定的红色 */
                   strokeWidth={2}
                   dot={false}
                   activeDot={{ r: 8 }}

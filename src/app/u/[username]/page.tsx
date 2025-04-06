@@ -5,6 +5,7 @@ import { useEffect, useState } from "react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { MarketReference } from "@/components/market-reference"
 import { CurveChart } from "@/components/curve-chart"
+import { FundChange } from "@/components/fund-change"
 import {
   Table,
   TableBody,
@@ -24,8 +25,11 @@ import {
 // 图表数据类型
 interface ChartDataPoint {
   date: string;
-  fundReturnPct: number; // 策略收益百分比变化率
-  fundReturn: number;    // 策略收益绝对值
+  fundReturnPct: number; // 策略收益百分比，已考虑出入金影响
+  fundReturn: number;    // 总市值（包含初始本金、出入金和盈亏）
+  // 以下字段可选添加，但不是必需的
+  // pureProfit?: number;   // 纯收益（不包含出入金）
+  // fundChange?: number;   // 累计出入金
   [key: string]: string | number; // 动态比较资产数据
 }
 
@@ -57,7 +61,6 @@ interface FundDataItem {
   "策略名": string;
   "初始本金": number;
   "初始价格": string;
-  "可用金额": number;
   "市值": number;
   "对比": string;
   "备注": string;
@@ -66,6 +69,20 @@ interface FundDataItem {
 interface BaseInfoResponse {
   success: boolean;
   data: FundDataItem[];
+  timestamp: string;
+}
+
+// 出入金数据类型
+interface FundChangeItem {
+  "日期": string;
+  "金额": number;
+  "操作": string;  // "入金" 或 "出金" 或 "初始本金"
+  "备注"?: string;
+}
+
+export interface FundChangeResponse {
+  success: boolean;
+  data: FundChangeItem[];
   timestamp: string;
 }
 
@@ -78,6 +95,9 @@ export default function UserPage() {
   const [holdingStrategies, setHoldingStrategies] = useState<HoldingStrategyResponse | null>(null);
   const [historicalHoldings, setHistoricalHoldings] = useState<HoldingStrategyResponse | null>(null);
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
+  const [totalMarketValue, setTotalMarketValue] = useState<number>(0);
+  const [idleFunds, setIdleFunds] = useState<number>(0);
+  const [fundChangeData, setFundChangeData] = useState<FundChangeResponse | null>(null);
   
   // 持仓标签页状态
   const [activeHoldingTab, setActiveHoldingTab] = useState<'current' | 'historical'>('current');
@@ -100,31 +120,104 @@ export default function UserPage() {
   // 在绝对值模式下，当前选中的对比资产
   const [selectedComparisonAsset, setSelectedComparisonAsset] = useState<string>('');
 
-  // 计算实时市值：可用金额 + 所有当前持仓的市值之和
-  const calculateTotalMarketValue = (): number => {
-    try {
-      if (holdingStrategies && holdingStrategies.success && holdingStrategies.data && baseInfoResponse && baseInfoResponse.success && baseInfoResponse.data && baseInfoResponse.data.length > 0) {
-        const availableFunds = baseInfoResponse.data[0]["可用金额"];
-        if (!availableFunds) throw new Error("可用金额不存在");
-        // 计算所有持仓的市值总和
-        const totalHoldingsValue = holdingStrategies.data.reduce((sum, strategy) => {
-          const marketValue = strategy["实时估值"] || 0;
-          return sum + marketValue;
-        }, 0);
-        
-        // 总市值 = 可用金额 + 持仓市值总和
-        const totalMarketValue = availableFunds + totalHoldingsValue;
-        
-        if (!isNaN(totalMarketValue) && totalMarketValue > 0) {
-          return totalMarketValue;
-        }
+  // 计算当前持仓的盈亏总和
+  const calculateCurrentHoldingsProfit = (strategies: HoldingStrategyItem[]): number => {
+    return strategies.reduce((sum, strategy) => {
+      // 计算当前持仓的盈亏：实时估值 - 进场价值
+      const marketValue = strategy["实时估值"] || 0;
+      let entryCost = 0;
+      
+      if (strategy["进场价值"]) {
+        entryCost = strategy["进场价值"];
+      } else if (strategy["仓位"] && strategy["进场"]) {
+        const position = typeof strategy["仓位"] === 'string' ? 
+          parseFloat(strategy["仓位"]) : strategy["仓位"];
+        entryCost = position * strategy["进场"];
       }
       
-      // 如果计算有问题，使用 FundDataItem 里的"市值"
-      return baseInfoResponse?.data?.[0]?.["市值"] || 0;
+      const profit = marketValue - entryCost;
+      return sum + profit;
+    }, 0);
+  };
+  
+  // 计算历史持仓的盈亏总和
+  const calculateHistoricalHoldingsProfit = (strategies: HoldingStrategyItem[]): number => {
+    return strategies.reduce((sum, strategy) => {
+      const profit = typeof strategy["盈亏"] === 'number' ? strategy["盈亏"] : 0;
+      return sum + profit;
+    }, 0);
+  };
+
+  // 计算实时市值和闲置资金，并更新状态
+  const updateTotalMarketValue = async () => {
+    try {
+      // 检查是否有基本数据
+      if (!baseInfoResponse || !baseInfoResponse.success || !baseInfoResponse.data || baseInfoResponse.data.length === 0) {
+        return 0;
+      }
+      
+      // 获取初始本金
+      const initialCapital = baseInfoResponse.data[0]["初始本金"] || 0;
+      if (initialCapital === 0) {
+        // 如果初始本金为0，则直接返回市值字段
+        return baseInfoResponse.data[0]["市值"] || 0;
+      }
+      
+      // 使用已获取的出入金数据
+      let netFundChange = 0;
+      if (fundChangeData && fundChangeData.success && fundChangeData.data && fundChangeData.data.length > 0) {
+        // 计算出入金净额
+        // 忽略“初始本金”操作类型
+        netFundChange = fundChangeData.data.reduce((sum: number, change: FundChangeItem) => {
+          if (change["操作"] === "初始本金") {
+            return sum;
+          }
+          const amount = change["金额"] * (change["操作"] === "入金" ? 1 : -1);
+          return sum + amount;
+        }, 0);
+      }
+      
+      let totalProfit = 0;
+      
+      // 计算所有当前持仓的盈亏总和
+      if (holdingStrategies && holdingStrategies.success && holdingStrategies.data) {
+        totalProfit += calculateCurrentHoldingsProfit(holdingStrategies.data);
+      }
+      
+      // 计算所有历史持仓的盈亏总和
+      if (historicalHoldings && historicalHoldings.success && historicalHoldings.data) {
+        totalProfit += calculateHistoricalHoldingsProfit(historicalHoldings.data);
+      }
+      
+      // 总市值 = 初始本金 + 净出入金 + 总盈亏
+      let calculatedValue = initialCapital + netFundChange + totalProfit;
+      
+      if (isNaN(calculatedValue) || calculatedValue <= 0) {
+        // 如果计算有问题，使用 FundDataItem 里的"市值"
+        calculatedValue = baseInfoResponse.data[0]["市值"] || 0;
+      }
+      
+      // 纯收益 = 总市值 - 初始本金 - 净出入金
+      const pureProfit = calculatedValue - initialCapital - netFundChange;
+      
+      // 计算当前持仓的总估值
+      let totalCurrentHoldingsValue = 0;
+      if (holdingStrategies && holdingStrategies.success && holdingStrategies.data) {
+        totalCurrentHoldingsValue = holdingStrategies.data.reduce((sum, strategy) => {
+          return sum + (strategy["实时估值"] || 0);
+        }, 0);
+      }
+      
+      // 计算闲置资金 = 总市值 - 当前持仓总估值
+      const calculatedIdleFunds = calculatedValue - totalCurrentHoldingsValue;
+      
+      // 更新状态
+      setTotalMarketValue(calculatedValue);
+      setIdleFunds(calculatedIdleFunds > 0 ? calculatedIdleFunds : 0);
     } catch (error) {
       console.error('计算实时市值时出错:', error);
-      return baseInfoResponse?.data?.[0]?.["市值"] || 0;
+      const fallbackValue = baseInfoResponse?.data?.[0]?.["市值"] || 0;
+      setTotalMarketValue(fallbackValue);
     }
   };
   
@@ -135,6 +228,53 @@ export default function UserPage() {
       setSelectedComparisonAsset(comparisonAssets[0]);
     }
   }, [comparisonAssets, selectedComparisonAsset]);
+  
+  // 当相关数据变化时更新总市值
+  useEffect(() => {
+    updateTotalMarketValue();
+  }, [baseInfoResponse, holdingStrategies, historicalHoldings, username, fundChangeData]);
+  
+  // 获取出入金数据
+  useEffect(() => {
+    async function fetchFundChangeData() {
+      try {
+        if (!username) {
+          return;
+        }
+        
+        const response = await fetch(`/api/change/${username}`);
+        
+        if (!response.ok) {
+          throw new Error(`API request failed with status ${response.status}`);
+        }
+        
+        const data = await response.json();
+        setFundChangeData(data);
+        
+        // 计算总入金和总出金
+        if (data.success && data.data) {
+          let deposit = 0;
+          let withdrawal = 0;
+          
+          data.data.forEach((item: { "操作": string; "金额": number }) => {
+            // 如果操作类型是“初始本金”，则忽略该记录
+            if (item["操作"] === "初始本金") {
+              return;
+            }
+            if (item["操作"] === "入金") {
+              deposit += item["金额"];
+            } else if (item["操作"] === "出金") {
+              withdrawal += item["金额"];
+            }
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching change data:', err);
+      }
+    }
+    
+    fetchFundChangeData();
+  }, [username]);
 
   useEffect(() => {
     async function fetchPageData() {
@@ -357,21 +497,56 @@ export default function UserPage() {
           // 更新当前资金
           currentCapital += profit;
           
-          // 记录这一天的资金
+          // 获取当天的出入金记录
           const dateKey = exitDate.toISOString().split('T')[0];
+          let dayFundChange = 0;
+          
+          // 考虑截止到当天的出入金记录
+          if (fundChangeData && fundChangeData.success && fundChangeData.data) {
+            // 找到当天的出入金记录
+            const dayChanges = fundChangeData.data.filter(change => {
+              const changeDate = new Date(change["日期"]).toISOString().split('T')[0];
+              return changeDate === dateKey && change["操作"] !== "初始本金";
+            });
+            
+            // 计算当天的出入金净额
+            dayFundChange = dayChanges.reduce((sum, change) => {
+              const amount = change["金额"] * (change["操作"] === "入金" ? 1 : -1);
+              return sum + amount;
+            }, 0);
+            
+            // 将出入金记录添加到当天资金中
+            currentCapital += dayFundChange;
+          }
+          
+          // 记录这一天的资金（包含盈亏和出入金）
           capitalChangeMap.set(dateKey, currentCapital);
         });
         
         // 如果有当前持仓，添加最新的估值
         if (localHoldingStrategies?.success && localHoldingStrategies.data && localHoldingStrategies.data.length > 0) {
-          // 计算当前持仓的总估值
-          const totalCurrentValue = localHoldingStrategies.data.reduce((sum, strategy) => {
-            return sum + (strategy["实时估值"] || 0);
-          }, 0);
+          // 计算当前持仓的总估值和总盈亏
+          let totalCurrentProfit = 0;
           
-          // 加上可用金额
-          const availableFunds = baseInfoResponse.data[0]["可用金额"] || 0;
-          const totalCurrentCapital = availableFunds + totalCurrentValue;
+          // 计算当前持仓的盈亏总和
+          totalCurrentProfit += calculateCurrentHoldingsProfit(localHoldingStrategies.data);
+          
+          // 计算所有历史持仓的盈亏总和
+          totalCurrentProfit += calculateHistoricalHoldingsProfit(sortedHistoricalHoldings);
+          
+          // 获取所有出入金的总和
+          let totalFundChange = 0;
+          if (fundChangeData && fundChangeData.success && fundChangeData.data) {
+            totalFundChange = fundChangeData.data
+              .filter(change => change["操作"] !== "初始本金")
+              .reduce((sum, change) => {
+                const amount = change["金额"] * (change["操作"] === "入金" ? 1 : -1);
+                return sum + amount;
+              }, 0);
+          }
+          
+          // 总市值 = 初始本金 + 总盈亏 + 总出入金
+          const totalCurrentCapital = initialCapital + totalCurrentProfit + totalFundChange;
           
           // 记录今天的资金
           const todayKey = endDate.toISOString().split('T')[0];
@@ -391,11 +566,35 @@ export default function UserPage() {
           const currentDate = new Date(currentDateKey);
           const currentCapital = capitalChangeMap.get(currentDateKey) || initialCapital;
           
-          // 创建数据点 - 只包含主曲线数据
+          // 获取当前日期之前的累计出入金
+          let cumulativeFundChangeUntilDate = 0;
+          if (fundChangeData && fundChangeData.success && fundChangeData.data) {
+            cumulativeFundChangeUntilDate = fundChangeData.data
+              .filter(change => {
+                // 只考虑当前日期之前的出入金记录，并忽略“初始本金”类型
+                const changeDate = new Date(change["日期"]).toISOString().split('T')[0];
+                return changeDate <= currentDateKey && change["操作"] !== "初始本金";
+              })
+              .reduce((sum, change) => {
+                const amount = change["金额"] * (change["操作"] === "入金" ? 1 : -1);
+                return sum + amount;
+              }, 0);
+          }
+          
+          // 纯收益 = 当前资金 - 初始本金 - 累计出入金
+          const pureProfit = currentCapital - initialCapital - cumulativeFundChangeUntilDate;
+          
+          // 正确计算收益率，排除出入金影响
+          // 收益率 = 纯收益 / 初始本金
+          const pureReturnRate = initialCapital > 0 ? (pureProfit / initialCapital) * 100 : 0;
+          
+          // 创建数据点 - 包含纯收益、累计出入金和收益率
           const dataPoint: ChartDataPoint = {
             date: currentDate.toLocaleDateString(),
-            fundReturn: currentCapital,
-            fundReturnPct: ((currentCapital / initialCapital) - 1) * 100
+            fundReturn: capitalChangeMap.get(currentDateKey) || currentCapital,  // 使用已计算好的当天资金值
+            fundReturnPct: pureReturnRate,  // 纯收益率，排除出入金影响
+            pureProfit: pureProfit,
+            fundChange: cumulativeFundChangeUntilDate
           };
           
           // 添加数据点
@@ -545,7 +744,7 @@ export default function UserPage() {
                   <CardTitle className="text-lg">市值</CardTitle>
                 </div>
                 <div className="font-semibold text-lg">
-                  ${calculateTotalMarketValue().toLocaleString()}
+                  ${totalMarketValue.toLocaleString()}
                 </div>
               </CardHeader>
               <CardContent>
@@ -554,6 +753,13 @@ export default function UserPage() {
                   <div className="flex justify-between items-center">
                     <dt className="text-muted-foreground">初始本金</dt>
                     <dd className="">${baseInfoResponse.data[0]["初始本金"].toLocaleString()}</dd>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <dt className="text-muted-foreground">闲置资金</dt>
+                    <dd className="flex items-center gap-2">
+                      <span>${idleFunds.toLocaleString()}</span>
+                      <span className="text-sm text-muted-foreground">({totalMarketValue > 0 ? ((idleFunds / totalMarketValue) * 100).toFixed(2) : '0.00'}%)</span>
+                    </dd>
                   </div>
                   <div className="flex justify-between">
                     <dt className="text-muted-foreground">开始日期</dt>
@@ -592,7 +798,7 @@ export default function UserPage() {
                   {(() => {
                     try {
                       const initialCapital = baseInfoResponse.data[0]["初始本金"];
-                      const currentBalance = calculateTotalMarketValue();
+                      const currentBalance = totalMarketValue;
                       
                       if (initialCapital && currentBalance) {
                         const initCapNum = typeof initialCapital === 'string' 
@@ -601,15 +807,32 @@ export default function UserPage() {
                         const currBalNum = typeof currentBalance === 'string' 
                           ? parseFloat(currentBalance) 
                           : currentBalance;
+                        
+                        // 获取出入金净额
+                        let netFundChange = 0;
+                        if (fundChangeData && fundChangeData.success && fundChangeData.data) {
+                          netFundChange = fundChangeData.data
+                            .filter(change => change["操作"] !== "初始本金")
+                            .reduce((sum, change) => {
+                              const amount = change["金额"] * (change["操作"] === "入金" ? 1 : -1);
+                              return sum + amount;
+                            }, 0);
+                        }
                           
                         if (!isNaN(initCapNum) && !isNaN(currBalNum) && initCapNum > 0) {
-                          const profit = currBalNum - initCapNum;
-                          const ratio = (profit / initCapNum) * 100;
-                          const colorClass = profit >= 0 ? 'text-green-600' : 'text-red-600';
+                          // 纯收益 = 当前余额 - 初始本金 - 出入金净额
+                          const pureProfit = currBalNum - initCapNum - netFundChange;
+                          
+                          // 调整后的收益率计算：纯收益 / (初始本金 + 出入金净额)
+                          const adjustedCapital = initCapNum + netFundChange;
+                          const ratio = adjustedCapital > 0 ? (pureProfit / adjustedCapital) * 100 : 0;
+                          
+                          const colorClass = pureProfit >= 0 ? 'text-green-600' : 'text-red-600';
                           
                           return (
                             <span className={colorClass}>
-                              ${profit >= 0 ? '+' : ''}{profit.toLocaleString(undefined, {maximumFractionDigits: 2})} ({ratio.toFixed(2)}%)
+                              ${pureProfit >= 0 ? '+' : ''}{pureProfit.toLocaleString(undefined, {maximumFractionDigits: 2})}
+                              <span className="text-sm">({ratio.toFixed(2)}%)</span>
                             </span>
                           );
                         }
@@ -656,7 +879,7 @@ export default function UserPage() {
                             return "-"; // 没有找到足够早的数据点
                           }
                           
-                          // 获取金额
+                          // 获取金额和出入金变化
                           const currentAmount = latestData.fundReturn;
                           const weekAgoAmount = weekAgoData.fundReturn;
                           
@@ -664,16 +887,26 @@ export default function UserPage() {
                             return "-";
                           }
                           
-                          // 计算盈亏金额
-                          const profitAmount = currentAmount - weekAgoAmount;
-                          const profitPercent = (profitAmount / weekAgoAmount) * 100;
+                          // 获取两个时间点的出入金数据
+                          const currentFundChange = typeof latestData.fundChange === 'number' ? latestData.fundChange : 0;
+                          const weekAgoFundChange = typeof weekAgoData.fundChange === 'number' ? weekAgoData.fundChange : 0;
                           
-                          // 根据正负值设置颜色
-                          const colorClass = profitAmount >= 0 ? 'text-green-600' : 'text-red-600';
+                          // 计算这一周的出入金净额
+                          const weekFundChangeNet = currentFundChange - weekAgoFundChange;
+                          
+                          // 纯盈亏金额 = 当前金额 - 一周前金额 - 这一周的出入金净额
+                          const pureProfitAmount = currentAmount - weekAgoAmount - weekFundChangeNet;
+                          
+                          // 计算纯盈亏百分比 = 纯盈亏 / 一周前金额
+                          const pureProfitPercent = (pureProfitAmount / weekAgoAmount) * 100;
+                          
+                          // 根据纯盈亏的正负值设置颜色
+                          const colorClass = pureProfitAmount >= 0 ? 'text-green-600' : 'text-red-600';
                           
                           return (
                             <span className={colorClass}>
-                              ${profitAmount >= 0 ? '+' : ''}{profitAmount.toLocaleString(undefined, {maximumFractionDigits: 2})}({profitPercent >= 0 ? '+' : ''}{profitPercent.toFixed(2)}%)
+                              ${pureProfitAmount >= 0 ? '+' : ''}{pureProfitAmount.toLocaleString(undefined, {maximumFractionDigits: 2})}
+                              <span className="text-sm">({pureProfitPercent >= 0 ? '+' : ''}{pureProfitPercent.toFixed(2)}%)</span>
                             </span>
                           );
                         } catch (error) {
@@ -692,7 +925,7 @@ export default function UserPage() {
                           const initialCapitalRaw = baseInfoResponse.data[0]["初始本金"];
                           
                           // 计算实时市值
-                          const currentBalanceRaw = calculateTotalMarketValue();
+                          const currentBalanceRaw = totalMarketValue;
                           
                           // 转换为数字
                           const initialCapital = typeof initialCapitalRaw === 'string' 
@@ -706,6 +939,20 @@ export default function UserPage() {
                             return "-";
                           }
                           
+                          // 获取总出入金额
+                          let totalFundChange = 0;
+                          if (fundChangeData && fundChangeData.success && fundChangeData.data) {
+                            totalFundChange = fundChangeData.data
+                              .filter(change => change["操作"] !== "初始本金")
+                              .reduce((sum, change) => {
+                                const amount = change["金额"] * (change["操作"] === "入金" ? 1 : -1);
+                                return sum + amount;
+                              }, 0);
+                          }
+                          
+                          // 计算纯收益：总市值 - 初始本金 - 总出入金
+                          const pureProfit = currentBalance - initialCapital - totalFundChange;
+                          
                           // 计算运行时长
                           const startDateStr = baseInfoResponse.data[0]["开始日期"];
                           if (!startDateStr) return "-";
@@ -716,9 +963,12 @@ export default function UserPage() {
                           const diffDays = diffTime / (1000 * 3600 * 24);
                           const runningTimeYears = diffDays / 365;
                           
-                          // 计算年化收益率: ((当前余额 / 初始本金) ^ (1/年数) - 1) * 100
+                          // 计算年化收益率: 使用纯收益计算 ((1 + 纯收益率) ^ (1/年数) - 1) * 100
                           if (runningTimeYears > 0) {
-                            const apr = (Math.pow(currentBalance / initialCapital, 1 / runningTimeYears) - 1) * 100;
+                            // 计算纯收益率：纯收益 / 初始本金
+                            const pureReturnRate = pureProfit / initialCapital;
+                            // 年化收益率
+                            const apr = (Math.pow(1 + pureReturnRate, 1 / runningTimeYears) - 1) * 100;
                             // 根据正负值设置颜色
                             const colorClass = apr >= 0 ? 'text-green-600' : 'text-red-600';
                             return (
@@ -747,54 +997,64 @@ export default function UserPage() {
                           // 获取最新的数据点
                           const latestData = chartData[chartData.length - 1];
                           const today = new Date();
-                          let monthAgoData = null;
+                          let weekAgoData = null;
                           
-                          // 从后向前遍历数据点，找到约30天前的数据点
+                          // 从后向前遍历数据点，找到约7天前的数据点
                           for (let i = chartData.length - 2; i >= 0; i--) {
                             const dataPoint = chartData[i];
                             const itemDate = new Date(dataPoint.date);
                             const daysDiff = (today.getTime() - itemDate.getTime()) / (1000 * 3600 * 24);
                             
-                            if (daysDiff >= 29) { // 至少有29天差距（约一个月）
-                              monthAgoData = dataPoint;
+                            if (daysDiff >= 6) { // 至少有6天差距（约一周）
+                              weekAgoData = dataPoint;
                               break;
                             }
                           }
                           
-                          if (!monthAgoData) {
+                          if (!weekAgoData) {
                             return "-"; // 没有找到足够早的数据点
                           }
                           
                           // 获取实时市值
-                          let currentAmount = calculateTotalMarketValue();
+                          let currentAmount = totalMarketValue;
                           
                           // 如果计算有问题，使用图表数据里的最新值
                           if (isNaN(currentAmount) || currentAmount <= 0) {
                             currentAmount = latestData.fundReturn;
                           }
 
-                          // 使用一个月前的数据
-                          const monthAgoAmount = monthAgoData.fundReturn;
+                          // 使用一周前的数据
+                          const weekAgoAmount = weekAgoData.fundReturn;
                           
-                          if (isNaN(currentAmount) || isNaN(monthAgoAmount) || monthAgoAmount <= 0) {
+                          if (isNaN(currentAmount) || isNaN(weekAgoAmount) || weekAgoAmount <= 0) {
                             return "-";
                           }
                           
+                          // 获取两个时间点的出入金数据
+                          const currentFundChange = typeof latestData.fundChange === 'number' ? latestData.fundChange : 0;
+                          const weekAgoFundChange = typeof weekAgoData.fundChange === 'number' ? weekAgoData.fundChange : 0;
+                          
+                          // 计算这一周的出入金净额
+                          const weekFundChangeNet = currentFundChange - weekAgoFundChange;
+                          
+                          // 纯收益金额 = 当前金额 - 一周前金额 - 这一周的出入金净额
+                          const pureWeeklyProfit = currentAmount - weekAgoAmount - weekFundChangeNet;
+                          
                           // 计算实际天数
-                          const daysDiff = (today.getTime() - new Date(monthAgoData.date).getTime()) / (1000 * 3600 * 24);
+                          const daysDiff = (today.getTime() - new Date(weekAgoData.date).getTime()) / (1000 * 3600 * 24);
                           
-                          // 计算月收益率
-                          const monthlyReturn = (currentAmount / monthAgoAmount) - 1;
+                          // 计算纯周收益率
+                          const pureWeeklyReturn = pureWeeklyProfit / weekAgoAmount;
                           
-                          // 计算年化收益率: ((1 + 月收益率) ^ (365/天数) - 1) * 100
-                          const monthlyAPR = (Math.pow(1 + monthlyReturn, 365 / daysDiff) - 1) * 100;
+                          // 计算年化收益率: ((1 + 纯周收益率) ^ (365/天数) - 1) * 100
+                          const weeklyAPR = (Math.pow(1 + pureWeeklyReturn, 365 / daysDiff) - 1) * 100;
                           
-                          // 根据正负值设置颜色
-                          const colorClass = monthlyAPR >= 0 ? 'text-green-600' : 'text-red-600';
+                          // 根据纯收益率的正负值设置颜色
+                          const colorClass = weeklyAPR >= 0 ? 'text-green-600' : 'text-red-600';
                           
                           return (
                             <span className={colorClass}>
-                              {monthlyAPR.toFixed(2)}%
+                              {weeklyAPR.toFixed(2)}%
                             </span>
                           );
                           
@@ -889,11 +1149,8 @@ export default function UserPage() {
                         const profit = marketValue - holdingCost;
                         const profitPercent = (profit / holdingCost) * 100;
                         
-                        // 计算实时市值总额
-                        const totalMarketValue = calculateTotalMarketValue();
-                        
                         // 计算比例
-                        const proportion = marketValue / totalMarketValue;
+                        const proportion = totalMarketValue > 0 ? marketValue / totalMarketValue : 0;
                         
                         return (
                           <TableRow key={index}>
@@ -917,7 +1174,7 @@ export default function UserPage() {
                                   {profit >= 0 ? "+" : ""}
                                   ${profit.toLocaleString(undefined, {maximumFractionDigits: 2})}
                                 </span>
-                                <span className="text-xs">
+                                <span className="text-sm">
                                   {profit >= 0 ? "+" : ""}
                                   {profitPercent.toFixed(2)}%
                                 </span>
@@ -950,7 +1207,7 @@ export default function UserPage() {
                     const profitPercent = (profit / holdingCost) * 100;
                     
                     // 计算实时市值总额
-                    const totalMarketValue = calculateTotalMarketValue();
+                    // 使用状态中的总市值变量
                     const proportion = holdingCost ? holdingCost / totalMarketValue : 0;
                     
                     return (
@@ -1121,7 +1378,7 @@ export default function UserPage() {
                         const profit = strategy["盈亏"];
                         
                         // 计算实时市值总额
-                        const totalMarketValue = calculateTotalMarketValue();
+                        // 使用状态中的总市值变量
                         
                         const proportion = entryCost ? entryCost / totalMarketValue : 0;
                         const profitPercent = entryCost > 0 ? (profit / entryCost) * 100 : 0;
@@ -1148,7 +1405,7 @@ export default function UserPage() {
                                   {profit >= 0 ? "+" : ""}
                                   ${profit.toLocaleString(undefined, {maximumFractionDigits: 2})}
                                 </span>
-                                <span className="text-xs">
+                                <span className="text-sm">
                                   {profit >= 0 ? "+" : ""}
                                   {profitPercent.toFixed(2)}%
                                 </span>
@@ -1191,7 +1448,7 @@ export default function UserPage() {
                     // 计算盈亏
                     const profit = strategy["盈亏"];
                     // 计算实时市值总额
-                    const totalMarketValue = calculateTotalMarketValue();
+                    // 使用状态中的总市值变量
 
                     const proportion = entryCost ? entryCost / totalMarketValue : 0;
                     const profitPercent = entryCost > 0 ? (profit / entryCost) * 100 : 0;
@@ -1337,6 +1594,25 @@ export default function UserPage() {
                 </TabsContent>
               </CardContent>
           </Tabs>
+        </Card>
+      )}
+
+      {/* 出入金模块 */}
+      {!loading && !error && fundChangeData && fundChangeData.success && (
+        <Card className="animate-in fade-in duration-700 mt-6">
+          <CardHeader className="flex flex-row items-center justify-between p-4">
+            <div className="flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-6 w-6">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
+              </svg>
+              <CardTitle className="text-lg">出入金</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="p-4 pt-0">
+            <FundChange
+              fundChangeData={fundChangeData} 
+            />
+          </CardContent>
         </Card>
       )}
 
