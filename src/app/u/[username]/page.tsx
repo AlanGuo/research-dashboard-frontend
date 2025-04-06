@@ -213,13 +213,81 @@ export default function UserPage() {
     }
   };
 
-  // 获取持仓数据
+  // 处理比较资产数据点的函数
+  const processAssetDataPoint = (dataPoint: ChartDataPoint, asset: string, currentDateKey: string, assetDataMap: Map<string, number>, initialAssetValues: Map<string, number>, newChartData: ChartDataPoint[]) => {
+    const assetKey = asset.toLowerCase();
+    let assetValue = assetDataMap.get(currentDateKey);
+    
+    // 如果当天没有资产数据，尝试找前一天的
+    if (assetValue === undefined && assetDataMap.size > 0) {
+      // 创建日期对象并减去一天
+      const prevDate = new Date(currentDateKey);
+      prevDate.setDate(prevDate.getDate() - 1);
+      const prevDateKey = prevDate.toISOString().split('T')[0];
+      assetValue = assetDataMap.get(prevDateKey);
+      
+      // 如果还是没有，再往前找一天
+      if (assetValue === undefined) {
+        prevDate.setDate(prevDate.getDate() - 1);
+        const prevDateKey2 = prevDate.toISOString().split('T')[0];
+        assetValue = assetDataMap.get(prevDateKey2);
+      }
+    }
+    
+    // 如果还是没有资产数据，使用前面数据点的值
+    if (assetValue === undefined && newChartData.length > 0) {
+      // 使用前一个数据点的百分比
+      const lastPctKey = `${assetKey}PricePct`;
+      const lastPct = newChartData[newChartData.length - 1][lastPctKey] as number;
+      // 将百分比转换回原始值
+      const initialValue = initialAssetValues.get(assetKey) || 0;
+      assetValue = initialValue * (1 + lastPct / 100);
+    }
+    
+    // 如果还是没有资产数据，使用一个默认值
+    if (assetValue === undefined) {
+      // 如果有其他数据，使用平均值
+      if (assetDataMap.size > 0) {
+        const values = Array.from(assetDataMap.values());
+        const avgValue = values.reduce((sum, value) => sum + value, 0) / values.length;
+        assetValue = avgValue;
+      } else {
+        // 完全没有数据时的最后备选
+        assetValue = initialAssetValues.get(assetKey) || 1000;
+      }
+    }
+    
+    // 计算百分比和绝对值
+    const initialValue = initialAssetValues.get(assetKey) || 1000;
+    const pctChange = ((assetValue / initialValue) - 1) * 100;
+    
+    // 添加到数据点
+    dataPoint[`${assetKey}PricePct`] = pctChange;
+    dataPoint[`${assetKey}Price`] = assetValue;
+  };
+  
+  // 获取持仓数据和生成基础图表数据
   useEffect(() => {
-    async function fetchHoldingData() {
+    async function fetchDataAndGenerateBaseChart() {
       try {
-        // 直接使用路由参数中的username
-        if (!username || !baseInfoResponse) {
-          return; // 如果username为空或基本信息未加载，不进行请求
+        if (!username || !baseInfoResponse?.success || !baseInfoResponse.data || baseInfoResponse.data.length === 0) {
+          return;
+        }
+        
+        // 获取初始本金
+        const initialCapital = baseInfoResponse.data[0]["初始本金"];
+        if (!initialCapital) {
+          console.error("初始本金不存在");
+          return;
+        }
+        
+        // 获取对比资产列表
+        const comparisonString = baseInfoResponse.data[0]["对比"] || "";
+        const assets = comparisonString ? comparisonString.split(',').map(asset => asset.trim()).filter(asset => asset) : [];
+        
+        // 更新比较资产列表（如果有变化）
+        if (JSON.stringify(assets) !== JSON.stringify(comparisonAssets)) {
+          setComparisonAssets(assets);
         }
         
         // 获取当前持仓
@@ -235,100 +303,159 @@ export default function UserPage() {
         // 获取历史持仓
         const historicalResponse = await fetch(`/api/holding/${username}?except=持仓`);
         
-        if (historicalResponse.ok) {
-          const historicalData = await historicalResponse.json();
-          setHistoricalHoldings(historicalData);
-        } else {
+        if (!historicalResponse.ok) {
           console.error(`Historical holdings API request failed with status ${historicalResponse.status}`);
+          return;
         }
         
-        // 获取基本信息以解析对比字段
-        if (baseInfoResponse && baseInfoResponse.success && baseInfoResponse.data.length > 0) {
-          const comparisonString = baseInfoResponse.data[0]["对比"] || "";
-          const assets = comparisonString ? comparisonString.split(',').map(asset => asset.trim()).filter(asset => asset) : [];
+        const historicalData = await historicalResponse.json();
+        setHistoricalHoldings(historicalData);
+        
+        if (!historicalData.success || !historicalData.data) {
+          return;
+        }
+        
+        // 初始化可见性设置 - 先只设置主曲线
+        const newVisibleLines: Record<string, boolean> = {
+          fundReturnPct: true,
+          fundReturn: true
+        };
+        
+        // 为每个资产添加可见性设置
+        for (const asset of assets) {
+          const assetKey = asset.toLowerCase();
+          newVisibleLines[`${assetKey}PricePct`] = true;
+          newVisibleLines[`${assetKey}Price`] = true;
+        }
+        
+        // 更新可见性设置
+        setVisibleLines(newVisibleLines);
+        
+        // 按日期排序历史持仓（从早到晚）
+        const sortedHistoricalHoldings = [...historicalData.data]
+          .sort((a, b) => {
+            return new Date(a["更新日期"]).getTime() - new Date(b["更新日期"]).getTime();
+          });
+        
+        // 创建日期到资金变化的映射
+        const capitalChangeMap = new Map<string, number>();
+        
+        // 当前资金，初始为初始本金
+        let currentCapital = initialCapital;
+        
+        // 获取开始日期和结束日期
+        const startDate = new Date(baseInfoResponse.data[0]["开始日期"]);
+        const endDate = new Date(); // 今天
+        
+        // 记录初始本金
+        const startDateKey = startDate.toISOString().split('T')[0];
+        capitalChangeMap.set(startDateKey, currentCapital);
+        
+        // 根据历史持仓计算每个平仓日期的资金变化
+        sortedHistoricalHoldings.forEach(holding => {
+          // 获取平仓日期和盈亏
+          const exitDate = new Date(holding["更新日期"]);
+          const profit = holding["盈亏"] || 0;
           
-          // 更新比较资产列表
-          setComparisonAssets(assets);
+          // 更新当前资金
+          currentCapital += profit;
           
-          // 初始化可见性设置
-          const newVisibleLines: Record<string, boolean> = {
-            fundReturnPct: true,
-            fundReturn: true
+          // 记录这一天的资金
+          const dateKey = exitDate.toISOString().split('T')[0];
+          capitalChangeMap.set(dateKey, currentCapital);
+        });
+        
+        // 如果有当前持仓，添加最新的估值
+        if (holdingStrategies?.success && holdingStrategies.data && holdingStrategies.data.length > 0) {
+          // 计算当前持仓的总估值
+          const totalCurrentValue = holdingStrategies.data.reduce((sum, strategy) => {
+            return sum + (strategy["实时估值"] || 0);
+          }, 0);
+          
+          // 加上可用金额
+          const availableFunds = baseInfoResponse.data[0]["可用金额"] || 0;
+          const totalCurrentCapital = availableFunds + totalCurrentValue;
+          
+          // 记录今天的资金
+          const todayKey = endDate.toISOString().split('T')[0];
+          capitalChangeMap.set(todayKey, totalCurrentCapital);
+        }
+        
+        // 获取所有日期并排序
+        const allDates = [...capitalChangeMap.keys()];
+        allDates.sort();
+        
+        // 生成图表数据 - 先只有主曲线
+        const newChartData: ChartDataPoint[] = [];
+        
+        // 为每个资金变化日期创建数据点
+        for (let i = 0; i < allDates.length; i++) {
+          const currentDateKey = allDates[i];
+          const currentDate = new Date(currentDateKey);
+          const currentCapital = capitalChangeMap.get(currentDateKey) || initialCapital;
+          
+          // 创建数据点 - 只包含主曲线数据
+          const dataPoint: ChartDataPoint = {
+            date: currentDate.toLocaleDateString(),
+            fundReturn: currentCapital,
+            fundReturnPct: ((currentCapital / initialCapital) - 1) * 100
           };
           
-          // 创建共享的比较资产日期到数据的映射
-          const newAssetDataMaps = new Map<string, Map<string, number>>();
-          
-          // 获取开始日期和结束日期
-          const startDate = new Date(baseInfoResponse.data[0]["开始日期"]);
-          const endDate = new Date(); // 今天
-          
-          // 格式化日期
-          const earliestDate = startDate.toISOString().split('T')[0];
-          const latestDate = endDate.toISOString().split('T')[0];
-          
-          // 为每个资产获取数据
-          for (const asset of assets) {
-            // 添加每个资产的可见性设置
-            newVisibleLines[`${asset.toLowerCase()}PricePct`] = true;
-            newVisibleLines[`${asset.toLowerCase()}Price`] = true;
-            
-            // 获取资产数据
-            await fetchComparisonData(asset, earliestDate, latestDate, newAssetDataMaps);
-          }
-          
-          // 将资产数据保存到状态
-          setAssetDataMaps(newAssetDataMaps);
-          
-          // 更新可见性设置
-          setVisibleLines(newVisibleLines);
+          // 添加数据点
+          newChartData.push(dataPoint);
         }
+        
+        // 如果成功生成了数据点，则更新图表数据
+        if (newChartData.length > 0) {
+          setChartData(newChartData);
+        }
+        
+        // 保存重要数据供比较资产使用
+        return {
+          assets,
+          startDate,
+          endDate,
+          allDates,
+          initialCapital,
+          newChartData
+        };
       } catch (err) {
-        console.error('Error fetching holding data:', err);
+        console.error('Error fetching data and generating base chart:', err);
+        return null;
       }
     }
     
-    if (username && baseInfoResponse) {
-      fetchHoldingData();
-    }
+    fetchDataAndGenerateBaseChart().then(baseChartData => {
+      // 如果成功生成了基础图表，启动获取比较资产数据的过程
+      if (baseChartData) {
+        fetchComparisonAssetData(baseChartData);
+      }
+    });
   }, [username, baseInfoResponse]);
   
-  // 生成图表数据 - 基于初始本金和历史持仓计算
-  useEffect(() => {
-    if (baseInfoResponse?.success && baseInfoResponse.data && baseInfoResponse.data.length > 0 && 
-        historicalHoldings?.success && historicalHoldings.data) {
+  // 获取比较资产数据并更新图表
+  const fetchComparisonAssetData = async (baseChartData: {
+    assets: string[],
+    startDate: Date,
+    endDate: Date,
+    allDates: string[],
+    initialCapital: number,
+    newChartData: ChartDataPoint[]
+  }) => {
+    try {
+      const { assets, startDate, endDate, allDates, initialCapital, newChartData } = baseChartData;
       
-      // 获取初始本金
-      const initialCapital = baseInfoResponse.data[0]["初始本金"];
-      if (!initialCapital) {
-        console.error("初始本金不存在");
-        return;
-      }
+      if (assets.length === 0) return;
       
-      // 获取对比资产列表
-      const comparisonString = baseInfoResponse.data[0]["对比"] || "";
-      const assets = comparisonString ? comparisonString.split(',').map(asset => asset.trim()).filter(asset => asset) : [];
+      // 创建共享的比较资产日期到数据的映射
+      const newAssetDataMaps = new Map<string, Map<string, number>>();
       
-      // 更新比较资产列表
-      setComparisonAssets(assets);
-      
-      // 初始化可见性设置
-      const newVisibleLines: Record<string, boolean> = {
-        fundReturnPct: true,
-        fundReturn: true
-      };
-      
-      // 为每个资产添加可见性设置
-      for (const asset of assets) {
-        newVisibleLines[`${asset.toLowerCase()}PricePct`] = true;
-        newVisibleLines[`${asset.toLowerCase()}Price`] = true;
-      }
-      
-      // 更新可见性设置
-      setVisibleLines(newVisibleLines);
+      // 格式化日期
+      const earliestDate = startDate.toISOString().split('T')[0];
+      const latestDate = endDate.toISOString().split('T')[0];
       
       // 解析初始价格字段，同样是逗号分隔
-      const initialPricesString = baseInfoResponse.data[0]["初始价格"] || "";
+      const initialPricesString = baseInfoResponse?.data?.[0]["初始价格"] || "";
       const initialPrices = initialPricesString.split(',').map(price => price.trim());
       
       // 为每个资产设置初始价格
@@ -351,141 +478,40 @@ export default function UserPage() {
         }
       }
       
-      // 获取开始日期
-      const startDate = new Date(baseInfoResponse.data[0]["开始日期"]);
-      const today = new Date();
+      // 为每个资产获取数据 - 并行获取以加快速度
+      const fetchPromises = assets.map(asset => 
+        fetchComparisonData(asset, earliestDate, latestDate, newAssetDataMaps)
+      );
       
-      // 按日期排序历史持仓（从早到晚）
-      const sortedHistoricalHoldings = [...historicalHoldings.data]
-        .sort((a, b) => {
-          return new Date(a["更新日期"]).getTime() - new Date(b["更新日期"]).getTime();
-        });
+      await Promise.all(fetchPromises);
       
-      // 创建日期到资金变化的映射
-      const capitalChangeMap = new Map<string, number>();
+      // 将资产数据保存到状态
+      setAssetDataMaps(newAssetDataMaps);
       
-      // 当前资金，初始为初始本金
-      let currentCapital = initialCapital;
+      // 复制原始图表数据以添加比较资产数据
+      const updatedChartData = [...newChartData];
       
-      // 记录初始本金
-      const startDateKey = startDate.toISOString().split('T')[0];
-      capitalChangeMap.set(startDateKey, currentCapital);
-      
-      // 根据历史持仓计算每个平仓日期的资金变化
-      sortedHistoricalHoldings.forEach(holding => {
-        // 获取平仓日期和盈亏
-        const exitDate = new Date(holding["更新日期"]);
-        const profit = holding["盈亏"] || 0;
-        
-        // 更新当前资金
-        currentCapital += profit;
-        
-        // 记录这一天的资金
-        const dateKey = exitDate.toISOString().split('T')[0];
-        capitalChangeMap.set(dateKey, currentCapital);
-      });
-      
-      // 如果有当前持仓，添加最新的估值
-      if (holdingStrategies?.success && holdingStrategies.data && holdingStrategies.data.length > 0) {
-        // 计算当前持仓的总估值
-        const totalCurrentValue = holdingStrategies.data.reduce((sum, strategy) => {
-          return sum + (strategy["实时估值"] || 0);
-        }, 0);
-        
-        // 加上可用金额
-        const availableFunds = baseInfoResponse.data[0]["可用金额"] || 0;
-        const totalCurrentCapital = availableFunds + totalCurrentValue;
-        
-        // 记录今天的资金
-        const todayKey = today.toISOString().split('T')[0];
-        capitalChangeMap.set(todayKey, totalCurrentCapital);
-      }
-      
-      // 获取所有日期并排序
-      const allDates = [...capitalChangeMap.keys()];
-      allDates.sort();
-      // console.log("allDates", allDates);
-      
-      // 生成图表数据
-      const newChartData: ChartDataPoint[] = [];
-      
-      // 为每个资金变化日期创建数据点
-      for (let i = 0; i < allDates.length; i++) {
+      // 为每个数据点添加比较资产数据
+      for (let i = 0; i < updatedChartData.length; i++) {
+        const dataPoint = updatedChartData[i];
         const currentDateKey = allDates[i];
-        const currentDate = new Date(currentDateKey);
-        const currentCapital = capitalChangeMap.get(currentDateKey) || initialCapital;
-        
-        // 创建数据点
-        const dataPoint: ChartDataPoint = {
-          date: currentDate.toLocaleDateString(),
-          fundReturn: currentCapital,
-          fundReturnPct: ((currentCapital / initialCapital) - 1) * 100
-        };
         
         // 处理所有比较资产的数据
         for (const asset of assets) {
           const assetKey = asset.toLowerCase();
-          const assetDataMap = assetDataMaps.get(assetKey) || new Map<string, number>();
-          let assetValue = assetDataMap.get(currentDateKey);
+          const assetDataMap = newAssetDataMaps.get(assetKey) || new Map<string, number>();
           
-          // 如果当天没有资产数据，尝试找前一天的
-          if (assetValue === undefined && assetDataMap.size > 0) {
-            // 创建日期对象并减去一天
-            const prevDate = new Date(currentDateKey);
-            prevDate.setDate(prevDate.getDate() - 1);
-            const prevDateKey = prevDate.toISOString().split('T')[0];
-            assetValue = assetDataMap.get(prevDateKey);
-            
-            // 如果还是没有，再往前找一天
-            if (assetValue === undefined) {
-              prevDate.setDate(prevDate.getDate() - 1);
-              const prevDateKey2 = prevDate.toISOString().split('T')[0];
-              assetValue = assetDataMap.get(prevDateKey2);
-            }
-          }
-          
-          // 如果还是没有资产数据，使用前面数据点的值
-          if (assetValue === undefined && newChartData.length > 0) {
-            // 使用前一个数据点的百分比
-            const lastPctKey = `${assetKey}PricePct`;
-            const lastPct = newChartData[newChartData.length - 1][lastPctKey] as number;
-            // 将百分比转换回原始值
-            const initialValue = initialAssetValues.get(assetKey) || 0;
-            assetValue = initialValue * (1 + lastPct / 100);
-          }
-          
-          // 如果还是没有资产数据，使用一个默认值
-          if (assetValue === undefined) {
-            // 如果有其他数据，使用平均值
-            if (assetDataMap.size > 0) {
-              const values = Array.from(assetDataMap.values());
-              const avgValue = values.reduce((sum, value) => sum + value, 0) / values.length;
-              assetValue = avgValue;
-            } else {
-              // 完全没有数据时的最后备选
-              assetValue = initialAssetValues.get(assetKey) || 1000;
-            }
-          }
-          
-          // 计算百分比和绝对值
-          const initialValue = initialAssetValues.get(assetKey) || 1000;
-          const pctChange = ((assetValue / initialValue) - 1) * 100;
-          
-          // 添加到数据点
-          dataPoint[`${assetKey}PricePct`] = pctChange;
-          dataPoint[`${assetKey}Price`] = assetValue;
+          // 处理每个资产的数据点
+          processAssetDataPoint(dataPoint, asset, currentDateKey, assetDataMap, initialAssetValues, updatedChartData.slice(0, i));
         }
-        
-        // 添加数据点
-        newChartData.push(dataPoint);
       }
       
-      // 如果成功生成了数据点，则更新图表数据
-      if (newChartData.length > 0) {
-        setChartData(newChartData);
-      }
+      // 更新图表数据
+      setChartData(updatedChartData);
+    } catch (err) {
+      console.error('Error fetching comparison asset data:', err);
     }
-  }, [baseInfoResponse, historicalHoldings, holdingStrategies, assetDataMaps]);
+  };
 
   // 渲染UI
   return (
@@ -817,7 +843,7 @@ export default function UserPage() {
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-6 w-6">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5" />
                 </svg>
-                <CardTitle className="md:text-lg">持仓策略</CardTitle>
+                <CardTitle className="text-lg">持仓策略</CardTitle>
               </div>
               
               <TabsList>

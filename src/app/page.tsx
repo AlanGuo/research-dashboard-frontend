@@ -24,7 +24,7 @@ export default function Home() {
   // 显示加载中状态，直到重定向完成
   return (
     <div className="flex flex-col justify-center items-center py-4 space-y-2 h-[50vh]">
-      <div className="h-10 w-10 border-t-2 border-blue-500 rounded-full animate-spin"></div>
+      <div className="h-10 w-10 border-t-2 border-primary rounded-full animate-spin"></div>
       <p className="text-sm text-muted-foreground mt-2">加载数据中...</p>
     </div>
   )

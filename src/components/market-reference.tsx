@@ -29,7 +29,7 @@ export function MarketReference({ comparisonAssets = ["BTCUSDT"] }: MarketRefere
         
         // 使用传入的比较资产列表，如果为空则使用默认列表
         const assetsToFetch = comparisonAssets;
-        
+        console.log(assetsToFetch);
         // 资产名称映射
         const assetNames: Record<string, string> = {
           'BTC': '比特币',
