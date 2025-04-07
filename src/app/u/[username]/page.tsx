@@ -21,6 +21,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 
 // 图表数据类型
 interface ChartDataPoint {
@@ -1173,7 +1174,13 @@ export default function UserPage() {
                         return (
                           <TableRow key={index}>
                             <TableCell className="font-medium">{strategy["标的"]}</TableCell>
-                            <TableCell>{strategy["策略"] || '-'}</TableCell>
+                            <TableCell>
+                              {strategy["策略"] ? (
+                                <Badge variant="secondary" className="font-normal text-xs">
+                                  {strategy["策略"]}
+                                </Badge>
+                              ) : '-'}
+                            </TableCell>
                             <TableCell className="text-center">{strategy["进场日期"] || "-"}</TableCell>
                             <TableCell className="text-right">{strategy["仓位"] || "-"}</TableCell>
                             <TableCell className="text-right">
@@ -1235,7 +1242,11 @@ export default function UserPage() {
                             <strong className="font-medium">{strategy["标的"] || '-'}</strong>
                           </div>
                           <div>
-                            <span className="font-medium">{strategy["策略"] || '-'}</span>
+                            {strategy["策略"] ? (
+                              <Badge variant="secondary" className="font-normal text-xs">
+                                {strategy["策略"]}
+                              </Badge>
+                            ) : '-'}
                           </div>
                         </div>
                         
@@ -1400,7 +1411,13 @@ export default function UserPage() {
                         return (
                           <TableRow key={index}>
                             <TableCell className="font-medium">{strategy["标的"]}</TableCell>
-                            <TableCell>{strategy["策略"]}</TableCell>
+                            <TableCell>
+                              {strategy["策略"] ? (
+                                <Badge variant="secondary" className="font-normal text-xs">
+                                  {strategy["策略"]}
+                                </Badge>
+                              ) : '-'}
+                            </TableCell>
                             <TableCell className="text-center">{strategy["进场日期"]}</TableCell>
                             <TableCell className="text-right">{strategy["仓位"]}</TableCell>
                             <TableCell className="text-right">
@@ -1478,7 +1495,11 @@ export default function UserPage() {
                             <strong className="font-medium">{strategy["标的"] || '-'}</strong>
                           </div>
                           <div>
-                            <span className="font-medium">{strategy["策略"] || '-'}</span>
+                            {strategy["策略"] ? (
+                              <Badge variant="secondary" className="font-normal text-xs">
+                                {strategy["策略"]}
+                              </Badge>
+                            ) : '-'}
                           </div>
                         </div>
                         
