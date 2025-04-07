@@ -1099,7 +1099,7 @@ export default function UserPage() {
                 {/* 桌面版表格 - 在中等及以上屏幕显示 */}
                 <div className="hidden md:block">
                   <Table>
-                    <TableHeader>
+                    <TableHeader className="bg-muted">
                       <TableRow>
                         <TableHead style={{width: '10%'}}>标的</TableHead>
                         <TableHead style={{width: '8%'}}>策略</TableHead>
