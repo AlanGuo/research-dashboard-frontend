@@ -87,7 +87,8 @@ export default function UserPage() {
   // 使用useParams获取动态路由参数
   const params = useParams();
   const username = params.username as string;
-  if (username) {
+  // check client
+  if (typeof window !== 'undefined' && username) {
     document.title = `${username.toUpperCase()} - Funding Curve`;
   }
 
@@ -457,31 +458,71 @@ export default function UserPage() {
         // 创建日期到资金变化的映射
         const capitalChangeMap = new Map<string, number>();
         
-        // 当前资金，初始为初始本金
-        let currentCapital = initialCapital;
+        // 收集所有需要记录的日期（包括出入金日期和历史持仓更新日期）
+        const allImportantDates = new Set<string>();
         
         // 获取开始日期和结束日期
         const startDate = new Date(baseInfoResponse.data[0]["开始日期"]);
         const endDate = new Date(); // 今天
         
-        // 记录初始本金
+        // 添加开始日期
         const startDateKey = startDate.toISOString().split('T')[0];
+        allImportantDates.add(startDateKey);
+        
+        // 添加所有历史持仓更新日期
+        sortedHistoricalHoldings.forEach(holding => {
+          const exitDate = new Date(holding["更新日期"]).toISOString().split('T')[0];
+          allImportantDates.add(exitDate);
+        });
+        
+        // 添加所有出入金日期
+        if (fundChangeData && fundChangeData.success && fundChangeData.data) {
+          fundChangeData.data.forEach(change => {
+            if (change["操作"] !== "初始本金") { // 排除初始本金
+              const changeDate = new Date(change["日期"]).toISOString().split('T')[0];
+              allImportantDates.add(changeDate);
+            }
+          });
+        }
+        
+        // 添加今天的日期
+        const todayKey = endDate.toISOString().split('T')[0];
+        allImportantDates.add(todayKey);
+        
+        // 将所有重要日期转换为数组并按时间排序
+        const sortedDates = Array.from(allImportantDates).sort();
+        
+        // 当前资金，初始为初始本金
+        let currentCapital = initialCapital;
+        
+        // 记录初始本金
         capitalChangeMap.set(startDateKey, currentCapital);
         
-        // 根据历史持仓计算每个平仓日期的资金变化
-        sortedHistoricalHoldings.forEach(holding => {
-          // 获取平仓日期和盈亏
-          const exitDate = new Date(holding["更新日期"]);
-          const profit = holding["盈亏"] || 0;
+        // 按时间顺序处理每个日期的资金变化
+        for (let i = 0; i < sortedDates.length; i++) {
+          const dateKey = sortedDates[i];
+          
+          if (dateKey === startDateKey) {
+            // 开始日期已经设置了初始本金，跳过
+            continue;
+          }
+          
+          // 检查这一天是否有历史持仓更新
+          const holdingsForDate = sortedHistoricalHoldings.filter(holding => {
+            const exitDate = new Date(holding["更新日期"]).toISOString().split('T')[0];
+            return exitDate === dateKey;
+          });
+          
+          // 计算这一天的持仓盈亏
+          const dayProfit = holdingsForDate.reduce((sum, holding) => {
+            return sum + (holding["盈亏"] || 0);
+          }, 0);
           
           // 更新当前资金
-          currentCapital += profit;
+          currentCapital += dayProfit;
           
-          // 获取当天的出入金记录
-          const dateKey = exitDate.toISOString().split('T')[0];
+          // 检查这一天是否有出入金记录
           let dayFundChange = 0;
-          
-          // 考虑截止到当天的出入金记录
           if (fundChangeData && fundChangeData.success && fundChangeData.data) {
             // 找到当天的出入金记录
             const dayChanges = fundChangeData.data.filter(change => {
@@ -501,7 +542,7 @@ export default function UserPage() {
           
           // 记录这一天的资金（包含盈亏和出入金）
           capitalChangeMap.set(dateKey, currentCapital);
-        });
+        }
         
         // 如果有当前持仓，添加最新的估值
         if (localHoldingStrategies?.success && localHoldingStrategies.data && localHoldingStrategies.data.length > 0) {
@@ -1116,15 +1157,12 @@ export default function UserPage() {
                     <TableBody>
                       {holdingStrategies.data.map((strategy, index) => {
                         // 处理进场价格和市值数据
-                        const entryPrice = strategy["进场"];
                         const marketValue = strategy["实时估值"];
                         
                         // 计算持仓成本: 优先使用"进场价值"字段，如果没有则计算"仓位"×"进场"
                         const holdingCost = strategy["进场价值"] ? 
                           strategy["进场价值"] : 
-                          (strategy["仓位"] && strategy["进场"]) ? 
-                            parseFloat(strategy["仓位"]) * strategy["进场"] : 
-                            entryPrice;
+                          parseFloat(strategy["仓位"]) * strategy["进场"];
                         
                         const profit = marketValue - holdingCost;
                         const profitPercent = (profit / holdingCost) * 100;
@@ -1173,21 +1211,17 @@ export default function UserPage() {
                 <div className="md:hidden space-y-3 px-2 py-4">
                   {holdingStrategies.data.map((strategy, index) => {
                     // 处理进场价格和市值数据
-                    const entryPrice = strategy["进场"];
                     const marketValue = strategy["实时估值"];
                     
                     // 计算持仓成本: 优先使用"进场价值"字段，如果没有则计算"仓位"×"进场"
                     const holdingCost = strategy["进场价值"] ? 
                       strategy["进场价值"] : 
-                      (strategy["仓位"] && strategy["进场"]) ? 
-                        parseFloat(strategy["仓位"]) * strategy["进场"] : 
-                        entryPrice;
+                      parseFloat(strategy["仓位"]) * strategy["进场"];
                     
                     const profit = marketValue - holdingCost;
                     const profitPercent = (profit / holdingCost) * 100;
                     
-                    // 计算实时市值总额
-                    // 使用状态中的总市值变量
+                    // 计算比例
                     const proportion = holdingCost ? holdingCost / totalMarketValue : 0;
                     
                     return (

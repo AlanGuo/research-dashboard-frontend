@@ -60,30 +60,30 @@ export function FundChange({ fundChangeData }: FundChangeProps) {
   return (
     <div className="space-y-4">
       {/* 出入金统计卡片 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
         <Card className="shadow-none">
-          <CardContent className="p-4">
+          <CardContent className="p-2 py-1.5">
             <div className="flex flex-col">
-              <span className="text-sm text-muted-foreground">总入金</span>
-              <span className="text-xl font-bold text-green-600">+${totalDeposit.toLocaleString()}</span>
+              <span className="text-xs text-muted-foreground">总入金</span>
+              <span className="text-base font-bold text-green-600">+${totalDeposit.toLocaleString()}</span>
             </div>
           </CardContent>
         </Card>
         
         <Card className="shadow-none">
-          <CardContent className="p-4">
+          <CardContent className="p-2 py-1.5">
             <div className="flex flex-col">
-              <span className="text-sm text-muted-foreground">总出金</span>
-              <span className="text-xl font-bold text-red-600">-${totalWithdrawal.toLocaleString()}</span>
+              <span className="text-xs text-muted-foreground">总出金</span>
+              <span className="text-base font-bold text-red-600">-${totalWithdrawal.toLocaleString()}</span>
             </div>
           </CardContent>
         </Card>
         
         <Card className="shadow-none">
-          <CardContent className="p-4">
+          <CardContent className="p-2 py-1.5">
             <div className="flex flex-col">
-              <span className="text-sm text-muted-foreground">净入金</span>
-              <span className={`text-xl font-bold ${netChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              <span className="text-xs text-muted-foreground">净入金</span>
+              <span className={`text-base font-bold ${netChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 {netChange >= 0 ? '+' : ''}{netChange.toLocaleString()}
               </span>
             </div>
@@ -127,12 +127,12 @@ export function FundChange({ fundChangeData }: FundChangeProps) {
       </div>
       
       {/* 移动版卡片 - 在小屏幕显示 */}
-      <div className="md:hidden space-y-3">
+      <div className="md:hidden space-y-2">
         {changeData.data.map((item, index) => (
-          <div key={index} className="rounded-lg border bg-card text-card-foreground p-3">
-            <div className="flex justify-between items-center mb-2">
-              <div className="font-medium">{item["日期"]}</div>
-              <span className={`px-2 py-1 rounded-full text-xs ${
+          <div key={index} className="rounded-lg border bg-card text-card-foreground p-2">
+            <div className="flex justify-between items-center mb-1">
+              <div className="text-sm font-medium">{item["日期"]}</div>
+              <span className={`px-1.5 py-0.5 rounded-full text-xs ${
                 item["操作"] === "入金" || item["操作"] === "初始本金" ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" : 
                 "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
               }`}>
@@ -140,13 +140,13 @@ export function FundChange({ fundChangeData }: FundChangeProps) {
               </span>
             </div>
             <div className="flex justify-between items-center">
-              <div className="text-sm text-muted-foreground">金额</div>
-              <div className={`font-medium ${item["操作"] === "入金" || item["操作"] === "初始本金" ? "text-green-600" : "text-red-600"}`}>
+              <div className="text-xs text-muted-foreground">金额</div>
+              <div className={`text-sm font-medium ${item["操作"] === "入金" || item["操作"] === "初始本金" ? "text-green-600" : "text-red-600"}`}>
                 {item["操作"] === "入金" || item["操作"] === "初始本金" ? "+" : "-"}${Math.abs(item["金额"]).toLocaleString()}
               </div>
             </div>
             {item["备注"] && (
-              <div className="mt-2 pt-2 border-t text-sm text-muted-foreground">
+              <div className="mt-1 pt-1 border-t text-xs text-muted-foreground">
                 {item["备注"]}
               </div>
             )}
