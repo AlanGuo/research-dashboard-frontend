@@ -133,7 +133,7 @@ export function FundChange({ fundChangeData }: FundChangeProps) {
             <div className="flex justify-between items-center mb-2">
               <div className="font-medium">{item["日期"]}</div>
               <span className={`px-2 py-1 rounded-full text-xs ${
-                item["操作"] === "入金" ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" : 
+                item["操作"] === "入金" || item["操作"] === "初始本金" ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" : 
                 "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
               }`}>
                 {item["操作"]}
