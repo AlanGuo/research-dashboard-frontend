@@ -886,7 +886,7 @@ export default function UserPage() {
                           return (
                             <span className={colorClass}>
                               ${pureProfitAmount >= 0 ? '+' : ''}{pureProfitAmount.toLocaleString(undefined, {maximumFractionDigits: 2})}
-                              <span className="text-sm">({pureProfitPercent >= 0 ? '+' : ''}{pureProfitPercent.toFixed(2)}%)</span>
+                              <span className="text-sm">({pureProfitPercent.toFixed(2)}%)</span>
                             </span>
                           );
                         } catch (error) {
