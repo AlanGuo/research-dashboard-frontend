@@ -1,6 +1,6 @@
 "use client"
 
-import { useParams } from 'next/navigation'
+import { useParams } from "next/navigation"
 import { useEffect, useState } from "react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { MarketReference } from "@/components/market-reference"
@@ -87,6 +87,9 @@ export default function UserPage() {
   // 使用useParams获取动态路由参数
   const params = useParams();
   const username = params.username as string;
+  if (username) {
+    document.title = `${username.toUpperCase()} - Funding Curve`;
+  }
 
   const [baseInfoResponse, setBaseInfoResponse] = useState<BaseInfoResponse | null>(null);
   const [holdingStrategies, setHoldingStrategies] = useState<HoldingStrategyResponse | null>(null);
