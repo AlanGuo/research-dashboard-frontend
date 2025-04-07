@@ -732,7 +732,7 @@ export default function UserPage() {
                     <dd className="">${baseInfoResponse.data[0]["初始本金"].toLocaleString()}</dd>
                   </div>
                   <div className="flex justify-between items-center">
-                    <dt className="text-muted-foreground">闲置资金</dt>
+                    <dt className="text-muted-foreground">空闲资金</dt>
                     <dd className="flex items-center gap-2">
                       <span>${idleFunds.toLocaleString()}</span>
                       <span className="text-sm text-muted-foreground">({totalMarketValue > 0 ? ((idleFunds / totalMarketValue) * 100).toFixed(2) : '0.00'}%)</span>
