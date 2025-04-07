@@ -1062,8 +1062,8 @@ export default function UserPage() {
                           // 纯收益金额 = 当前金额 - 一周前金额 - 这一周的出入金净额
                           const pureWeeklyProfit = currentAmount - weekAgoAmount - weekFundChangeNet;
                           
-                          // 计算实际天数
-                          const daysDiff = (today.getTime() - new Date(weekAgoData.date).getTime()) / (1000 * 3600 * 24);
+                          // 计算实际天数，确保至少为1天，避免除以零
+                          const daysDiff = Math.max(1, (today.getTime() - new Date(weekAgoData.date).getTime()) / (1000 * 3600 * 24));
                           
                           // 计算纯周收益率
                           const pureWeeklyReturn = pureWeeklyProfit / weekAgoAmount;
