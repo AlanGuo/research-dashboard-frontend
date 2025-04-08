@@ -38,7 +38,7 @@ interface HoldingStrategyItem {
   "仓位": string;
   "进场日期": string;
   "进场": number;
-  "进场价值": number;
+  "成本": number;
   "出场": number;
   "盈亏": number;
   "实时估值": number;
@@ -165,7 +165,7 @@ export default function UserPage() {
     
     // 使用Promise.all并行处理所有策略
     await Promise.all(strategies.map(async (strategy) => {
-      // 计算当前持仓的盈亏：实时估值 - 进场价值
+      // 计算当前持仓的盈亏：实时估值 - 成本
       let marketValue = 0;
       const position = typeof strategy["仓位"] === 'string' ? 
         parseFloat(strategy["仓位"]) : (strategy["仓位"] || 0);
@@ -191,8 +191,8 @@ export default function UserPage() {
       }
       
       let entryCost = 0;
-      if (strategy["进场价值"]) {
-        entryCost = strategy["进场价值"];
+      if (strategy["成本"]) {
+        entryCost = strategy["成本"];
       } else if (position && strategy["进场"]) {
         entryCost = position * strategy["进场"];
       }
@@ -1230,9 +1230,9 @@ export default function UserPage() {
                         // 处理进场价格和市值数据
                         const marketValue = strategy["实时估值"];
                         
-                        // 计算持仓成本: 优先使用"进场价值"字段，如果没有则计算"仓位"×"进场"
-                        const holdingCost = strategy["进场价值"] ? 
-                          strategy["进场价值"] : 
+                        // 计算持仓成本: 优先使用"成本"字段，如果没有则计算"仓位"×"进场"
+                        const holdingCost = strategy["成本"] ? 
+                          strategy["成本"] : 
                           parseFloat(strategy["仓位"]) * strategy["进场"];
                         
                         const profit = marketValue - holdingCost;
@@ -1290,9 +1290,9 @@ export default function UserPage() {
                     // 处理进场价格和市值数据
                     const marketValue = strategy["实时估值"];
                     
-                    // 计算持仓成本: 优先使用"进场价值"字段，如果没有则计算"仓位"×"进场"
-                    const holdingCost = strategy["进场价值"] ? 
-                      strategy["进场价值"] : 
+                    // 计算持仓成本: 优先使用"成本"字段，如果没有则计算"仓位"×"进场"
+                    const holdingCost = strategy["成本"] ? 
+                      strategy["成本"] : 
                       parseFloat(strategy["仓位"]) * strategy["进场"];
                     
                     const profit = marketValue - holdingCost;
@@ -1457,9 +1457,9 @@ export default function UserPage() {
                         // 处理进场价格和平仓价值数据
                         const entryPrice = typeof strategy["进场"] === 'string' ? parseFloat(strategy["进场"]) : strategy["进场"];
                         
-                        // 计算持仓成本: 优先使用"进场价值"字段，如果没有则计算"仓位"×"进场"
-                        const entryCost = strategy["进场价值"]? 
-                          strategy["进场价值"] : 
+                        // 计算持仓成本: 优先使用"成本"字段，如果没有则计算"仓位"×"进场"
+                        const entryCost = strategy["成本"]? 
+                          strategy["成本"] : 
                           (strategy["仓位"] && strategy["进场"]) ? 
                             parseFloat(strategy["仓位"]) * strategy["进场"] : 
                             entryPrice;
@@ -1534,9 +1534,9 @@ export default function UserPage() {
                     // 处理进场价格和平仓价值数据
                     const entryPrice = typeof strategy["进场"] === 'string' ? parseFloat(strategy["进场"]) : strategy["进场"];
                     
-                    // 计算持仓成本: 优先取"进场价值"字段，如果没有则计算"仓位"×"进场"
-                    const entryCost = strategy["进场价值"]? 
-                          strategy["进场价值"] : 
+                    // 计算持仓成本: 优先取"成本"字段，如果没有则计算"仓位"×"进场"
+                    const entryCost = strategy["成本"]? 
+                          strategy["成本"] : 
                           (strategy["仓位"] && strategy["进场"]) ? 
                             parseFloat(strategy["仓位"]) * strategy["进场"] : 
                             entryPrice;
