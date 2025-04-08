@@ -43,6 +43,7 @@ interface CurveChartProps {
   setSelectedComparisonAsset: (asset: string) => void;
   visibleLines: Record<string, boolean>;
   setVisibleLines: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  isLoading?: boolean; // Add loading state prop
 }
 
 export const CurveChart: React.FC<CurveChartProps> = ({
@@ -53,7 +54,8 @@ export const CurveChart: React.FC<CurveChartProps> = ({
   selectedComparisonAsset,
   setSelectedComparisonAsset,
   visibleLines,
-  setVisibleLines
+  setVisibleLines,
+  isLoading = false // Default to false
 }) => {
   return (
     <Card className="animate-in fade-in duration-700">
@@ -92,7 +94,12 @@ export const CurveChart: React.FC<CurveChartProps> = ({
       )}
       <CardContent className="px-0 pb-2 md:px-4 md:pb-4">
         <div className="h-60 sm:h-72 md:h-80">
-        {chartData.length > 0 ? (
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center h-full gap-2">
+            <div className="h-5 w-5 border-t-2 border-primary rounded-full animate-spin"></div>
+            <p className="text-muted-foreground">图表加载中...</p>
+          </div>
+        ) : chartData.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
               data={chartData}

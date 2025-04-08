@@ -59,16 +59,10 @@ interface FundDataItem {
   "开始日期": string;
   "策略名": string;
   "初始本金": number;
-  "初始价格": string;
+  // "初始价格" 字段已移除，使用对比资产中的第一个数据作为初始价格
   "市值": number;
   "对比": string;
   "备注": string;
-}
-
-interface BaseInfoResponse {
-  success: boolean;
-  data: FundDataItem[];
-  timestamp: string;
 }
 
 // 出入金数据类型
@@ -94,7 +88,7 @@ export default function UserPage() {
     document.title = `${username.toUpperCase()} - Funding Curve`;
   }
 
-  const [baseInfoResponse, setBaseInfoResponse] = useState<BaseInfoResponse | null>(null);
+  const [baseInfoItem, setBaseInfoItem] = useState<FundDataItem | null>(null);
   const [holdingStrategies, setHoldingStrategies] = useState<HoldingStrategyResponse | null>(null);
   const [historicalHoldings, setHistoricalHoldings] = useState<HoldingStrategyResponse | null>(null);
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
@@ -106,6 +100,7 @@ export default function UserPage() {
   const [activeHoldingTab, setActiveHoldingTab] = useState<'current' | 'historical'>('current');
 
   const [loading, setLoading] = useState(true);
+  const [chartLoading, setChartLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
   // 用于控制曲线的显示/隐藏
@@ -162,7 +157,6 @@ export default function UserPage() {
   // 计算当前持仓的盈亏总和
   const calculateCurrentHoldingsProfit = async (strategies: HoldingStrategyItem[]): Promise<number> => {
     let totalProfit = 0;
-    
     // 使用Promise.all并行处理所有策略
     await Promise.all(strategies.map(async (strategy) => {
       // 计算当前持仓的盈亏：实时估值 - 成本
@@ -213,20 +207,15 @@ export default function UserPage() {
   };
 
   // 计算实时市值和闲置资金，并更新状态
-  const updateTotalMarketValue = async () => {
+  const updateTotalMarketValue = async (baseInfoItem: FundDataItem) => {
     try {
-      // 检查是否有基本数据
-      if (!baseInfoResponse || !baseInfoResponse.success || !baseInfoResponse.data || baseInfoResponse.data.length === 0) {
-        return 0;
-      }
-      
+      // 检查是否有基本数据      
       // 获取初始本金
-      const initialCapital = baseInfoResponse.data[0]["初始本金"] || 0;
+      const initialCapital = baseInfoItem["初始本金"] || 0;
       if (initialCapital === 0) {
         // 如果初始本金为0，则直接返回市值字段
-        return baseInfoResponse.data[0]["市值"] || 0;
+        return baseInfoItem["市值"] || 0;
       }
-      
       // 使用已获取的出入金数据
       let netFundChange = 0;
       if (fundChangeData && fundChangeData.success && fundChangeData.data && fundChangeData.data.length > 0) {
@@ -259,7 +248,7 @@ export default function UserPage() {
       
       if (isNaN(calculatedValue) || calculatedValue <= 0) {
         // 如果计算有问题，使用 FundDataItem 里的"市值"
-        calculatedValue = baseInfoResponse.data[0]["市值"] || 0;
+        calculatedValue = baseInfoItem["市值"] || 0;
       }
       
       // 计算当前持仓的总估值
@@ -280,7 +269,7 @@ export default function UserPage() {
       setIdleFunds(calculatedIdleFunds > 0 ? calculatedIdleFunds : 0);
     } catch (error) {
       console.error('计算实时市值时出错:', error);
-      const fallbackValue = baseInfoResponse?.data?.[0]?.["市值"] || 0;
+      const fallbackValue = baseInfoItem["市值"] || 0;
       setTotalMarketValue(fallbackValue);
     }
   };
@@ -293,36 +282,6 @@ export default function UserPage() {
     }
   }, [comparisonAssets, selectedComparisonAsset]);
   
-  // 当相关数据变化时更新总市值
-  useEffect(() => {
-    updateTotalMarketValue();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [baseInfoResponse, holdingStrategies, historicalHoldings, username, fundChangeData]);
-  
-  // 获取出入金数据
-  useEffect(() => {
-    async function fetchFundChangeData() {
-      try {
-        if (!username) {
-          return;
-        }
-        
-        const response = await fetch(`/api/change/${username}`);
-        
-        if (!response.ok) {
-          throw new Error(`API request failed with status ${response.status}`);
-        }
-        
-        const data = await response.json();
-        setFundChangeData(data);
-      } catch (err) {
-        console.error('Error fetching change data:', err);
-      }
-    }
-    
-    fetchFundChangeData();
-  }, [username]);
-
   useEffect(() => {
     async function fetchPageData() {
       try {
@@ -338,7 +297,10 @@ export default function UserPage() {
         }
         
         const data = await response.json();
-        setBaseInfoResponse(data);
+        if (!data.success || !data.data || data.data.length === 0) {
+          throw new Error('Invalid baseinfo data');
+        }
+        setBaseInfoItem(data.data[0]);
         setLoading(false);
       } catch (err) {
         console.error('Error fetching page data:', err);
@@ -349,124 +311,20 @@ export default function UserPage() {
     
     fetchPageData();
   }, [username]);
-  
-  // 获取比较资产数据 - 在获取到实时数据后调用
-  const fetchComparisonData = async (asset: string, startDate: string, endDate: string, assetDataMaps: Map<string, Map<string, number>>) => {
-    try {
-      // 计算策略运行的天数
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      // 计算实际天数差并加上一些缓冲时间确保数据完整
-      const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 3600 * 24)) + 1; // 加1天作为缓冲
-      
-      // 将资产名称转换为小写
-      const symbol = asset.toLowerCase();
-      const response = await fetch(`/api/kline/${symbol}?interval=1D&bars=${daysDiff}`);
-      
-      if (!response.ok) {
-        throw new Error(`${asset} API request failed with status ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      // 处理返回的数据并存入assetDataMaps
-      if (data?.success && data.data?.candles) {
-        const assetKey = asset.toLowerCase();
-        // 创建该资产的数据映射
-        const assetDataMap = new Map<string, number>();
-        assetDataMaps.set(assetKey, assetDataMap);
-        
-        // 按日期排序数据
-        const sortedData = [...data.data.candles].sort((a, b) => {
-          return new Date(a.datetime).getTime() - new Date(b.datetime).getTime();
-        });
-        
-        // 将数据存入映射
-        sortedData.forEach(item => {
-          if (item.datetime && item.close) {
-            const dateKey = new Date(item.datetime).toISOString().split('T')[0];
-            assetDataMap.set(dateKey, item.close);
-          }
-        });
-      }
-      
-      return data;
-    } catch (err) {
-      console.error(`Error fetching ${asset} data:`, err);
-      return null;
-    }
-  };
 
-  // 处理比较资产数据点的函数
-  const processAssetDataPoint = (dataPoint: ChartDataPoint, asset: string, currentDateKey: string, assetDataMap: Map<string, number>, initialAssetValues: Map<string, number>, newChartData: ChartDataPoint[]) => {
-    const assetKey = asset.toLowerCase();
-    let assetValue = assetDataMap.get(currentDateKey);
-    
-    // 如果当天没有资产数据，尝试找前一天的
-    if (assetValue === undefined && assetDataMap.size > 0) {
-      // 创建日期对象并减去一天
-      const prevDate = new Date(currentDateKey);
-      prevDate.setDate(prevDate.getDate() - 1);
-      const prevDateKey = prevDate.toISOString().split('T')[0];
-      assetValue = assetDataMap.get(prevDateKey);
-      
-      // 如果还是没有，再往前找一天
-      if (assetValue === undefined) {
-        prevDate.setDate(prevDate.getDate() - 1);
-        const prevDateKey2 = prevDate.toISOString().split('T')[0];
-        assetValue = assetDataMap.get(prevDateKey2);
-      }
-    }
-    
-    // 如果还是没有资产数据，使用前面数据点的值
-    if (assetValue === undefined && newChartData.length > 0) {
-      // 使用前一个数据点的百分比
-      const lastPctKey = `${assetKey}PricePct`;
-      const lastPct = newChartData[newChartData.length - 1][lastPctKey] as number;
-      // 将百分比转换回原始值
-      const initialValue = initialAssetValues.get(assetKey) || 0;
-      assetValue = initialValue * (1 + lastPct / 100);
-    }
-    
-    // 如果还是没有资产数据，使用一个默认值
-    if (assetValue === undefined) {
-      // 如果有其他数据，使用平均值
-      if (assetDataMap.size > 0) {
-        const values = Array.from(assetDataMap.values());
-        const avgValue = values.reduce((sum, value) => sum + value, 0) / values.length;
-        assetValue = avgValue;
-      } else {
-        // 完全没有数据时的最后备选
-        assetValue = initialAssetValues.get(assetKey) || 1000;
-      }
-    }
-    
-    // 计算百分比和绝对值
-    const initialValue = initialAssetValues.get(assetKey) || 1000;
-    const pctChange = ((assetValue / initialValue) - 1) * 100;
-    
-    // 添加到数据点
-    dataPoint[`${assetKey}PricePct`] = pctChange;
-    dataPoint[`${assetKey}Price`] = assetValue;
-  };
-  
-  // 获取持仓数据和生成基础图表数据
+  // 获取当前持仓, 历史持仓, 出入金数据
   useEffect(() => {
-    async function fetchDataAndGenerateBaseChart() {
+    async function fetchHoldingsAndFundChanges(baseInfoItem: FundDataItem) {
       try {
-        if (!username || !baseInfoResponse?.success || !baseInfoResponse.data || baseInfoResponse.data.length === 0) {
-          return;
-        }
-        
         // 获取初始本金
-        const initialCapital = baseInfoResponse.data[0]["初始本金"];
+        const initialCapital = baseInfoItem["初始本金"];
         if (!initialCapital) {
           console.error("初始本金不存在");
           return;
         }
         
         // 获取对比资产列表
-        const comparisonString = baseInfoResponse.data[0]["对比"];
+        const comparisonString = baseInfoItem["对比"];
         const assets = comparisonString ? comparisonString.split(',').map(asset => asset.trim()).filter(asset => asset) : [];
         
         // 更新比较资产列表
@@ -474,11 +332,8 @@ export default function UserPage() {
         
         // 获取当前持仓
         const holdingResponse = await fetch(`/api/holding/${username}?status=持仓`);
-        
-        let localHoldingStrategies: HoldingStrategyResponse | null = null;
         if (holdingResponse.ok) {
           const holdingData = await holdingResponse.json();
-          localHoldingStrategies = holdingData;
           setHoldingStrategies(holdingData);
         } else {
           console.error(`Holding strategies API request failed with status ${holdingResponse.status}`);
@@ -492,12 +347,52 @@ export default function UserPage() {
           return;
         }
         
-        const historicalData = await historicalResponse.json();
+        const historicalData: HoldingStrategyResponse | null = await historicalResponse.json();
         setHistoricalHoldings(historicalData);
+
+        // 获取出入金数据
+        const fundChangeResponse = await fetch(`/api/change/${username}`);
         
-        if (!historicalData.success || !historicalData.data) {
+        if (!fundChangeResponse.ok) {
+          console.error(`Fund change API request failed with status ${fundChangeResponse.status}`);
           return;
         }
+        const fundChangeData: FundChangeResponse | null = await fundChangeResponse.json();
+        setFundChangeData(fundChangeData);
+      } catch (err) {
+        console.error('Error fetching data and generating base chart:', err);
+        setChartLoading(false);
+        return null;
+      }
+    }
+    if (baseInfoItem) {
+      setChartLoading(true);
+      fetchHoldingsAndFundChanges(baseInfoItem);
+    }
+    // disable eslint warning
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseInfoItem]);
+
+  // 更新总市值
+  useEffect(() => {
+    if (baseInfoItem && fundChangeData && holdingStrategies && historicalHoldings) {
+      updateTotalMarketValue(baseInfoItem);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [baseInfoItem, holdingStrategies, historicalHoldings, fundChangeData]);
+
+  // 生成图表数据
+  useEffect(() => {
+    async function fetchDataAndGenerateBaseChart(baseInfoItem: FundDataItem) {
+      try {
+        // 获取初始本金
+        const initialCapital = baseInfoItem["初始本金"];
+        if (!initialCapital) {
+          console.error("初始本金不存在");
+          return;
+        }
+        
+        const assets = comparisonAssets;
         
         // 初始化可见性设置 - 先只设置主曲线
         const newVisibleLines: Record<string, boolean> = {
@@ -516,10 +411,7 @@ export default function UserPage() {
         setVisibleLines(newVisibleLines);
         
         // 按日期排序历史持仓（从早到晚）
-        const sortedHistoricalHoldings = [...historicalData.data]
-          .sort((a, b) => {
-            return new Date(a["更新日期"]).getTime() - new Date(b["更新日期"]).getTime();
-          });
+        const sortedHistoricalHoldings = [...(historicalHoldings?.data || [])]
         
         // 创建日期到资金变化的映射
         const capitalChangeMap = new Map<string, number>();
@@ -528,7 +420,7 @@ export default function UserPage() {
         const allImportantDates = new Set<string>();
         
         // 获取开始日期和结束日期
-        const startDate = new Date(baseInfoResponse.data[0]["开始日期"]);
+        const startDate = new Date(baseInfoItem["开始日期"]);
         const endDate = new Date(); // 今天
         
         // 添加开始日期
@@ -611,35 +503,7 @@ export default function UserPage() {
         }
         
         // 如果有当前持仓，添加最新的估值
-        if (localHoldingStrategies?.success && localHoldingStrategies.data && localHoldingStrategies.data.length > 0) {
-          // 计算当前持仓的总估值和总盈亏
-          let totalCurrentProfit = 0;
-          
-          // 计算当前持仓的盈亏总和
-          const currentHoldingsProfit = await calculateCurrentHoldingsProfit(localHoldingStrategies.data);
-          totalCurrentProfit += currentHoldingsProfit;
-          
-          // 计算所有历史持仓的盈亏总和
-          totalCurrentProfit += calculateHistoricalHoldingsProfit(sortedHistoricalHoldings);
-          
-          // 获取所有出入金的总和
-          let totalFundChange = 0;
-          if (fundChangeData && fundChangeData.success && fundChangeData.data) {
-            totalFundChange = fundChangeData.data
-              .filter(change => change["操作"] !== "初始本金")
-              .reduce((sum, change) => {
-                const amount = change["金额"] * (change["操作"] === "入金" ? 1 : -1);
-                return sum + amount;
-              }, 0);
-          }
-          
-          // 总市值 = 初始本金 + 总盈亏 + 总出入金
-          const totalCurrentCapital = initialCapital + totalCurrentProfit + totalFundChange;
-          
-          // 记录今天的资金
-          const todayKey = endDate.toISOString().split('T')[0];
-          capitalChangeMap.set(todayKey, totalCurrentCapital);
-        }
+        capitalChangeMap.set(todayKey, totalMarketValue);
         
         // 获取所有日期并排序
         const allDates = [...capitalChangeMap.keys()];
@@ -684,7 +548,6 @@ export default function UserPage() {
             pureProfit: pureProfit,
             fundChange: cumulativeFundChangeUntilDate
           };
-          
           // 添加数据点
           newChartData.push(dataPoint);
         }
@@ -708,16 +571,146 @@ export default function UserPage() {
         return null;
       }
     }
-    
-    fetchDataAndGenerateBaseChart().then(baseChartData => {
-      // 如果成功生成了基础图表，启动获取比较资产数据的过程
-      if (baseChartData) {
-        fetchComparisonAssetData(baseChartData);
-      }
-    });
+    // 4个数据源准备好后，生成基础图表
+    if (baseInfoItem && historicalHoldings && fundChangeData && totalMarketValue) {
+      fetchDataAndGenerateBaseChart(baseInfoItem).then(baseChartData => {
+        setChartLoading(false);
+        // 如果成功生成了基础图表，启动获取比较资产数据的过程
+        if (baseChartData && comparisonAssets.length > 0) {
+          fetchComparisonAssetData(baseChartData);
+        }
+      });
+    }
     // disable eslint warning
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [username, baseInfoResponse]);
+  }, [historicalHoldings, fundChangeData, totalMarketValue, comparisonAssets]);
+
+  // 获取比较资产数据 - 精确获取资金曲线中指定日期的价格数据
+  const fetchComparisonData = async (asset: string, startDate: string, endDate: string, assetDataMaps: Map<string, Map<string, number>>, specificDates: string[]) => {
+    try {
+      // 将资产名称转换为小写
+      const symbol = asset.toLowerCase();
+      const assetKey = asset.toLowerCase();
+      
+      // 创建该资产的数据映射
+      const assetDataMap = new Map<string, number>();
+      assetDataMaps.set(assetKey, assetDataMap);
+      
+      // 如果没有指定日期，直接返回
+      if (specificDates.length === 0) {
+        return null;
+      }
+      
+      // 优化：批量获取数据，每次最多获取50个日期的数据
+      const batchSize = 50;
+      const batches = [];
+      
+      for (let i = 0; i < specificDates.length; i += batchSize) {
+        batches.push(specificDates.slice(i, i + batchSize));
+      }
+      
+      // 并行获取每批日期的数据
+      const batchPromises = batches.map(async (dateBatch) => {
+        // 构建日期查询参数
+        const dateParams = dateBatch.map(date => `dates[]=${encodeURIComponent(date)}`).join('&');
+        
+        // 使用新的API端点，只获取指定日期的价格
+        const response = await fetch(`/api/kline/${symbol}/exact-dates?${dateParams}`);
+        
+        if (!response.ok) {
+          throw new Error(`${asset} API request failed with status ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // 处理返回的数据并存入assetDataMap
+        if (data?.success && data.data) {
+          // 数据格式应该是 {date: string, price: number}[] 的形式
+          data.data.forEach((item: {date: string, price: number}) => {
+            if (item.date && item.price !== undefined) {
+              assetDataMap.set(item.date, item.price);
+            }
+          });
+        }
+        
+        return data;
+      });
+      
+      // 等待所有批次数据获取完成
+      await Promise.all(batchPromises);
+      
+      return { success: true };
+    } catch (err) {
+      console.error(`Error fetching ${asset} data:`, err);
+      return null;
+    }
+  };
+
+  // 处理比较资产数据点的函数
+  const processAssetDataPoint = (dataPoint: ChartDataPoint, asset: string, currentDateKey: string, assetDataMap: Map<string, number>, initialAssetValues: Map<string, number>, newChartData: ChartDataPoint[]) => {
+    const assetKey = asset.toLowerCase();
+    let assetValue = assetDataMap.get(currentDateKey);
+
+    // 如果当天没有资产数据，尝试找前一天的数据（最多往前找3天）
+    if (assetValue === undefined && assetDataMap.size > 0) {
+      for (let i = 1; i <= 3; i++) {
+        const prevDate = new Date(currentDateKey);
+        prevDate.setDate(prevDate.getDate() - i);
+        const prevDateKey = prevDate.toISOString().split('T')[0];
+        const prevValue = assetDataMap.get(prevDateKey);
+        
+        if (prevValue !== undefined) {
+          assetValue = prevValue;
+          break;
+        }
+      }
+    }
+    
+    // 如果还是没有资产数据，使用前面数据点的值
+    if (assetValue === undefined && newChartData.length > 0) {
+      // 使用前一个数据点的百分比
+      const lastPctKey = `${assetKey}PricePct`;
+      const lastPct = newChartData[newChartData.length - 1][lastPctKey] as number;
+      // 将百分比转换回原始值
+      const initialValue = initialAssetValues.get(assetKey) || 0;
+      assetValue = initialValue * (1 + lastPct / 100);
+    }
+    
+    // 如果还是没有资产数据，使用一个默认值
+    if (assetValue === undefined) {
+      // 如果有其他数据，使用平均值
+      if (assetDataMap.size > 0) {
+        const values = Array.from(assetDataMap.values());
+        const avgValue = values.reduce((sum, value) => sum + value, 0) / values.length;
+        assetValue = avgValue;
+      } else {
+        // 完全没有数据时的最后备选
+        assetValue = initialAssetValues.get(assetKey) || 1000;
+      }
+    }
+    
+    // 如果这是第一个数据点，将其作为初始价格
+    if (newChartData.length === 0 && assetValue !== undefined) {
+      initialAssetValues.set(assetKey, assetValue);
+      // 当这是第一个数据点时，百分比变化应为0
+      dataPoint[`${assetKey}PricePct`] = 0;
+      dataPoint[`${assetKey}Price`] = assetValue;
+      return;
+    }
+    
+    // 计算百分比和绝对值
+    const initialValue = initialAssetValues.get(assetKey) || 1000;
+    
+    // 比较资产不需要考虑出入金对价格的影响，因为它们是外部指数
+    // 直接计算百分比变化
+    const pctChange = ((assetValue / initialValue) - 1) * 100;
+    
+    // 添加到数据点
+    dataPoint[`${assetKey}PricePct`] = pctChange;
+    dataPoint[`${assetKey}Price`] = assetValue;
+    // 可选：记录数据来源（用于调试）
+    // dataPoint[`${assetKey}Source`] = valueSource;
+  };
   
   // 获取比较资产数据并更新图表
   const fetchComparisonAssetData = async (baseChartData: {
@@ -739,33 +732,21 @@ export default function UserPage() {
       const earliestDate = startDate.toISOString().split('T')[0];
       const latestDate = endDate.toISOString().split('T')[0];
       
-      // 解析初始价格字段，同样是逗号分隔
-      const initialPricesString = baseInfoResponse?.data?.[0]["初始价格"] || "";
-      const initialPrices = initialPricesString.split(',').map(price => price.trim());
-      
-      // 为每个资产设置初始价格
+      // 为每个资产初始化一个初始价格映射
       const initialAssetValues = new Map<string, number>();
-      assets.forEach((asset, index) => {
-        const assetKey = asset.toLowerCase();
-        if (index < initialPrices.length) {
-          const priceValue = parseFloat(initialPrices[index]);
-          if (!isNaN(priceValue)) {
-            initialAssetValues.set(assetKey, priceValue);
-          }
-        }
-      });
       
-      // 为其他比较资产设置默认初始值
+      // 默认为所有资产设置默认初始值，后续将使用第一个数据点的价格覆盖
       for (const asset of assets) {
         const assetKey = asset.toLowerCase();
-        if (!initialAssetValues.has(assetKey)) {
-          initialAssetValues.set(assetKey, 1000); // 默认初始值
-        }
+        initialAssetValues.set(assetKey, 1000); // 默认初始值，将在获取到实际数据后更新
       }
+      
+      // 提取所有需要获取数据的日期
+      const specificDates = allDates;
       
       // 为每个资产获取数据 - 并行获取以加快速度
       const fetchPromises = assets.map(asset => 
-        fetchComparisonData(asset, earliestDate, latestDate, newAssetDataMaps)
+        fetchComparisonData(asset, earliestDate, latestDate, newAssetDataMaps, specificDates)
       );
       
       await Promise.all(fetchPromises);
@@ -777,7 +758,7 @@ export default function UserPage() {
       for (let i = 0; i < updatedChartData.length; i++) {
         const dataPoint = updatedChartData[i];
         const currentDateKey = allDates[i];
-        
+
         // 处理所有比较资产的数据
         for (const asset of assets) {
           const assetKey = asset.toLowerCase();
@@ -808,16 +789,16 @@ export default function UserPage() {
           <p className="font-bold">加载数据时出错</p>
           <p>{error}</p>
         </div>
-      ) : baseInfoResponse && baseInfoResponse.success && baseInfoResponse.data.length > 0 ? (
+      ) : baseInfoItem ? (
         <div className="space-y-6 md:space-y-8">
           {/* 市场参考板块 */}
-          <MarketReference comparisonAssets={comparisonAssets.length > 0 ? comparisonAssets : baseInfoResponse.data[0]["对比"]?.split(',').map(asset => asset.trim()) || []} />
+          <MarketReference comparisonAssets={comparisonAssets} />
           
           {/* 标题区域 */}
           <div className="animate-in fade-in duration-700 flex justify-between items-start">
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold">{baseInfoResponse.data[0]["策略名"]}</h1>
-              <p className="text-base text-muted-foreground mt-2">{baseInfoResponse.data[0]["备注"]}</p>
+              <h1 className="text-2xl md:text-3xl font-bold">{baseInfoItem["策略名"]}</h1>
+              <p className="text-base text-muted-foreground mt-2">{baseInfoItem["备注"]}</p>
             </div>
             <ThemeToggle />
           </div>
@@ -832,7 +813,7 @@ export default function UserPage() {
                   <CardTitle className="text-lg">总资产市值</CardTitle>
                 </div>
                 <div className="font-semibold text-lg">
-                  ${totalMarketValue.toLocaleString()}
+                  ${totalMarketValue ? totalMarketValue.toLocaleString() : "-"}
                 </div>
               </CardHeader>
               <CardContent>
@@ -840,24 +821,24 @@ export default function UserPage() {
                   <div className="h-px bg-border"></div>
                   <div className="flex justify-between items-center">
                     <dt className="text-muted-foreground">初始本金</dt>
-                    <dd className="">${baseInfoResponse.data[0]["初始本金"].toLocaleString()}</dd>
+                    <dd className="">${baseInfoItem["初始本金"].toLocaleString()}</dd>
                   </div>
                   <div className="flex justify-between items-center">
                     <dt className="text-muted-foreground">空闲资金</dt>
                     <dd className="flex items-center gap-2">
                       <span>${idleFunds.toLocaleString()}</span>
-                      <span className="text-sm text-muted-foreground">({totalMarketValue > 0 ? ((idleFunds / totalMarketValue) * 100).toFixed(2) : '0.00'}%)</span>
+                      <span className="text-sm text-muted-foreground">({totalMarketValue ? ((idleFunds / totalMarketValue) * 100).toFixed(2) : '0.00'}%)</span>
                     </dd>
                   </div>
                   <div className="flex justify-between">
                     <dt className="text-muted-foreground">开始日期</dt>
-                    <dd className="">{new Date(baseInfoResponse.data[0]["开始日期"]).toLocaleDateString()}</dd>
+                    <dd className="">{new Date(baseInfoItem["开始日期"]).toLocaleDateString()}</dd>
                   </div>
                   <div className="flex justify-between">
                     <dt className="text-muted-foreground">运行时长</dt>
                     <dd className="">{(() => {
                         // 计算运行时长
-                        const startDateStr = baseInfoResponse.data[0]["开始日期"];
+                        const startDateStr = baseInfoItem["开始日期"];
                         if (!startDateStr) return "-";
                         
                         const startDate = new Date(startDateStr);
@@ -884,8 +865,9 @@ export default function UserPage() {
                 </div>
                 <div className="font-semibold text-lg">
                   {(() => {
+                    if (!totalMarketValue) return "-";
                     try {
-                      const initialCapital = baseInfoResponse.data[0]["初始本金"];
+                      const initialCapital = baseInfoItem["初始本金"];
                       const currentBalance = totalMarketValue;
                       
                       if (initialCapital && currentBalance) {
@@ -1009,8 +991,9 @@ export default function UserPage() {
                     <dd className="text-green-600">
                       {(() => {
                         try {
+                          if (!totalMarketValue) return "-";
                           // 自行计算年化收益率
-                          const initialCapitalRaw = baseInfoResponse.data[0]["初始本金"];
+                          const initialCapitalRaw = baseInfoItem["初始本金"];
                           
                           // 计算实时市值
                           const currentBalanceRaw = totalMarketValue;
@@ -1042,7 +1025,7 @@ export default function UserPage() {
                           const pureProfit = currentBalance - initialCapital - totalFundChange;
                           
                           // 计算运行时长
-                          const startDateStr = baseInfoResponse.data[0]["开始日期"];
+                          const startDateStr = baseInfoItem["开始日期"];
                           if (!startDateStr) return "-";
                           
                           const startDate = new Date(startDateStr);
@@ -1164,7 +1147,7 @@ export default function UserPage() {
         </div>
       )}
       
-      {!loading && !error && baseInfoResponse && baseInfoResponse.success && (
+      {!error && baseInfoItem && (
         <CurveChart 
           chartData={chartData}
           chartMode={chartMode}
@@ -1174,11 +1157,12 @@ export default function UserPage() {
           setSelectedComparisonAsset={setSelectedComparisonAsset}
           visibleLines={visibleLines}
           setVisibleLines={setVisibleLines}
+          isLoading={chartLoading}
         />
       )}
 
       {/* 持仓策略模块 - 始终显示，在加载中会显示加载状态 */}
-      {!error && baseInfoResponse && baseInfoResponse.success && (
+      {!error && baseInfoItem && (
         <Card className="animate-in fade-in duration-700">
           <Tabs value={activeHoldingTab} onValueChange={(value) => setActiveHoldingTab(value as 'current' | 'historical')}>
             <CardHeader className="flex flex-row items-center justify-between p-4">
@@ -1204,7 +1188,7 @@ export default function UserPage() {
                 </TabsTrigger>
               </TabsList>
             </CardHeader>
-            <CardContent className="p-4 pt-0">
+            <CardContent className="p-4">
               <TabsContent className="mt-0" value="current">
                 { holdingStrategies?.success && holdingStrategies.data.length > 0 ? (
               <>
@@ -1239,7 +1223,7 @@ export default function UserPage() {
                         const profitPercent = (profit / holdingCost) * 100;
                         
                         // 计算比例
-                        const proportion = totalMarketValue > 0 ? marketValue / totalMarketValue : 0;
+                        const proportion = totalMarketValue ? marketValue / totalMarketValue : 0;
                         
                         return (
                           <TableRow key={index}>
@@ -1299,7 +1283,7 @@ export default function UserPage() {
                     const profitPercent = (profit / holdingCost) * 100;
                     
                     // 计算比例
-                    const proportion = holdingCost ? holdingCost / totalMarketValue : 0;
+                    const proportion = totalMarketValue && holdingCost ? holdingCost / totalMarketValue : 0;
                     
                     return (
                       <div key={index} className="rounded-lg border bg-card text-card-foreground p-3">
@@ -1324,7 +1308,7 @@ export default function UserPage() {
                         <div className="mb-3">
                           <div className="flex items-center gap-1 text-sm text-muted-foreground">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
                             </svg>
                             开仓日期
                           </div>
@@ -1332,27 +1316,25 @@ export default function UserPage() {
                         </div>
                         
                         {/* 仓位信息 */}
-                        <div className="mb-3">
-                          <div className="grid grid-cols-2 gap-4 items-start">
-                            <div>
-                              <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5" />
-                                </svg>
-                                仓位
-                              </div>
-                              <div className="font-medium break-all" style={{maxWidth: '150px', wordBreak: 'break-word'}}>{strategy["仓位"] || "-"}</div>
+                        <div className="grid grid-cols-2 gap-4 mb-3">
+                          <div>
+                          <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5" />
+                            </svg>
+                            仓位
+                          </div>
+                          <div className="font-medium">{strategy["仓位"] || "-"}</div>
+                        </div>
+                          <div className="text-right">
+                            <div className="flex items-center justify-end gap-1 text-sm text-muted-foreground">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z" />
+                              </svg>
+                              占比
                             </div>
-                            <div className="text-right">
-                              <div className="flex items-center justify-end gap-1 text-sm text-muted-foreground">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z" />
-                                </svg>
-                                占比
-                              </div>
-                              <div className="flex items-center justify-end">
-                                <span>{(proportion * 100).toFixed(2)}%</span>
-                              </div>
+                            <div className="flex items-center justify-end">
+                              <span>{(proportion * 100).toFixed(2)}%</span>
                             </div>
                           </div>
                         </div>
@@ -1362,7 +1344,7 @@ export default function UserPage() {
                           <div>
                             <div className="flex items-center gap-1 text-sm text-muted-foreground">
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
                               </svg>
                               成本
                             </div>
@@ -1371,7 +1353,7 @@ export default function UserPage() {
                           <div className="text-right">
                             <div className="flex items-center justify-end gap-1 text-sm text-muted-foreground">
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
                               </svg>
                               市值
                             </div>
@@ -1384,7 +1366,7 @@ export default function UserPage() {
                           <div>
                             <div className="flex items-center gap-1 text-sm text-muted-foreground">
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
                               </svg>
                               盈亏
                             </div>
@@ -1417,7 +1399,7 @@ export default function UserPage() {
             ) : (
               <div className="py-12 text-center">
                 <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-muted-foreground opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                 </svg>
                 <p className="mt-4 text-muted-foreground">当前无持仓</p>
               </div>
@@ -1434,11 +1416,10 @@ export default function UserPage() {
                     </div>
                   ) : historicalHoldings?.success && historicalHoldings.data.length > 0 ? (
               <>
-
               {/* 桌面版表格 - 在中等及以上屏幕显示 */}
                 <div className="hidden md:block">
                   <Table>
-                    <TableHeader>
+                    <TableHeader className="bg-muted">
                       <TableRow>
                         <TableHead style={{width: '10%'}}>标的</TableHead>
                         <TableHead style={{width: '8%'}}>策略</TableHead>
@@ -1482,7 +1463,7 @@ export default function UserPage() {
                         // 计算实时市值总额
                         // 使用状态中的总市值变量
                         
-                        const proportion = entryCost ? entryCost / totalMarketValue : 0;
+                        const proportion = entryCost && totalMarketValue ? entryCost / totalMarketValue : 0;
                         const profitPercent = entryCost > 0 ? (profit / entryCost) * 100 : 0;
                         
                         return (
@@ -1586,7 +1567,7 @@ export default function UserPage() {
                           <div>
                             <div className="flex items-center gap-1 text-sm text-muted-foreground">
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
                               </svg>
                               开仓日期
                             </div>
@@ -1595,7 +1576,7 @@ export default function UserPage() {
                           <div className="text-right">
                             <div className="flex items-center justify-end gap-1 text-sm text-muted-foreground">
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z" />
                               </svg>
                               平仓日期
                             </div>
@@ -1610,7 +1591,7 @@ export default function UserPage() {
                             <div>
                               <div className="flex items-center gap-1 text-sm text-muted-foreground">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5" />
                                 </svg>
                                 仓位
                               </div>
@@ -1619,7 +1600,7 @@ export default function UserPage() {
                             <div className="text-right">
                               <div className="flex items-center justify-end gap-1 text-sm text-muted-foreground">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z" />
                                 </svg>
                                 占比
                               </div>
@@ -1636,7 +1617,7 @@ export default function UserPage() {
                             <div>
                               <div className="flex items-center gap-1 text-sm text-muted-foreground">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
                                 </svg>
                                 成本
                               </div>
@@ -1647,7 +1628,7 @@ export default function UserPage() {
                             <div className="text-right">
                               <div className="flex items-center justify-end gap-1 text-sm text-muted-foreground">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
                                 </svg>
                                 平仓市值
                               </div>
@@ -1664,7 +1645,7 @@ export default function UserPage() {
                             <div>
                               <div className="flex items-center gap-1 text-sm text-muted-foreground">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
                                 </svg>
                                 盈亏
                               </div>
@@ -1698,13 +1679,13 @@ export default function UserPage() {
             ) : (
               <div className="py-12 text-center">
                 <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-muted-foreground opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                 </svg>
                 <p className="mt-4 text-muted-foreground">暂无历史持仓</p>
               </div>
                   )}
                 </TabsContent>
-              </CardContent>
+            </CardContent>
           </Tabs>
         </Card>
       )}
@@ -1720,7 +1701,7 @@ export default function UserPage() {
               <CardTitle className="text-lg">出入金</CardTitle>
             </div>
           </CardHeader>
-          <CardContent className="p-4 pt-0">
+          <CardContent className="p-4">
             <FundChange
               fundChangeData={fundChangeData} 
             />
@@ -1728,7 +1709,7 @@ export default function UserPage() {
         </Card>
       )}
 
-      {baseInfoResponse && baseInfoResponse.success && historicalHoldings && historicalHoldings.success && (
+      {baseInfoItem && historicalHoldings && historicalHoldings.success && (
         <div className="text-center mt-4">
           <p className="text-sm text-muted-foreground mt-1">
             最近更新: {new Date(historicalHoldings.timestamp).toLocaleString()}

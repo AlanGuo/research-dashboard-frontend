@@ -13,11 +13,19 @@ export async function GET(
   const searchParams = request.nextUrl.searchParams;
   const interval = searchParams.get('interval') || '1D';
   const bars = parseInt(searchParams.get('bars') || '1', 10);
+  const from = searchParams.get('from'); // 新增from参数，表示开始时间戳
   
   try {
     // 使用内部的kline API获取数据
     const apiBaseUrl = config.api?.baseUrl || 'http://localhost:3001/v1';
-    const response = await fetch(`${apiBaseUrl}/kline/${symbolLower}?interval=${interval}&bars=${bars}`);
+    let url = `${apiBaseUrl}/kline/${symbolLower}?interval=${interval}&bars=${bars}`;
+    
+    // 如果提供了from参数，添加到请求URL中
+    if (from) {
+      url += `&from=${from}`;
+    }
+    
+    const response = await fetch(url);
     
     if (!response.ok) {
       throw new Error(`Kline API请求失败: ${response.status}`);

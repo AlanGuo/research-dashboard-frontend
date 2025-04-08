@@ -6,7 +6,6 @@ import { AssetIcon } from "./asset-icons"
 // 定义加密货币价格数据类型
 interface CryptoPriceData {
   symbol: string
-  name: string
   currentPrice: number
   dayChange: number | null // 24小时变动百分比
   weekChange: number | null // 7天变动百分比
@@ -20,7 +19,7 @@ interface MarketReferenceProps {
 
 export function MarketReference({ comparisonAssets = ["BTCUSDT"] }: MarketReferenceProps) {
   const [cryptoData, setCryptoData] = useState<CryptoPriceData[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     async function fetchCryptoPrices() {
@@ -29,26 +28,6 @@ export function MarketReference({ comparisonAssets = ["BTCUSDT"] }: MarketRefere
         
         // 使用传入的比较资产列表，如果为空则使用默认列表
         const assetsToFetch = comparisonAssets;
-        // 资产名称映射
-        const assetNames: Record<string, string> = {
-          'BTC': '比特币',
-          'SOL': 'Solana',
-          'SUI': 'Sui',
-          'ETH': '以太坊',
-          'BNB': '币安币',
-          'XRP': '瑞波币',
-          'ADA': '卡尔达诺',
-          'DOGE': '狗狗币',
-          'MATIC': 'Polygon',
-          'DOT': '波卡',
-          'AVAX': 'Avalanche',
-          'SHIB': '柴犬币',
-          'TRX': '波场',
-          'LINK': 'Chainlink',
-          'UNI': 'Uniswap',
-          'ATOM': 'Cosmos'
-        };
-        
         // 为每个资产单独获取数据，这样一个失败不会影响其他的
         const results = await Promise.all(
           assetsToFetch.map(async (asset) => {
@@ -75,7 +54,6 @@ export function MarketReference({ comparisonAssets = ["BTCUSDT"] }: MarketRefere
               // 返回格式化的数据
               return {
                 symbol: symbol,
-                name: assetNames[symbol] || symbol,
                 currentPrice: data.data.price,
                 dayChange: data.data.priceChange24h,
                 weekChange: data.data.priceChange7d,
@@ -87,7 +65,6 @@ export function MarketReference({ comparisonAssets = ["BTCUSDT"] }: MarketRefere
               // 返回带有错误信息的数据对象
               return {
                 symbol: symbol,
-                name: assetNames[symbol] || symbol,
                 currentPrice: 0,
                 dayChange: null,
                 weekChange: null,
@@ -106,8 +83,10 @@ export function MarketReference({ comparisonAssets = ["BTCUSDT"] }: MarketRefere
         setLoading(false);
       }
     }
-    
-    fetchCryptoPrices()
+    if (!loading && comparisonAssets.length > 0) {
+      fetchCryptoPrices();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [comparisonAssets])
   
   // 格式化价格变动，添加+/-符号和颜色类
@@ -138,7 +117,7 @@ export function MarketReference({ comparisonAssets = ["BTCUSDT"] }: MarketRefere
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-1">
                     <AssetIcon symbol={crypto.symbol} size={16} />
-                    <div className="font-medium text-sm">{crypto.name}</div>
+                    <div className="font-medium text-sm">{crypto.symbol}</div>
                   </div>
                   {crypto.error ? (
                     <div className="text-xs text-red-500 dark:text-red-400 font-medium">
