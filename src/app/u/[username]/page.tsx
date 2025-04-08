@@ -1305,27 +1305,40 @@ export default function UserPage() {
                         </div>
                         
                         {/* 开仓日期 */}
-                        <div className="mb-3">
-                          <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
-                            </svg>
-                            开仓日期
+                        <div className="grid grid-cols-2 gap-4 mb-3">
+                          <div>
+                            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+                              </svg>
+                              开仓日期
+                            </div>
+                            <div className="font-medium">{strategy["进场日期"] || "-"}</div>
                           </div>
-                          <div className="font-medium">{strategy["进场日期"] || "-"}</div>
+                          <div className="text-right">
+                            <div className="flex items-center justify-end gap-1 text-sm text-muted-foreground">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              更新
+                            </div>
+                            <div className="flex items-center justify-end">
+                              <span>{strategy["更新日期"] || "-"}</span>
+                            </div>
+                          </div>
                         </div>
                         
                         {/* 仓位信息 */}
                         <div className="grid grid-cols-2 gap-4 mb-3">
                           <div>
-                          <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5" />
-                            </svg>
-                            仓位
+                            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5" />
+                              </svg>
+                              仓位
+                            </div>
+                            <div className="font-medium">{strategy["仓位"] || "-"}</div>
                           </div>
-                          <div className="font-medium">{strategy["仓位"] || "-"}</div>
-                        </div>
                           <div className="text-right">
                             <div className="flex items-center justify-end gap-1 text-sm text-muted-foreground">
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1362,7 +1375,7 @@ export default function UserPage() {
                         </div>
                         
                         {/* 盈亏信息 */}
-                        <div className="flex justify-between items-center">
+                        <div className="mb-3">
                           <div>
                             <div className="flex items-center gap-1 text-sm text-muted-foreground">
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1372,13 +1385,8 @@ export default function UserPage() {
                             </div>
                             <div className={`font-medium ${profit >= 0 ? "text-green-600" : "text-red-600"}`}>
                               {profit >= 0 ? "+" : ""}
-                              ${profit.toLocaleString(undefined, {maximumFractionDigits: 0})}
+                              ${profit.toLocaleString(undefined, {maximumFractionDigits: 0})}({profitPercent.toFixed(2)}%)
                             </div>
-                          </div>
-                          <div className={`text-right ${profit >= 0 ? "text-green-600" : "text-red-600"}`}>
-                            <span className="font-medium flex items-center justify-end gap-1">
-                              {profit >= 0 ? "+" : ""}{profitPercent.toFixed(2)}%
-                            </span>
                           </div>
                         </div>
                         
@@ -1576,7 +1584,7 @@ export default function UserPage() {
                           <div className="text-right">
                             <div className="flex items-center justify-end gap-1 text-sm text-muted-foreground">
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
                               </svg>
                               平仓日期
                             </div>
@@ -1651,13 +1659,8 @@ export default function UserPage() {
                               </div>
                               <div className={`font-medium ${profit >= 0 ? "text-green-600" : "text-red-600"}`}>
                                 {profit >= 0 ? "+" : ""}
-                                ${profit.toLocaleString(undefined, {maximumFractionDigits: 0})}
+                                ${profit.toLocaleString(undefined, {maximumFractionDigits: 0})}({profitPercent.toFixed(2)}%)
                               </div>
-                            </div>
-                            <div className={`text-right ${profit >= 0 ? "text-green-600" : "text-red-600"}`}>
-                              <span className="font-medium flex items-center justify-end gap-1">
-                                {profit >= 0 ? "+" : ""}{profitPercent.toFixed(2)}%
-                              </span>
                             </div>
                           </div>
                         </div>
