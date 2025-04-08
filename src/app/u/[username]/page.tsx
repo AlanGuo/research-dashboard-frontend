@@ -1222,7 +1222,7 @@ export default function UserPage() {
                         <TableHead className="text-right" style={{width: '10%'}}>市值</TableHead>
                         <TableHead className="text-right" style={{width: '10%'}}>盈亏</TableHead>
                         <TableHead className="text-right" style={{width: '16%'}}>备注</TableHead>
-                        <TableHead className="text-right" style={{width: '10%'}}>更新于</TableHead>
+                        <TableHead className="text-right" style={{width: '10%'}}>更新</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
