@@ -1285,7 +1285,7 @@ export default function UserPage() {
                 </div>
                   
                 {/* 移动版卡片布局 - 在小屏幕显示 */}
-                <div className="md:hidden space-y-3 px-2 py-4">
+                <div className="md:hidden space-y-3 py-2">
                   {holdingStrategies.data.map((strategy, index) => {
                     // 处理进场价格和市值数据
                     const marketValue = strategy["实时估值"];
@@ -1529,7 +1529,7 @@ export default function UserPage() {
                 </div>
                 
                 {/* 移动版卡片 - 在小屏幕显示 */}
-                <div className="md:hidden space-y-3 px-2 py-4">
+                <div className="md:hidden space-y-3 py-2">
                   {historicalHoldings.data.map((strategy, index) => {
                     // 处理进场价格和平仓价值数据
                     const entryPrice = typeof strategy["进场"] === 'string' ? parseFloat(strategy["进场"]) : strategy["进场"];
