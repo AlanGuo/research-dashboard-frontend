@@ -42,6 +42,7 @@ interface HoldingStrategyItem {
   "出场": number;
   "盈亏": number;
   "实时估值": number;
+  "实时标的": string; // 新增字段：用于指定实时价格标的
   "状态": string;
   "更新日期": string;
   "备注": string;
@@ -122,24 +123,85 @@ export default function UserPage() {
   // 在绝对值模式下，当前选中的对比资产
   const [selectedComparisonAsset, setSelectedComparisonAsset] = useState<string>('');
 
-  // 计算当前持仓的盈亏总和
-  const calculateCurrentHoldingsProfit = (strategies: HoldingStrategyItem[]): number => {
-    return strategies.reduce((sum, strategy) => {
-      // 计算当前持仓的盈亏：实时估值 - 进场价值
-      const marketValue = strategy["实时估值"] || 0;
-      let entryCost = 0;
+  // 用于缓存已获取的实时价格
+  const [realtimePriceCache, setRealtimePriceCache] = useState<Record<string, number>>({});
+
+  // 获取实时标的价格
+  const fetchRealtimePrice = async (symbol: string): Promise<number> => {
+    try {
+      // 检查缓存中是否已有该标的的价格
+      if (realtimePriceCache[symbol]) {
+        return realtimePriceCache[symbol];
+      }
       
+      // 调用价格API获取实时价格
+      const response = await fetch(`/api/price/${symbol}`);
+      
+      if (!response.ok) {
+        throw new Error(`获取${symbol}价格失败: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.success && data.data && data.data.price) {
+        // 更新价格缓存
+        setRealtimePriceCache(prev => ({
+          ...prev,
+          [symbol]: data.data.price
+        }));
+        return data.data.price;
+      } else {
+        throw new Error(`获取${symbol}价格数据不完整`);
+      }
+    } catch (error) {
+      console.error(`获取${symbol}实时价格失败:`, error);
+      return 0; // 获取失败时返回0
+    }
+  };
+
+  // 计算当前持仓的盈亏总和
+  const calculateCurrentHoldingsProfit = async (strategies: HoldingStrategyItem[]): Promise<number> => {
+    let totalProfit = 0;
+    
+    // 使用Promise.all并行处理所有策略
+    await Promise.all(strategies.map(async (strategy) => {
+      // 计算当前持仓的盈亏：实时估值 - 进场价值
+      let marketValue = 0;
+      const position = typeof strategy["仓位"] === 'string' ? 
+        parseFloat(strategy["仓位"]) : (strategy["仓位"] || 0);
+      
+      // 如果有实时标的字段，则使用仓位 * 实时标的价格计算市值
+      if (strategy["实时标的"]) {
+        // 获取实时标的价格
+        const realtimePrice = await fetchRealtimePrice(strategy["实时标的"].trim());
+        if (realtimePrice > 0) {
+          // 使用实时价格 * 仓位计算市值
+          marketValue = realtimePrice * position;
+          // 更新策略的实时估值字段
+          strategy["实时估值"] = marketValue;
+          // 在更新日期字段显示"实时"
+          strategy["更新日期"] = "实时";
+        } else {
+          // 如果获取实时价格失败，则使用原有的实时估值
+          marketValue = strategy["实时估值"] || 0;
+        }
+      } else {
+        // 没有实时标的时使用实时估值字段
+        marketValue = strategy["实时估值"] || 0;
+      }
+      
+      let entryCost = 0;
       if (strategy["进场价值"]) {
         entryCost = strategy["进场价值"];
-      } else if (strategy["仓位"] && strategy["进场"]) {
-        const position = typeof strategy["仓位"] === 'string' ? 
-          parseFloat(strategy["仓位"]) : strategy["仓位"];
+      } else if (position && strategy["进场"]) {
         entryCost = position * strategy["进场"];
       }
       
       const profit = marketValue - entryCost;
-      return sum + profit;
-    }, 0);
+      totalProfit += profit;
+    }));
+    
+    return totalProfit;
   };
   
   // 计算历史持仓的盈亏总和
@@ -183,7 +245,8 @@ export default function UserPage() {
       
       // 计算所有当前持仓的盈亏总和
       if (holdingStrategies && holdingStrategies.success && holdingStrategies.data) {
-        totalProfit += calculateCurrentHoldingsProfit(holdingStrategies.data);
+        const currentProfit = await calculateCurrentHoldingsProfit(holdingStrategies.data);
+        totalProfit += currentProfit;
       }
       
       // 计算所有历史持仓的盈亏总和
@@ -202,6 +265,8 @@ export default function UserPage() {
       // 计算当前持仓的总估值
       let totalCurrentHoldingsValue = 0;
       if (holdingStrategies && holdingStrategies.success && holdingStrategies.data) {
+        // 由于在前面已经调用了calculateCurrentHoldingsProfit，实时标的的价格已经更新到实时估值字段
+        // 现在可以直接使用实时估值字段计算总估值
         totalCurrentHoldingsValue = holdingStrategies.data.reduce((sum, strategy) => {
           return sum + (strategy["实时估值"] || 0);
         }, 0);
@@ -401,7 +466,7 @@ export default function UserPage() {
         }
         
         // 获取对比资产列表
-        const comparisonString = baseInfoResponse.data[0]["对比"] || "";
+        const comparisonString = baseInfoResponse.data[0]["对比"];
         const assets = comparisonString ? comparisonString.split(',').map(asset => asset.trim()).filter(asset => asset) : [];
         
         // 更新比较资产列表
@@ -551,7 +616,8 @@ export default function UserPage() {
           let totalCurrentProfit = 0;
           
           // 计算当前持仓的盈亏总和
-          totalCurrentProfit += calculateCurrentHoldingsProfit(localHoldingStrategies.data);
+          const currentHoldingsProfit = await calculateCurrentHoldingsProfit(localHoldingStrategies.data);
+          totalCurrentProfit += currentHoldingsProfit;
           
           // 计算所有历史持仓的盈亏总和
           totalCurrentProfit += calculateHistoricalHoldingsProfit(sortedHistoricalHoldings);
@@ -745,7 +811,7 @@ export default function UserPage() {
       ) : baseInfoResponse && baseInfoResponse.success && baseInfoResponse.data.length > 0 ? (
         <div className="space-y-6 md:space-y-8">
           {/* 市场参考板块 */}
-          <MarketReference comparisonAssets={comparisonAssets} />
+          <MarketReference comparisonAssets={comparisonAssets.length > 0 ? comparisonAssets : baseInfoResponse.data[0]["对比"]?.split(',').map(asset => asset.trim()) || []} />
           
           {/* 标题区域 */}
           <div className="animate-in fade-in duration-700 flex justify-between items-start">
@@ -1111,8 +1177,8 @@ export default function UserPage() {
         />
       )}
 
-      {/* 持仓策略模块 */}
-      {!loading && !error && baseInfoResponse && baseInfoResponse.success && holdingStrategies && holdingStrategies.success && historicalHoldings && historicalHoldings.success && (
+      {/* 持仓策略模块 - 始终显示，在加载中会显示加载状态 */}
+      {!error && baseInfoResponse && baseInfoResponse.success && (
         <Card className="animate-in fade-in duration-700">
           <Tabs value={activeHoldingTab} onValueChange={(value) => setActiveHoldingTab(value as 'current' | 'historical')}>
             <CardHeader className="flex flex-row items-center justify-between p-4">
@@ -1126,17 +1192,21 @@ export default function UserPage() {
               <TabsList>
                 <TabsTrigger value="current">
                   当前持仓
-                  <span className="ml-1 inline-flex items-center justify-center w-5 h-5 text-xs font-medium rounded-full bg-muted text-muted-foreground">{holdingStrategies.data.length}</span>
+                  <span className="ml-1 inline-flex items-center justify-center w-5 h-5 text-xs font-medium rounded-full bg-muted text-muted-foreground">
+                    {loading ? '...' : (holdingStrategies?.success ? holdingStrategies.data.length : 0)}
+                  </span>
                 </TabsTrigger>
                 <TabsTrigger value="historical">
                   历史持仓
-                  <span className="ml-1 inline-flex items-center justify-center w-5 h-5 text-xs font-medium rounded-full bg-muted text-muted-foreground">{historicalHoldings.data.length}</span>
+                  <span className="ml-1 inline-flex items-center justify-center w-5 h-5 text-xs font-medium rounded-full bg-muted text-muted-foreground">
+                    {loading ? '...' : (historicalHoldings?.success ? historicalHoldings.data.length : 0)}
+                  </span>
                 </TabsTrigger>
               </TabsList>
             </CardHeader>
             <CardContent className="p-4 pt-0">
               <TabsContent className="mt-0" value="current">
-                {holdingStrategies.data.length > 0 ? (
+                { holdingStrategies?.success && holdingStrategies.data.length > 0 ? (
               <>
                 {/* 桌面版表格 - 在中等及以上屏幕显示 */}
                 <div className="hidden md:block">
@@ -1156,7 +1226,7 @@ export default function UserPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {holdingStrategies.data.map((strategy, index) => {
+                      {holdingStrategies?.success && holdingStrategies.data.map((strategy, index) => {
                         // 处理进场价格和市值数据
                         const marketValue = strategy["实时估值"];
                         
@@ -1173,7 +1243,7 @@ export default function UserPage() {
                         
                         return (
                           <TableRow key={index}>
-                            <TableCell className="font-medium">{strategy["标的"]}</TableCell>
+                            <TableCell className="font-medium">{strategy["标的"] || "-"}</TableCell>
                             <TableCell>
                               {strategy["策略"] ? (
                                 <Badge variant="secondary" className="font-normal text-xs">
@@ -1355,7 +1425,14 @@ export default function UserPage() {
                 </TabsContent>
                 
                 <TabsContent className="mt-0" value="historical">
-                  {historicalHoldings.data.length > 0 ? (
+                  {loading ? (
+                    <div className="flex items-center justify-center p-8">
+                      <div className="text-center">
+                        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+                        <p className="text-muted-foreground">正在加载历史持仓数据...</p>
+                      </div>
+                    </div>
+                  ) : historicalHoldings?.success && historicalHoldings.data.length > 0 ? (
               <>
 
               {/* 桌面版表格 - 在中等及以上屏幕显示 */}
@@ -1376,7 +1453,7 @@ export default function UserPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {historicalHoldings.data.map((strategy, index) => {
+                      {historicalHoldings?.success && historicalHoldings.data.map((strategy, index) => {
                         // 处理进场价格和平仓价值数据
                         const entryPrice = typeof strategy["进场"] === 'string' ? parseFloat(strategy["进场"]) : strategy["进场"];
                         
@@ -1410,7 +1487,7 @@ export default function UserPage() {
                         
                         return (
                           <TableRow key={index}>
-                            <TableCell className="font-medium">{strategy["标的"]}</TableCell>
+                            <TableCell className="font-medium">{strategy["标的"] || "-"}</TableCell>
                             <TableCell>
                               {strategy["策略"] ? (
                                 <Badge variant="secondary" className="font-normal text-xs">
