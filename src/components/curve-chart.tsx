@@ -313,7 +313,7 @@ export const CurveChart: React.FC<CurveChartProps> = ({
           </ResponsiveContainer>
         ) : (
           <div className="flex flex-col items-center justify-center h-full gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground">
+            <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-muted-foreground opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 3v18h18" />
               <path d="m19 9-5 5-4-4-3 3" />
             </svg>

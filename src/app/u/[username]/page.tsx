@@ -816,8 +816,8 @@ export default function UserPage() {
           {/* 标题区域 */}
           <div className="animate-in fade-in duration-700 flex justify-between items-start">
             <div>
-              <h1 className="text-3xl md:text-4xl font-bold">{baseInfoResponse.data[0]["策略名"]}</h1>
-              <p className="text-base md:text-lg text-muted-foreground mt-2">{baseInfoResponse.data[0]["备注"]}</p>
+              <h1 className="text-2xl md:text-3xl font-bold">{baseInfoResponse.data[0]["策略名"]}</h1>
+              <p className="text-base text-muted-foreground mt-2">{baseInfoResponse.data[0]["备注"]}</p>
             </div>
             <ThemeToggle />
           </div>
@@ -1700,7 +1700,7 @@ export default function UserPage() {
                 <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12 text-muted-foreground opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                 </svg>
-                <p className="mt-4 text-muted-foreground">暂无历史持仓记录</p>
+                <p className="mt-4 text-muted-foreground">暂无历史持仓</p>
               </div>
                   )}
                 </TabsContent>
