@@ -1350,7 +1350,7 @@ export default function UserPage() {
                               更新
                             </div>
                             <div className="flex items-center justify-end">
-                              <span>{strategy["更新日期"] || "-"}</span>
+                              <span className="text-muted-foreground text-sm">{strategy["更新日期"] || "-"}</span>
                             </div>
                           </div>
                         </div>
