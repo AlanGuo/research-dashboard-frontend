@@ -1226,13 +1226,13 @@ export default function UserPage() {
                   <Table>
                     <TableHeader className="bg-muted">
                       <TableRow>
-                        <TableHead style={{width: '10%'}}>标的</TableHead>
+                        <TableHead style={{width: '6%'}}>标的</TableHead>
                         <TableHead style={{width: '8%'}}>策略</TableHead>
                         <TableHead className="text-center" style={{width: '10%'}}>开仓日期</TableHead>
                         <TableHead className="text-right" style={{width: '8%'}}>仓位</TableHead>
                         <TableHead className="text-right" style={{width: '8%'}}>占比</TableHead>
-                        <TableHead className="text-right" style={{width: '10%'}}>成本</TableHead>
-                        <TableHead className="text-right" style={{width: '10%'}}>市值</TableHead>
+                        <TableHead className="text-right" style={{width: '12%'}}>成本</TableHead>
+                        <TableHead className="text-right" style={{width: '12%'}}>市值</TableHead>
                         <TableHead className="text-right" style={{width: '10%'}}>盈亏</TableHead>
                         <TableHead className="text-right" style={{width: '12%'}}>备注</TableHead>
                         <TableHead className="text-right" style={{width: '14%'}}>更新</TableHead>
@@ -1482,13 +1482,13 @@ export default function UserPage() {
                   <Table>
                     <TableHeader className="bg-muted">
                       <TableRow>
-                        <TableHead style={{width: '10%'}}>标的</TableHead>
+                        <TableHead style={{width: '6%'}}>标的</TableHead>
                         <TableHead style={{width: '8%'}}>策略</TableHead>
                         <TableHead className="text-center" style={{width: '10%'}}>开仓日期</TableHead>
                         <TableHead className="text-right" style={{width: '8%'}}>仓位</TableHead>
                         <TableHead className="text-right" style={{width: '8%'}}>占比</TableHead>
-                        <TableHead className="text-right" style={{width: '10%'}}>成本</TableHead>
-                        <TableHead className="text-right" style={{width: '10%'}}>平仓市值</TableHead>
+                        <TableHead className="text-right" style={{width: '12%'}}>成本</TableHead>
+                        <TableHead className="text-right" style={{width: '12%'}}>平仓市值</TableHead>
                         <TableHead className="text-right" style={{width: '10%'}}>盈亏</TableHead>
                         <TableHead className="text-right" style={{width: '12%'}}>备注</TableHead>
                         <TableHead className="text-right" style={{width: '14%'}}>平仓日期</TableHead>
