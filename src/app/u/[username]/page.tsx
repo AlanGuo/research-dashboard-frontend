@@ -43,7 +43,7 @@ interface HoldingStrategyItem {
   "盈亏": number;
   "实时估值": number;
   "实时标的": string; // 新增字段：用于指定实时价格标的
-  "实时价格": number; // 新增字段：用于指定实时价格
+  "标的价格": number; // 新增字段：用于指定实时价格
   "状态": string;
   "更新日期": string;
   "备注": string;
@@ -198,7 +198,7 @@ export default function UserPage() {
           strategy["实时估值"] = marketValue;
           // 在更新日期字段显示"实时"
           strategy["更新日期"] = "实时";
-          strategy["实时价格"] = realtimePrice;
+          strategy["标的价格"] = realtimePrice;
         } else {
           // 如果获取实时价格失败，则使用原有的实时估值
           marketValue = strategy["实时估值"] || 0;
@@ -1278,8 +1278,8 @@ export default function UserPage() {
                             <TableCell className="text-right">
                               <div className="flex flex-col items-end">
                                 <span className="font-medium">${marketValue ? marketValue.toLocaleString(undefined, {maximumFractionDigits: 2}) : "-"}</span>
-                                {strategy["实时价格"] && <div className="text-muted-foreground text-sm">
-                                  <span>{strategy["标的"]}: ${strategy["实时价格"].toLocaleString(undefined, {maximumFractionDigits: 2})}</span>
+                                {strategy["标的价格"] && <div className="text-muted-foreground text-sm">
+                                  <span>{strategy["标的"]}: ${strategy["标的价格"].toLocaleString(undefined, {maximumFractionDigits: 2})}</span>
                                 </div>}
                               </div>
                             </TableCell>
@@ -1330,7 +1330,7 @@ export default function UserPage() {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                             </svg>
                             <strong className="font-medium">{strategy["标的"] || '-'}</strong>
-                            {strategy["实时价格"] && <span className="text-muted-foreground text-sm">${strategy["实时价格"].toLocaleString(undefined, {maximumFractionDigits: 2})}</span>}
+                            {strategy["标的价格"] && <span className="text-muted-foreground text-sm">${strategy["标的价格"].toLocaleString(undefined, {maximumFractionDigits: 2})}</span>}
                           </div>
                           <div>
                             {strategy["策略"] ? (
