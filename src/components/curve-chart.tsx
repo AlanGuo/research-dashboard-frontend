@@ -121,7 +121,7 @@ export const CurveChart: React.FC<CurveChartProps> = ({
                 <YAxis 
                   yAxisId="left" 
                   orientation="left"
-                  stroke="#e11d48" /* 使用固定的红色 */
+                  stroke="var(--chart-1)"
                   tickFormatter={(value) => `$${value.toLocaleString()}`}
                 />
               }
@@ -195,7 +195,7 @@ export const CurveChart: React.FC<CurveChartProps> = ({
                       legendItems.push({ 
                         value: '策略收益率', 
                         type: 'line' as const, 
-                        color: '#e11d48', 
+                        color: 'var(--chart-1)', 
                         dataKey: 'fundReturnPct', 
                         inactive: !visibleLines.fundReturnPct 
                       });
@@ -218,7 +218,7 @@ export const CurveChart: React.FC<CurveChartProps> = ({
                       legendItems.push({ 
                         value: '策略市值', 
                         type: 'line' as const, 
-                        color: '#e11d48', 
+                        color: 'var(--chart-1)', 
                         dataKey: 'fundReturn', 
                         inactive: !visibleLines.fundReturn 
                       });
@@ -250,7 +250,7 @@ export const CurveChart: React.FC<CurveChartProps> = ({
                   type="monotone"
                   dataKey="fundReturnPct"
                   name="策略收益率"
-                  stroke="#e11d48" /* 使用固定的红色 */
+                  stroke="var(--chart-1)" /* 使用固定的红色 */
                   strokeWidth={2}
                   dot={false}
                   activeDot={{ r: 8 }}
@@ -287,7 +287,7 @@ export const CurveChart: React.FC<CurveChartProps> = ({
                   type="monotone"
                   dataKey="fundReturn"
                   name="策略收益"
-                  stroke="#e11d48" /* 使用固定的红色 */
+                  stroke="var(--chart-1)" /* 使用固定的红色 */
                   strokeWidth={2}
                   dot={false}
                   activeDot={{ r: 8 }}
