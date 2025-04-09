@@ -1547,8 +1547,22 @@ export default function UserPage() {
                                 </div>
                               </div>
                             </TableCell>
-                            <TableCell className="text-right">${entryCost ? entryCost.toLocaleString(undefined, {maximumFractionDigits: 2}) : "-"}</TableCell>
-                            <TableCell className="text-right">${closingValue ? closingValue.toLocaleString(undefined, {maximumFractionDigits: 2}) : "-"}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex flex-col items-end">
+                                <div>${entryCost ? entryCost.toLocaleString(undefined, {maximumFractionDigits: 2}) : "-"}</div>
+                                {strategy["进场"] && <div className="text-muted-foreground text-sm">
+                                  <span>成本价: ${strategy["进场"].toLocaleString(undefined, {maximumFractionDigits: 2})}</span>
+                                </div>}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex flex-col items-end">
+                                <div>${closingValue ? closingValue.toLocaleString(undefined, {maximumFractionDigits: 2}) : "-"}</div>
+                                {strategy["出场"] && <div className="text-muted-foreground text-sm">
+                                  <span>平仓价: ${strategy["出场"].toLocaleString(undefined, {maximumFractionDigits: 2})}</span>
+                                </div>}
+                              </div>
+                            </TableCell>
                             <TableCell className="text-right">
                               <div className={`flex flex-col items-end ${profit >= 0 ? "text-green-600" : "text-red-600"}`}>
                                 <span className="font-medium">
@@ -1682,8 +1696,11 @@ export default function UserPage() {
                                 </svg>
                                 成本
                               </div>
-                              <div className="font-medium">
-                                ${entryCost ? entryCost.toLocaleString(undefined, {maximumFractionDigits: 0}) : "-"}
+                              <div className="flex flex-col">
+                                <div className="font-medium">${entryCost ? entryCost.toLocaleString(undefined, {maximumFractionDigits: 0}) : "-"}</div>
+                                {strategy["进场"] && <div className="text-muted-foreground text-sm">
+                                  <span>成本价: ${strategy["进场"].toLocaleString(undefined, {maximumFractionDigits: 2})}</span>
+                                </div>}
                               </div>
                             </div>
                             <div className="text-right">
@@ -1693,8 +1710,11 @@ export default function UserPage() {
                                 </svg>
                                 平仓市值
                               </div>
-                              <div className="font-medium">
-                                ${closingValue ? closingValue.toLocaleString(undefined, {maximumFractionDigits: 0}) : "-"}
+                              <div className="flex flex-col">
+                                <div className="font-medium">${closingValue ? closingValue.toLocaleString(undefined, {maximumFractionDigits: 0}) : "-"}</div>
+                                {strategy["出场"] && <div className="text-muted-foreground text-sm">
+                                  <span>平仓价: ${strategy["出场"].toLocaleString(undefined, {maximumFractionDigits: 2})}</span>
+                                </div>}
                               </div>
                             </div>
                           </div>
