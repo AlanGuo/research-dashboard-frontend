@@ -156,9 +156,29 @@ export default function UserPage() {
 
   // 计算当前持仓的盈亏总和
   const calculateCurrentHoldingsProfit = async (strategies: HoldingStrategyItem[]): Promise<number> => {
+    // 首先收集所有需要获取实时价格的标的
+    const realtimePricePromises: { strategy: HoldingStrategyItem, pricePromise: Promise<number> }[] = [];
+    
+    // 为每个有实时标的的策略创建价格获取Promise
+    for (const strategy of strategies) {
+      if (strategy["实时标的"]) {
+        const symbol = strategy["实时标的"].trim();
+        // 创建价格获取Promise并与策略关联
+        realtimePricePromises.push({
+          strategy,
+          pricePromise: fetchRealtimePrice(symbol)
+        });
+      }
+    }
+    
+    // 并行获取所有实时价格
+    await Promise.all(realtimePricePromises.map(item => item.pricePromise));
+    
+    // 计算总盈亏
     let totalProfit = 0;
-    // 使用Promise.all并行处理所有策略
-    await Promise.all(strategies.map(async (strategy) => {
+    
+    // 处理所有策略
+    for (const strategy of strategies) {
       // 计算当前持仓的盈亏：实时估值 - 成本
       let marketValue = 0;
       const position = typeof strategy["仓位"] === 'string' ? 
@@ -166,8 +186,10 @@ export default function UserPage() {
       
       // 如果有实时标的字段，则使用仓位 * 实时标的价格计算市值
       if (strategy["实时标的"]) {
-        // 获取实时标的价格
-        const realtimePrice = await fetchRealtimePrice(strategy["实时标的"].trim());
+        // 查找对应的价格Promise结果
+        const priceItem = realtimePricePromises.find(item => item.strategy === strategy);
+        const realtimePrice = priceItem ? await priceItem.pricePromise : 0;
+        
         if (realtimePrice > 0) {
           // 使用实时价格 * 仓位计算市值
           marketValue = realtimePrice * position;
@@ -193,7 +215,7 @@ export default function UserPage() {
       
       const profit = marketValue - entryCost;
       totalProfit += profit;
-    }));
+    }
     
     return totalProfit;
   };
@@ -330,8 +352,18 @@ export default function UserPage() {
         // 更新比较资产列表
         setComparisonAssets(assets);
         
-        // 获取当前持仓
-        const holdingResponse = await fetch(`/api/holding/${username}?status=持仓`);
+        // 并行执行三个API调用
+        const [
+          holdingResponse,
+          historicalResponse,
+          fundChangeResponse
+        ] = await Promise.all([
+          fetch(`/api/holding/${username}?status=持仓`),
+          fetch(`/api/holding/${username}?except=持仓`),
+          fetch(`/api/change/${username}`)
+        ]);
+        
+        // 处理当前持仓响应
         if (holdingResponse.ok) {
           const holdingData = await holdingResponse.json();
           setHoldingStrategies(holdingData);
@@ -339,20 +371,15 @@ export default function UserPage() {
           console.error(`Holding strategies API request failed with status ${holdingResponse.status}`);
         }
         
-        // 获取历史持仓
-        const historicalResponse = await fetch(`/api/holding/${username}?except=持仓`);
-        
+        // 处理历史持仓响应
         if (!historicalResponse.ok) {
           console.error(`Historical holdings API request failed with status ${historicalResponse.status}`);
           return;
         }
-        
         const historicalData: HoldingStrategyResponse | null = await historicalResponse.json();
         setHistoricalHoldings(historicalData);
 
-        // 获取出入金数据
-        const fundChangeResponse = await fetch(`/api/change/${username}`);
-        
+        // 处理出入金数据响应
         if (!fundChangeResponse.ok) {
           console.error(`Fund change API request failed with status ${fundChangeResponse.status}`);
           return;
