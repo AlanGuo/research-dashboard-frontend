@@ -17,7 +17,7 @@ interface MarketReferenceProps {
   comparisonAssets?: string[];
 }
 
-export function MarketReference({ comparisonAssets = ["BTCUSDT"] }: MarketReferenceProps) {
+export function MarketReference({ comparisonAssets = [] }: MarketReferenceProps) {
   const [cryptoData, setCryptoData] = useState<CryptoPriceData[]>([])
   const [loading, setLoading] = useState(false)
 
