@@ -43,6 +43,7 @@ interface HoldingStrategyItem {
   "盈亏": number;
   "实时估值": number;
   "实时标的": string; // 新增字段：用于指定实时价格标的
+  "实时价格": number; // 新增字段：用于指定实时价格
   "状态": string;
   "更新日期": string;
   "备注": string;
@@ -197,6 +198,7 @@ export default function UserPage() {
           strategy["实时估值"] = marketValue;
           // 在更新日期字段显示"实时"
           strategy["更新日期"] = "实时";
+          strategy["实时价格"] = realtimePrice;
         } else {
           // 如果获取实时价格失败，则使用原有的实时估值
           marketValue = strategy["实时估值"] || 0;
@@ -837,7 +839,7 @@ export default function UserPage() {
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-6 w-6">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <CardTitle className="text-lg">总资产市值</CardTitle>
+                  <CardTitle className="text-lg">总市值</CardTitle>
                 </div>
                 <div className="font-semibold text-lg">
                   ${totalMarketValue ? totalMarketValue.toLocaleString() : "-"}
@@ -1273,7 +1275,14 @@ export default function UserPage() {
                               </div>
                             </TableCell>
                             <TableCell className="text-right font-medium">${holdingCost ? holdingCost.toLocaleString(undefined, {maximumFractionDigits: 2}) : "-"}</TableCell>
-                            <TableCell className="text-right font-medium">${marketValue ? marketValue.toLocaleString(undefined, {maximumFractionDigits: 2}) : "-"}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex flex-col items-end">
+                                <span className="font-medium">${marketValue ? marketValue.toLocaleString(undefined, {maximumFractionDigits: 2}) : "-"}</span>
+                                {strategy["实时价格"] && <div className="text-muted-foreground text-sm">
+                                  <span>{strategy["标的"]}: ${strategy["实时价格"].toLocaleString(undefined, {maximumFractionDigits: 2})}</span>
+                                </div>}
+                              </div>
+                            </TableCell>
                             <TableCell className="text-right">
                               <div className={`flex flex-col items-end ${profit >= 0 ? "text-green-600" : "text-red-600"}`}>
                                 <span className="font-medium">
@@ -1287,7 +1296,7 @@ export default function UserPage() {
                               </div>
                             </TableCell>
                             <TableCell className="text-right text-muted-foreground">{strategy["备注"] || '-'}</TableCell>
-                            <TableCell className="text-right text-sm text-muted-foreground">{strategy["更新日期"] || '-'}</TableCell>
+                            <TableCell className="text-right">{strategy["更新日期"] || '-'}</TableCell>
                           </TableRow>
                         );
                       })}
@@ -1321,6 +1330,7 @@ export default function UserPage() {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                             </svg>
                             <strong className="font-medium">{strategy["标的"] || '-'}</strong>
+                            {strategy["实时价格"] && <span className="text-muted-foreground text-sm">${strategy["实时价格"].toLocaleString(undefined, {maximumFractionDigits: 2})}</span>}
                           </div>
                           <div>
                             {strategy["策略"] ? (
@@ -1350,7 +1360,7 @@ export default function UserPage() {
                               更新
                             </div>
                             <div className="flex items-center justify-end">
-                              <span className="text-muted-foreground text-sm">{strategy["更新日期"] || "-"}</span>
+                              <span className="font-medium">{strategy["更新日期"] || "-"}</span>
                             </div>
                           </div>
                         </div>
@@ -1374,7 +1384,7 @@ export default function UserPage() {
                               占比
                             </div>
                             <div className="flex items-center justify-end">
-                              <span>{(proportion * 100).toFixed(2)}%</span>
+                              <span className="font-medium">{(proportion * 100).toFixed(2)}%</span>
                             </div>
                           </div>
                         </div>
@@ -1402,7 +1412,7 @@ export default function UserPage() {
                         </div>
                         
                         {/* 盈亏信息 */}
-                        <div className="mb-3">
+                        <div className="grid grid-cols-2 gap-4 mb-3">
                           <div>
                             <div className="flex items-center gap-1 text-sm text-muted-foreground">
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1536,7 +1546,7 @@ export default function UserPage() {
                               </div>
                             </TableCell>
                             <TableCell className="text-right text-muted-foreground">{strategy["备注"] || '-'}</TableCell>
-                            <TableCell className="text-right text-muted-foreground">{strategy["更新日期"]}</TableCell>
+                            <TableCell className="text-right">{strategy["更新日期"]}</TableCell>
                           </TableRow>
                         );
                       })}
@@ -1640,7 +1650,7 @@ export default function UserPage() {
                                 占比
                               </div>
                               <div className="flex items-center justify-end">
-                                <span>{(proportion * 100).toFixed(2)}%</span>
+                                <span className="font-medium">{(proportion * 100).toFixed(2)}%</span>
                               </div>
                             </div>
                           </div>
