@@ -1215,7 +1215,7 @@ export default function UserPage() {
                 </TabsTrigger>
               </TabsList>
             </CardHeader>
-            <CardContent className="p-4">
+            <CardContent className="p-0">
               <TabsContent className="mt-0" value="current">
                 { holdingStrategies?.success && holdingStrategies.data.length > 0 ? (
               <>
@@ -1232,8 +1232,8 @@ export default function UserPage() {
                         <TableHead className="text-right" style={{width: '10%'}}>成本</TableHead>
                         <TableHead className="text-right" style={{width: '10%'}}>市值</TableHead>
                         <TableHead className="text-right" style={{width: '10%'}}>盈亏</TableHead>
-                        <TableHead className="text-right" style={{width: '16%'}}>备注</TableHead>
-                        <TableHead className="text-right" style={{width: '10%'}}>更新</TableHead>
+                        <TableHead className="text-right" style={{width: '12%'}}>备注</TableHead>
+                        <TableHead className="text-right" style={{width: '14%'}}>更新</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1287,7 +1287,7 @@ export default function UserPage() {
                               </div>
                             </TableCell>
                             <TableCell className="text-right text-muted-foreground">{strategy["备注"] || '-'}</TableCell>
-                            <TableCell className="text-right text-sm">{strategy["更新日期"] || '-'}</TableCell>
+                            <TableCell className="text-right text-sm text-muted-foreground">{strategy["更新日期"] || '-'}</TableCell>
                           </TableRow>
                         );
                       })}
@@ -1296,7 +1296,7 @@ export default function UserPage() {
                 </div>
                   
                 {/* 移动版卡片布局 - 在小屏幕显示 */}
-                <div className="md:hidden space-y-3 py-2">
+                <div className="md:hidden space-y-3 p-4 pt-0">
                   {holdingStrategies.data.map((strategy, index) => {
                     // 处理进场价格和市值数据
                     const marketValue = strategy["实时估值"];
@@ -1464,8 +1464,8 @@ export default function UserPage() {
                         <TableHead className="text-right" style={{width: '10%'}}>成本</TableHead>
                         <TableHead className="text-right" style={{width: '10%'}}>平仓市值</TableHead>
                         <TableHead className="text-right" style={{width: '10%'}}>盈亏</TableHead>
-                        <TableHead className="text-right" style={{width: '16%'}}>备注</TableHead>
-                        <TableHead className="text-right" style={{width: '10%'}}>平仓日期</TableHead>
+                        <TableHead className="text-right" style={{width: '12%'}}>备注</TableHead>
+                        <TableHead className="text-right" style={{width: '14%'}}>平仓日期</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1731,7 +1731,7 @@ export default function UserPage() {
               <CardTitle className="text-lg">出入金</CardTitle>
             </div>
           </CardHeader>
-          <CardContent className="p-4">
+          <CardContent className="p-0">
             <FundChange
               fundChangeData={fundChangeData} 
             />

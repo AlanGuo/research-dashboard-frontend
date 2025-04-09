@@ -58,9 +58,9 @@ export function FundChange({ fundChangeData }: FundChangeProps) {
   const netChange = totalDeposit - totalWithdrawal;
 
   return (
-    <div className="space-y-4">
+    <div>
       {/* 出入金统计卡片 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 px-4">
         <Card className="shadow-none">
           <CardContent className="p-2 py-1.5">
             <div className="flex flex-col">
@@ -92,7 +92,7 @@ export function FundChange({ fundChangeData }: FundChangeProps) {
       </div>
 
       {/* 桌面版表格 - 在中等及以上屏幕显示 */}
-      <div className="hidden md:block">
+      <div className="hidden md:block mt-4">
         <Table>
           <TableHeader className="bg-muted">
             <TableRow>
@@ -127,7 +127,7 @@ export function FundChange({ fundChangeData }: FundChangeProps) {
       </div>
       
       {/* 移动版卡片 - 在小屏幕显示 */}
-      <div className="md:hidden space-y-2">
+      <div className="md:hidden space-y-2 p-4 pt-0 mt-4">
         {changeData.data.map((item, index) => (
           <div key={index} className="rounded-lg border bg-card text-card-foreground p-2">
             <div className="flex justify-between items-center mb-1">
