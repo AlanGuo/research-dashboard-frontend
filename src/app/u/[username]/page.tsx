@@ -1274,12 +1274,19 @@ export default function UserPage() {
                                 </div>
                               </div>
                             </TableCell>
-                            <TableCell className="text-right font-medium">${holdingCost ? holdingCost.toLocaleString(undefined, {maximumFractionDigits: 2}) : "-"}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex flex-col items-end">
+                                <span className="font-medium">${holdingCost ? holdingCost.toLocaleString(undefined, {maximumFractionDigits: 2}) : "-"}</span>
+                                {strategy["进场"] && <div className="text-muted-foreground text-sm">
+                                  <span>成本价: ${strategy["进场"].toLocaleString(undefined, {maximumFractionDigits: 2})}</span>
+                                </div>}
+                              </div>
+                            </TableCell>
                             <TableCell className="text-right">
                               <div className="flex flex-col items-end">
                                 <span className="font-medium">${marketValue ? marketValue.toLocaleString(undefined, {maximumFractionDigits: 2}) : "-"}</span>
                                 {strategy["标的价格"] && <div className="text-muted-foreground text-sm">
-                                  <span>{strategy["标的"]}: ${strategy["标的价格"].toLocaleString(undefined, {maximumFractionDigits: 2})}</span>
+                                  <span>最新价: ${strategy["标的价格"].toLocaleString(undefined, {maximumFractionDigits: 2})}</span>
                                 </div>}
                               </div>
                             </TableCell>
@@ -1330,7 +1337,6 @@ export default function UserPage() {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                             </svg>
                             <strong className="font-medium">{strategy["标的"] || '-'}</strong>
-                            {strategy["标的价格"] && <span className="text-muted-foreground text-sm">${strategy["标的价格"].toLocaleString(undefined, {maximumFractionDigits: 2})}</span>}
                           </div>
                           <div>
                             {strategy["策略"] ? (
@@ -1398,7 +1404,12 @@ export default function UserPage() {
                               </svg>
                               成本
                             </div>
-                            <div className="font-medium">${holdingCost ? holdingCost.toLocaleString(undefined, {maximumFractionDigits: 0}) : "-"}</div>
+                            <div className="flex flex-col">
+                              <div className="font-medium">${holdingCost ? holdingCost.toLocaleString(undefined, {maximumFractionDigits: 0}) : "-"}</div>
+                              {strategy["进场"] && <div className="text-muted-foreground text-sm">
+                                <span>成本价: ${strategy["进场"].toLocaleString(undefined, {maximumFractionDigits: 2})}</span>
+                              </div>}
+                            </div>
                           </div>
                           <div className="text-right">
                             <div className="flex items-center justify-end gap-1 text-sm text-muted-foreground">
@@ -1407,7 +1418,12 @@ export default function UserPage() {
                               </svg>
                               市值
                             </div>
-                            <div className="font-medium">${marketValue ? marketValue.toLocaleString(undefined, {maximumFractionDigits: 0}) : "-"}</div>
+                            <div className="flex flex-col items-end">
+                              <div className="font-medium">${marketValue ? marketValue.toLocaleString(undefined, {maximumFractionDigits: 0}) : "-"}</div>
+                              {strategy["标的价格"] && <div className="text-muted-foreground text-sm">
+                                <span>最新价: ${strategy["标的价格"].toLocaleString(undefined, {maximumFractionDigits: 2})}</span>
+                              </div>}
+                            </div>
                           </div>
                         </div>
                         
