@@ -43,7 +43,7 @@ interface HoldingStrategyItem {
   "盈亏": number;
   "实时估值": number;
   "实时标的": string; // 新增字段：用于指定实时价格标的
-  "标的价格": number; // 新增字段：用于指定实时价格
+  "实时价格": number; // 新增字段：用于指定实时价格
   "状态": string;
   "更新日期": string;
   "备注": string;
@@ -122,7 +122,7 @@ export default function UserPage() {
   // 用于缓存已获取的实时价格
   const [realtimePriceCache, setRealtimePriceCache] = useState<Record<string, number>>({});
 
-  // 获取实时标的价格
+  // 获取实时实时价格
   const fetchRealtimePrice = async (symbol: string): Promise<number> => {
     try {
       // 检查缓存中是否已有该标的的价格
@@ -185,7 +185,7 @@ export default function UserPage() {
       const position = typeof strategy["仓位"] === 'string' ? 
         parseFloat(strategy["仓位"]) : (strategy["仓位"] || 0);
       
-      // 如果有实时标的字段，则使用仓位 * 实时标的价格计算市值
+      // 如果有实时标的字段，则使用仓位 * 实时实时价格计算市值
       if (strategy["实时标的"]) {
         // 查找对应的价格Promise结果
         const priceItem = realtimePricePromises.find(item => item.strategy === strategy);
@@ -198,14 +198,14 @@ export default function UserPage() {
           strategy["实时估值"] = marketValue;
           // 在更新日期字段显示"实时"
           strategy["更新日期"] = "实时";
-          strategy["标的价格"] = realtimePrice;
+          strategy["实时价格"] = realtimePrice;
         } else {
           // 如果获取实时价格失败，则使用原有的实时估值
           marketValue = strategy["实时估值"] || 0;
         }
       } else {
         // 没有实时标的时使用实时估值字段
-        marketValue = strategy["实时估值"] || 0;
+        marketValue = strategy["实时估值"] ? strategy["实时估值"] : strategy["实时价格"] ? position * strategy["实时价格"] : 0;
       }
       
       let entryCost = 0;
@@ -1242,7 +1242,7 @@ export default function UserPage() {
                       {holdingStrategies?.success && holdingStrategies.data.map((strategy, index) => {
                         // 处理进场价格和市值数据
                         const marketValue = strategy["实时估值"] ? strategy["实时估值"] : 
-                        strategy["标的价格"] ? strategy["标的价格"] * parseFloat(strategy["仓位"]) : 0;
+                        strategy["实时价格"] ? strategy["实时价格"] * parseFloat(strategy["仓位"]) : 0;
                         
                         // 计算持仓成本: 优先使用"成本"字段，如果没有则计算"仓位"×"进场"
                         const holdingCost = strategy["成本"] ? 
@@ -1286,8 +1286,8 @@ export default function UserPage() {
                             <TableCell className="text-right">
                               <div className="flex flex-col items-end">
                                 <span className="font-medium">${marketValue ? marketValue.toLocaleString(undefined, {maximumFractionDigits: 2}) : "-"}</span>
-                                {strategy["标的价格"] && <div className="text-muted-foreground text-sm">
-                                  <span>最新价: ${strategy["标的价格"].toLocaleString(undefined, {maximumFractionDigits: 2})}</span>
+                                {strategy["实时价格"] && <div className="text-muted-foreground text-sm">
+                                  <span>最新价: ${strategy["实时价格"].toLocaleString(undefined, {maximumFractionDigits: 2})}</span>
                                 </div>}
                               </div>
                             </TableCell>
@@ -1317,7 +1317,7 @@ export default function UserPage() {
                   {holdingStrategies.data.map((strategy, index) => {
                     // 处理进场价格和市值数据
                     const marketValue = strategy["实时估值"] ? strategy["实时估值"] : 
-                        strategy["标的价格"] ? strategy["标的价格"] * parseFloat(strategy["仓位"]) : 0;
+                        strategy["实时价格"] ? strategy["实时价格"] * parseFloat(strategy["仓位"]) : 0;
                     
                     // 计算持仓成本: 优先使用"成本"字段，如果没有则计算"仓位"×"进场"
                     const holdingCost = strategy["成本"] ? 
@@ -1422,8 +1422,8 @@ export default function UserPage() {
                             </div>
                             <div className="flex flex-col items-end">
                               <div className="font-medium">${marketValue ? marketValue.toLocaleString(undefined, {maximumFractionDigits: 0}) : "-"}</div>
-                              {strategy["标的价格"] && <div className="text-muted-foreground text-sm">
-                                <span>最新价: ${strategy["标的价格"].toLocaleString(undefined, {maximumFractionDigits: 2})}</span>
+                              {strategy["实时价格"] && <div className="text-muted-foreground text-sm">
+                                <span>最新价: ${strategy["实时价格"].toLocaleString(undefined, {maximumFractionDigits: 2})}</span>
                               </div>}
                             </div>
                           </div>
