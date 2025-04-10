@@ -1241,7 +1241,8 @@ export default function UserPage() {
                     <TableBody>
                       {holdingStrategies?.success && holdingStrategies.data.map((strategy, index) => {
                         // 处理进场价格和市值数据
-                        const marketValue = strategy["实时估值"];
+                        const marketValue = strategy["实时估值"] ? strategy["实时估值"] : 
+                        strategy["标的价格"] ? strategy["标的价格"] * parseFloat(strategy["仓位"]) : 0;
                         
                         // 计算持仓成本: 优先使用"成本"字段，如果没有则计算"仓位"×"进场"
                         const holdingCost = strategy["成本"] ? 
