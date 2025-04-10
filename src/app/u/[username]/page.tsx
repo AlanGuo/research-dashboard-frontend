@@ -160,23 +160,27 @@ export default function UserPage() {
 
   // 计算当前持仓的盈亏总和
   const calculateCurrentHoldingsProfit = async (strategies: HoldingStrategyItem[]): Promise<number> => {
-    // 首先收集所有需要获取实时价格的标的
-    const realtimePricePromises: { strategy: HoldingStrategyItem, pricePromise: Promise<number> }[] = [];
+    // 使用Map缓存相同标的的价格请求，避免重复请求
+    const symbolPriceMap = new Map<string, Promise<number>>();
+    const strategyPriceMap = new Map<HoldingStrategyItem, Promise<number>>();
     
-    // 为每个有实时标的的策略创建价格获取Promise
+    // 为每个有实时标的的策略关联价格获取Promise
     for (const strategy of strategies) {
       if (strategy["实时标的"]) {
         const symbol = strategy["实时标的"].trim();
-        // 创建价格获取Promise并与策略关联
-        realtimePricePromises.push({
-          strategy,
-          pricePromise: fetchRealtimePrice(symbol)
-        });
+        
+        // 如果该标的已经有价格请求，则复用；否则创建新请求
+        if (!symbolPriceMap.has(symbol)) {
+          symbolPriceMap.set(symbol, fetchRealtimePrice(symbol));
+        }
+        
+        // 将策略与对应的价格Promise关联
+        strategyPriceMap.set(strategy, symbolPriceMap.get(symbol)!);
       }
     }
     
     // 并行获取所有实时价格
-    await Promise.all(realtimePricePromises.map(item => item.pricePromise));
+    await Promise.all([...symbolPriceMap.values()]);
     
     // 计算总盈亏
     let totalProfit = 0;
@@ -188,11 +192,11 @@ export default function UserPage() {
       const position = typeof strategy["仓位"] === 'string' ? 
         parseFloat(strategy["仓位"]) : (strategy["仓位"] || 0);
       
-      // 如果有实时标的字段，则使用仓位 * 实时实时价格计算市值
+      // 如果有实时标的字段，则使用仓位 * 实时价格计算市值
       if (strategy["实时标的"]) {
-        // 查找对应的价格Promise结果
-        const priceItem = realtimePricePromises.find(item => item.strategy === strategy);
-        const realtimePrice = priceItem ? await priceItem.pricePromise : 0;
+        // 获取对应的价格Promise结果
+        const pricePromise = strategyPriceMap.get(strategy);
+        const realtimePrice = pricePromise ? await pricePromise : 0;
         
         if (realtimePrice > 0) {
           // 使用实时价格 * 仓位计算市值
@@ -722,7 +726,7 @@ export default function UserPage() {
         assetValue = avgValue;
       } else {
         // 完全没有数据时的最后备选
-        assetValue = initialAssetValues.get(assetKey) || 1000;
+        assetValue = initialAssetValues.get(assetKey) || 0;
       }
     }
     
@@ -736,7 +740,7 @@ export default function UserPage() {
     }
     
     // 计算百分比和绝对值
-    const initialValue = initialAssetValues.get(assetKey) || 1000;
+    const initialValue = initialAssetValues.get(assetKey) || 0;
     
     // 比较资产不需要考虑出入金对价格的影响，因为它们是外部指数
     // 直接计算百分比变化
@@ -775,7 +779,7 @@ export default function UserPage() {
       // 默认为所有资产设置默认初始值，后续将使用第一个数据点的价格覆盖
       for (const asset of assets) {
         const assetKey = asset.toLowerCase();
-        initialAssetValues.set(assetKey, 1000); // 默认初始值，将在获取到实际数据后更新
+        initialAssetValues.set(assetKey, 0); // 默认初始值，将在获取到实际数据后更新
       }
       
       // 提取所有需要获取数据的日期
