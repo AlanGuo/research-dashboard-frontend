@@ -28,6 +28,7 @@ interface ChartDataPoint {
   date: string;
   fundReturnPct: number; // 策略收益百分比，已考虑出入金影响
   fundReturn: number;    // 总市值（包含初始本金、出入金和盈亏）
+  realTimeCapital: number; // 实时本金（初始本金+出入金变化）
   [key: string]: string | number; // 动态比较资产数据
 }
 
@@ -565,9 +566,12 @@ export default function UserPage() {
           // 纯收益 = 当前资金 - 初始本金 - 累计出入金
           const pureProfit = currentCapital - initialCapital - cumulativeFundChangeUntilDate;
           
+          // 计算实时本金 = 初始本金 + 累计出入金
+          const realTimeCapital = initialCapital + cumulativeFundChangeUntilDate;
+          
           // 正确计算收益率，排除出入金影响
-          // 收益率 = 纯收益 / 初始本金
-          const pureReturnRate = initialCapital > 0 ? (pureProfit / initialCapital) * 100 : 0;
+          // 收益率 = 纯收益 / 实时本金（而非初始本金）
+          const pureReturnRate = realTimeCapital > 0 ? (pureProfit / realTimeCapital) * 100 : 0;
           
           // 创建数据点 - 包含纯收益、累计出入金和收益率
           const dataPoint: ChartDataPoint = {
@@ -575,7 +579,8 @@ export default function UserPage() {
             fundReturn: capitalChangeMap.get(currentDateKey) || currentCapital,  // 使用已计算好的当天资金值
             fundReturnPct: pureReturnRate,  // 纯收益率，排除出入金影响
             pureProfit: pureProfit,
-            fundChange: cumulativeFundChangeUntilDate
+            fundChange: cumulativeFundChangeUntilDate,
+            realTimeCapital: initialCapital + cumulativeFundChangeUntilDate // 实时本金 = 初始本金 + 累计出入金
           };
           // 添加数据点
           newChartData.push(dataPoint);
@@ -849,8 +854,21 @@ export default function UserPage() {
                 <dl className="space-y-3">
                   <div className="h-px bg-border"></div>
                   <div className="flex justify-between items-center">
-                    <dt className="text-muted-foreground">初始本金</dt>
-                    <dd className="">${baseInfoItem["初始本金"].toLocaleString()}</dd>
+                    <dt className="text-muted-foreground">本金</dt>
+                    <dd className="">${(() => {
+                      // 计算实时本金 = 初始本金 + 出入金总额
+                      let totalFundChange = 0;
+                      if (fundChangeData && fundChangeData.success && fundChangeData.data) {
+                        totalFundChange = fundChangeData.data
+                          .filter(change => change["操作"] !== "初始本金")
+                          .reduce((sum, change) => {
+                            const amount = change["金额"] * (change["操作"] === "入金" ? 1 : -1);
+                            return sum + amount;
+                          }, 0);
+                      }
+                      const realTimeCapital = baseInfoItem["初始本金"] + totalFundChange;
+                      return realTimeCapital.toLocaleString();
+                    })()}</dd>
                   </div>
                   <div className="flex justify-between items-center">
                     <dt className="text-muted-foreground">空闲资金</dt>
@@ -909,7 +927,7 @@ export default function UserPage() {
                         
                         // 获取出入金净额
                         let netFundChange = 0;
-                        if (fundChangeData && fundChangeData.success && fundChangeData.data) {
+                        if (fundChangeData && fundChangeData.success && fundChangeData.data && fundChangeData.data.length > 0) {
                           netFundChange = fundChangeData.data
                             .filter(change => change["操作"] !== "初始本金")
                             .reduce((sum, change) => {
@@ -1041,7 +1059,7 @@ export default function UserPage() {
                           
                           // 获取总出入金额
                           let totalFundChange = 0;
-                          if (fundChangeData && fundChangeData.success && fundChangeData.data) {
+                          if (fundChangeData && fundChangeData.success && fundChangeData.data && fundChangeData.data.length > 0) {
                             totalFundChange = fundChangeData.data
                               .filter(change => change["操作"] !== "初始本金")
                               .reduce((sum, change) => {
@@ -1063,10 +1081,11 @@ export default function UserPage() {
                           const diffDays = diffTime / (1000 * 3600 * 24);
                           const runningTimeYears = diffDays / 365;
                           
-                          // 计算年化收益率: 使用纯收益计算 ((1 + 纯收益率) ^ (1/年数) - 1) * 100
+                          // 计算年化收益率: 使用实时本金计算 ((1 + 纯收益率) ^ (1/年数) - 1) * 100
                           if (runningTimeYears > 0) {
-                            // 计算纯收益率：纯收益 / 初始本金
-                            const pureReturnRate = pureProfit / initialCapital;
+                            // 计算纯收益率：纯收益 / 实时本金（而非初始本金）
+                            const realTimeCapital = initialCapital + totalFundChange; // 实时本金 = 初始本金 + 总出入金
+                            const pureReturnRate = pureProfit / realTimeCapital;
                             // 年化收益率
                             const apr = (Math.pow(1 + pureReturnRate, 1 / runningTimeYears) - 1) * 100;
                             // 根据正负值设置颜色
@@ -1144,7 +1163,8 @@ export default function UserPage() {
                           const daysDiff = Math.max(1, (today.getTime() - new Date(weekAgoData.date).getTime()) / (1000 * 3600 * 24));
                           
                           // 计算纯周收益率
-                          const pureWeeklyReturn = pureWeeklyProfit / weekAgoAmount;
+                          const weekAgoRealTimeCapital = weekAgoAmount - pureWeeklyProfit + weekAgoFundChange; // 一周前的实时本金
+                          const pureWeeklyReturn = pureWeeklyProfit / weekAgoRealTimeCapital;
                           
                           // 计算年化收益率: ((1 + 纯周收益率) ^ (365/天数) - 1) * 100
                           const weeklyAPR = (Math.pow(1 + pureWeeklyReturn, 365 / daysDiff) - 1) * 100;
@@ -1245,7 +1265,7 @@ export default function UserPage() {
                         strategy["实时价格"] ? strategy["实时价格"] * parseFloat(strategy["仓位"]) : 0;
                         
                         // 计算持仓成本: 优先使用"成本"字段，如果没有则计算"仓位"×"进场"
-                        const holdingCost = strategy["成本"] ? 
+                        const holdingCost = strategy["成本"]? 
                           strategy["成本"] : 
                           parseFloat(strategy["仓位"]) * strategy["进场"];
                         
@@ -1363,7 +1383,7 @@ export default function UserPage() {
                           <div className="text-right">
                             <div className="flex items-center justify-end gap-1 text-sm text-muted-foreground">
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
                               </svg>
                               更新
                             </div>
@@ -1407,7 +1427,7 @@ export default function UserPage() {
                               成本
                             </div>
                             <div className="flex flex-col">
-                              <div className="font-medium">${holdingCost ? holdingCost.toLocaleString(undefined, {maximumFractionDigits: 0}) : "-"}</div>
+                              <div className="font-medium">${holdingCost ? holdingCost.toLocaleString(undefined, {maximumFractionDigits: 2}) : "-"}</div>
                               {strategy["进场"] && <div className="text-muted-foreground text-sm">
                                 <span>成本价: ${strategy["进场"].toLocaleString(undefined, {maximumFractionDigits: 2})}</span>
                               </div>}
@@ -1421,7 +1441,7 @@ export default function UserPage() {
                               市值
                             </div>
                             <div className="flex flex-col items-end">
-                              <div className="font-medium">${marketValue ? marketValue.toLocaleString(undefined, {maximumFractionDigits: 0}) : "-"}</div>
+                              <div className="font-medium">${marketValue ? marketValue.toLocaleString(undefined, {maximumFractionDigits: 2}) : "-"}</div>
                               {strategy["实时价格"] && <div className="text-muted-foreground text-sm">
                                 <span>最新价: ${strategy["实时价格"].toLocaleString(undefined, {maximumFractionDigits: 2})}</span>
                               </div>}
@@ -1440,7 +1460,7 @@ export default function UserPage() {
                             </div>
                             <div className={`font-medium ${profit >= 0 ? "text-green-600" : "text-red-600"}`}>
                               {profit >= 0 ? "+" : ""}
-                              ${profit.toLocaleString(undefined, {maximumFractionDigits: 0})}({profitPercent.toFixed(2)}%)
+                              ${profit.toLocaleString(undefined, {maximumFractionDigits: 2})}({profitPercent.toFixed(2)}%)
                             </div>
                           </div>
                         </div>
