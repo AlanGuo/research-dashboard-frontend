@@ -22,6 +22,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
 
 // 图表数据类型
 interface ChartDataPoint {
@@ -814,9 +815,124 @@ export default function UserPage() {
   return (
     <div className="container mx-auto py-6 md:py-10 px-4 md:px-6 space-y-6 md:space-y-8">
       { !username || loading ? (
-        <div className="flex flex-col justify-center items-center py-4 space-y-2 h-[50vh]">
-          <div className="h-10 w-10 border-t-2 border-primary rounded-full animate-spin"></div>
-          <p className="text-sm text-muted-foreground mt-2">加载数据中...</p>
+        <div className="space-y-6 md:space-y-8">
+          {/* 市场参考板块 Skeleton */}
+          <div className="grid grid-cols-4 gap-2 md:gap-4">
+            {[...Array(4)].map((_, i) => (
+              <Card key={i} className="bg-card">
+                <CardContent className="p-4">
+                  <Skeleton className="h-6 w-24 mb-2" />
+                  <Skeleton className="h-8 w-full" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          
+          {/* 标题区域 Skeleton */}
+          <div className="flex justify-between items-start">
+            <div>
+              <Skeleton className="h-9 w-48 mb-2" />
+              <Skeleton className="h-5 w-64" />
+            </div>
+            <Skeleton className="h-10 w-10 rounded-full" />
+          </div>
+          
+          {/* 市值卡片 Skeleton */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader className="p-4 pb-2">
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-6 w-6 rounded-full" />
+                    <Skeleton className="h-6 w-24" />
+                  </div>
+                  <Skeleton className="h-6 w-32" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="h-px bg-border"></div>
+                  {[...Array(4)].map((_, i) => (
+                    <div key={i} className="flex justify-between items-center">
+                      <Skeleton className="h-4 w-20" />
+                      <Skeleton className="h-4 w-24" />
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="p-4 pb-2">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-6 w-6 rounded-full" />
+                  <Skeleton className="h-6 w-24" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="h-px bg-border"></div>
+                  {[...Array(4)].map((_, i) => (
+                    <div key={i} className="flex justify-between items-center">
+                      <Skeleton className="h-4 w-20" />
+                      <Skeleton className="h-4 w-24" />
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          
+          {/* 图表 Skeleton */}
+          <Card>
+            <CardHeader className="p-4">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-6 w-32" />
+                <div className="flex gap-2">
+                  <Skeleton className="h-8 w-24 rounded-md" />
+                  <Skeleton className="h-8 w-24 rounded-md" />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4">
+              <Skeleton className="h-[300px] w-full" />
+            </CardContent>
+          </Card>
+          
+          {/* 持仓策略 Skeleton */}
+          <Card>
+            <CardHeader className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-6 w-6 rounded-full" />
+                  <Skeleton className="h-6 w-24" />
+                </div>
+                <Skeleton className="h-8 w-32 rounded-md" />
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="p-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[...Array(2)].map((_, i) => (
+                    <div key={i} className="border rounded-lg p-4">
+                      <div className="flex justify-between mb-2">
+                        <Skeleton className="h-5 w-24" />
+                        <Skeleton className="h-5 w-16" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        {[...Array(4)].map((_, j) => (
+                          <div key={j} className="flex justify-between">
+                            <Skeleton className="h-4 w-16" />
+                            <Skeleton className="h-4 w-20" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       ) : error ? (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
