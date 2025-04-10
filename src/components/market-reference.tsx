@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react"
 import { AssetIcon } from "./asset-icons"
+import { Skeleton } from "./ui/skeleton"
+import { Card, CardContent } from "./ui/card"
 
 // 定义加密货币价格数据类型
 interface CryptoPriceData {
@@ -79,7 +81,6 @@ export function MarketReference({ comparisonAssets = [] }: MarketReferenceProps)
         setLoading(false);
       } catch (err) {
         console.error('获取市场数据失败:', err);
-        // 即使整体失败，也设置为非加载状态，这样UI可以显示空状态
         setLoading(false);
       }
     }
@@ -104,59 +105,58 @@ export function MarketReference({ comparisonAssets = [] }: MarketReferenceProps)
 
   return (
     <div>
-      <div>
-        {loading ? (
-          <div className="flex justify-center py-4 items-center">
-            <div className="h-5 w-5 border-t-2 border-primary rounded-full animate-spin"></div>
-            <p className="text-sm text-muted-foreground ml-2">加载市场中...</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-            {cryptoData.map((crypto) => (
-              <div key={crypto.symbol} className="p-2 border rounded-lg hover:shadow-sm transition-shadow duration-200 bg-card text-card-foreground">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-1">
-                    <AssetIcon symbol={crypto.symbol} size={16} />
-                    <div className="font-medium text-sm">{crypto.symbol}</div>
-                  </div>
-                  {crypto.error ? (
-                    <div className="text-xs text-red-500 dark:text-red-400 font-medium">
-                      获取失败
-                    </div>
-                  ) : (
-                    <div className="text-base font-bold">
-                      ${crypto.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: crypto.currentPrice < 10 ? 4 : 2 })}
-                    </div>
-                  )}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          {!cryptoData.length && [...Array(comparisonAssets.length)].map((_, i) => (
+            <Card key={i} className="bg-card">
+              <CardContent className="p-2 md:p-4">
+                <Skeleton className="h-4 md:h-6 w-16 md:w-24 mb-1 md:mb-2" />
+                <Skeleton className="h-6 md:h-8 w-full" />
+              </CardContent>
+            </Card>
+          ))}
+          {cryptoData.length > 0 && cryptoData.map((crypto) => (
+            <div key={crypto.symbol} className="p-2 border rounded-lg hover:shadow-sm transition-shadow duration-200 bg-card text-card-foreground">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-1">
+                  <AssetIcon symbol={crypto.symbol} size={16} />
+                  <div className="font-medium text-sm">{crypto.symbol}</div>
                 </div>
-                {!crypto.error && (
-                  <div className="flex justify-between text-xs mt-1">
-                    <div>
-                      <span className="text-muted-foreground">24h: </span>
-                      <span className={getPriceChangeClass(crypto.dayChange)}>
-                        {formatPriceChange(crypto.dayChange)}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">7d: </span>
-                      <span className={getPriceChangeClass(crypto.weekChange)}>
-                        {formatPriceChange(crypto.weekChange)}
-                      </span>
-                    </div>
+                {crypto.error ? (
+                  <div className="text-xs text-red-500 dark:text-red-400 font-medium">
+                    获取失败
                   </div>
-                )}
-                {crypto.error && (
-                  <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span className="truncate" title={crypto.error}>数据暂时不可用</span>
+                ) : (
+                  <div className="text-base font-bold">
+                    ${crypto.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: crypto.currentPrice < 10 ? 4 : 2 })}
                   </div>
                 )}
               </div>
-            ))}
-          </div>
-        )}
+              {!crypto.error && (
+                <div className="flex justify-between text-xs mt-1">
+                  <div>
+                    <span className="text-muted-foreground">24h: </span>
+                    <span className={getPriceChangeClass(crypto.dayChange)}>
+                      {formatPriceChange(crypto.dayChange)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">7d: </span>
+                    <span className={getPriceChangeClass(crypto.weekChange)}>
+                      {formatPriceChange(crypto.weekChange)}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {crypto.error && (
+                <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="truncate" title={crypto.error}>数据暂时不可用</span>
+                </div>
+              )}
+            </div>
+          ))}
       </div>
     </div>
   )

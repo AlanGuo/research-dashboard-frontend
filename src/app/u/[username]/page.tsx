@@ -104,6 +104,7 @@ export default function UserPage() {
 
   const [loading, setLoading] = useState(true);
   const [chartLoading, setChartLoading] = useState(true);
+  const [holdingLoading, setHoldingLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
   // 用于控制曲线的显示/隐藏
@@ -382,6 +383,7 @@ export default function UserPage() {
         }
         const historicalData: HoldingStrategyResponse | null = await historicalResponse.json();
         setHistoricalHoldings(historicalData);
+        setHoldingLoading(false);
 
         // 处理出入金数据响应
         if (!fundChangeResponse.ok) {
@@ -817,7 +819,7 @@ export default function UserPage() {
       { !username || loading ? (
         <div className="space-y-6 md:space-y-8">
           {/* 市场参考板块 Skeleton */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             {[...Array(4)].map((_, i) => (
               <Card key={i} className="bg-card">
                 <CardContent className="p-2 md:p-4">
@@ -1354,7 +1356,13 @@ export default function UserPage() {
               </TabsList>
             </CardHeader>
             <CardContent className="p-0">
-              <TabsContent className="mt-0" value="current">
+              {holdingLoading ? (
+                <div className="flex flex-col items-center justify-center h-60 gap-2">
+                  <div className="h-5 w-5 border-t-2 border-primary rounded-full animate-spin"></div>
+                  <p className="text-muted-foreground">持仓加载中...</p>
+                </div>
+              ) : (
+                <TabsContent className="mt-0" value="current">
                 { holdingStrategies?.success && holdingStrategies.data.length > 0 ? (
               <>
                 {/* 桌面版表格 - 在中等及以上屏幕显示 */}
@@ -1604,16 +1612,9 @@ export default function UserPage() {
               </div>
                   )}
                 </TabsContent>
-                
+              )}
                 <TabsContent className="mt-0" value="historical">
-                  {loading ? (
-                    <div className="flex items-center justify-center p-8">
-                      <div className="text-center">
-                        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
-                        <p className="text-muted-foreground">正在加载历史持仓数据...</p>
-                      </div>
-                    </div>
-                  ) : historicalHoldings?.success && historicalHoldings.data.length > 0 ? (
+                  { historicalHoldings?.success && historicalHoldings.data.length > 0 ? (
               <>
               {/* 桌面版表格 - 在中等及以上屏幕显示 */}
                 <div className="hidden md:block">
@@ -1905,7 +1906,8 @@ export default function UserPage() {
       )}
 
       {/* 出入金模块 */}
-      {!loading && !error && fundChangeData && fundChangeData.success && (
+      {!loading && !error &&
+        fundChangeData && fundChangeData.success && (
         <Card className="animate-in fade-in duration-700 mt-6">
           <CardHeader className="flex flex-row items-center justify-between p-4">
             <div className="flex items-center gap-2">
