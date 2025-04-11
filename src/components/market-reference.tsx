@@ -108,9 +108,9 @@ export function MarketReference({ comparisonAssets = [] }: MarketReferenceProps)
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           {!cryptoData.length && [...Array(comparisonAssets.length)].map((_, i) => (
             <Card key={i} className="bg-card">
-              <CardContent className="p-2 md:p-4">
-                <Skeleton className="h-4 md:h-6 w-16 md:w-24 mb-1 md:mb-2" />
-                <Skeleton className="h-6 md:h-8 w-full" />
+              <CardContent className="p-2">
+                <Skeleton className="h-6 w-16 md:w-24 mb-1" />
+                <Skeleton className="h-4 w-full mt-1" />
               </CardContent>
             </Card>
           ))}
