@@ -1437,7 +1437,7 @@ export default function UserPage() {
                   </span>
                 </TabsTrigger>
                 <TabsTrigger value="historical">
-                  历史持仓
+                  历史仓位
                   <span className="ml-1 inline-flex items-center justify-center w-5 h-5 text-xs font-medium rounded-full bg-muted text-muted-foreground">
                     {loading ? '...' : (historicalHoldings?.success ? historicalHoldings.data.length : 0)}
                   </span>
@@ -1712,7 +1712,7 @@ export default function UserPage() {
                       <TableRow>
                         <TableHead style={{width: '6%'}}>标的</TableHead>
                         <TableHead style={{width: '8%'}}>策略</TableHead>
-                        <TableHead className="text-center" style={{width: '20%'}}>交易日期</TableHead>
+                        <TableHead className="text-center" style={{width: '20%'}}>持仓日期</TableHead>
                         <TableHead className="text-right" style={{width: '8%'}}>仓位</TableHead>
                         <TableHead className="text-right" style={{width: '10%'}}>占比</TableHead>
                         <TableHead className="text-right" style={{width: '12%'}}>成本</TableHead>
