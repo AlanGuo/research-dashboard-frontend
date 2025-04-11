@@ -1463,7 +1463,7 @@ export default function UserPage() {
                         <TableHead className="text-right" style={{width: '8%'}}>占比</TableHead>
                         <TableHead className="text-right" style={{width: '12%'}}>成本</TableHead>
                         <TableHead className="text-right" style={{width: '12%'}}>市值</TableHead>
-                        <TableHead className="text-right" style={{width: '10%'}}>盈亏</TableHead>
+                        <TableHead className="text-right" style={{width: '10%'}}>收益</TableHead>
                         <TableHead className="text-right" style={{width: '12%'}}>备注</TableHead>
                         <TableHead className="text-right" style={{width: '14%'}}>更新</TableHead>
                       </TableRow>
@@ -1659,14 +1659,14 @@ export default function UserPage() {
                           </div>
                         </div>
                         
-                        {/* 盈亏信息 */}
+                        {/*收益信息 */}
                         <div className="grid grid-cols-2 gap-4 mb-3">
                           <div>
                             <div className="flex items-center gap-1 text-sm text-muted-foreground">
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
                               </svg>
-                              盈亏
+                              收益
                             </div>
                             <div className={`font-medium ${profit >= 0 ? "text-green-600" : "text-red-600"}`}>
                               {profit >= 0 ? "+" : ""}
@@ -1714,7 +1714,7 @@ export default function UserPage() {
                         <TableHead className="text-right" style={{width: '10%'}}>占比</TableHead>
                         <TableHead className="text-right" style={{width: '12%'}}>成本</TableHead>
                         <TableHead className="text-right" style={{width: '12%'}}>平仓市值</TableHead>
-                        <TableHead className="text-right" style={{width: '10%'}}>盈亏</TableHead>
+                        <TableHead className="text-right" style={{width: '10%'}}>收益</TableHead>
                         <TableHead className="text-right" style={{width: '14%'}}>备注</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -1943,7 +1943,7 @@ export default function UserPage() {
                           </div>
                         </div>
 
-                        {/* 持仓盈亏 */}
+                        {/* 持仓收益 */}
                         <div className="mb-3">
                           <div className="grid grid-cols-2 gap-4 items-start">
                             <div>
@@ -1951,7 +1951,7 @@ export default function UserPage() {
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
                                 </svg>
-                                盈亏
+                                收益
                               </div>
                               <div className={`font-medium ${profit >= 0 ? "text-green-600" : "text-red-600"}`}>
                                 {profit >= 0 ? "+" : ""}
