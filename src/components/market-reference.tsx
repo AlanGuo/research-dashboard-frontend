@@ -129,7 +129,7 @@ export function MarketReference({ comparisonAssets = [] }: MarketReferenceProps)
                     获取失败
                   </div>
                 ) : (
-                  <div className="text-base font-bold">
+                  <div className="text-base font-semibold">
                     ${crypto.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: crypto.currentPrice < 10 ? 4 : 2 })}
                   </div>
                 )}
