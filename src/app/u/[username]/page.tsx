@@ -1710,8 +1710,8 @@ export default function UserPage() {
                         <TableHead style={{width: '6%'}}>标的</TableHead>
                         <TableHead style={{width: '8%'}}>策略</TableHead>
                         <TableHead className="text-center" style={{width: '20%'}}>交易日期</TableHead>
-                        <TableHead className="text-right" style={{width: '10%'}}>仓位</TableHead>
-                        <TableHead className="text-right" style={{width: '8%'}}>占比</TableHead>
+                        <TableHead className="text-right" style={{width: '8%'}}>仓位</TableHead>
+                        <TableHead className="text-right" style={{width: '10%'}}>占比</TableHead>
                         <TableHead className="text-right" style={{width: '12%'}}>成本</TableHead>
                         <TableHead className="text-right" style={{width: '12%'}}>平仓市值</TableHead>
                         <TableHead className="text-right" style={{width: '10%'}}>盈亏</TableHead>
