@@ -966,7 +966,7 @@ export default function UserPage() {
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="h-6 w-6">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <CardTitle className="text-lg">总市值</CardTitle>
+                  <CardTitle className="text-lg">总资产</CardTitle>
                 </div>
                 <div className="font-semibold text-lg">
                   ${totalMarketValue ? totalMarketValue.toLocaleString() : "-"}
@@ -1088,7 +1088,7 @@ export default function UserPage() {
                 <dl className="space-y-3">
                   <div className="h-px bg-border"></div>
                   <div className="flex justify-between">
-                    <dt className="text-muted-foreground">7日盈亏</dt>
+                    <dt className="text-muted-foreground">7日收益</dt>
                     <dd className="font-medium">
                       {(() => {
                         try {
@@ -1302,6 +1302,88 @@ export default function UserPage() {
                           
                         } catch (error) {
                           console.error('计算7日APR时出错:', error);
+                          return "-";
+                        }
+                      })()}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-muted-foreground">30日年化(APR)</dt>
+                    <dd className="text-green-600">
+                      {(() => {
+                        try {
+                          // 使用图表数据
+                          if (!chartData || chartData.length < 2) {
+                            return "-"; // 没有足够的数据点
+                          }
+                          
+                          // 获取最新的数据点
+                          const latestData = chartData[chartData.length - 1];
+                          const today = new Date();
+                          let monthAgoData = null;
+                          
+                          // 从后向前遍历数据点，找到约30天前的数据点
+                          for (let i = chartData.length - 2; i >= 0; i--) {
+                            const dataPoint = chartData[i];
+                            const itemDate = new Date(dataPoint.date);
+                            const daysDiff = (today.getTime() - itemDate.getTime()) / (1000 * 3600 * 24);
+                            
+                            if (daysDiff >= 30) { // 至少有30天差距（约一个月）
+                              monthAgoData = dataPoint;
+                              break;
+                            }
+                          }
+                          
+                          if (!monthAgoData) {
+                            return "-"; // 没有找到足够早的数据点
+                          }
+                          
+                          // 获取实时市值
+                          let currentAmount = totalMarketValue;
+                          
+                          // 如果计算有问题，使用图表数据里的最新值
+                          if (isNaN(currentAmount) || currentAmount <= 0) {
+                            currentAmount = latestData.fundReturn;
+                          }
+
+                          // 使用一个月前的数据
+                          const monthAgoAmount = monthAgoData.fundReturn;
+                          
+                          if (isNaN(currentAmount) || isNaN(monthAgoAmount) || monthAgoAmount <= 0) {
+                            return "-";
+                          }
+                          
+                          // 获取两个时间点的出入金数据
+                          const currentFundChange = typeof latestData.fundChange === 'number' ? latestData.fundChange : 0;
+                          const monthAgoFundChange = typeof monthAgoData.fundChange === 'number' ? monthAgoData.fundChange : 0;
+                          
+                          // 计算这一周的出入金净额
+                          const monthFundChangeNet = currentFundChange - monthAgoFundChange;
+                          
+                          // 纯收益金额 = 当前金额 - 一个月前金额 - 这一个月的出入金净额
+                          const pureMonthProfit = currentAmount - monthAgoAmount - monthFundChangeNet;
+                          
+                          // 计算实际天数，确保至少为1天，避免除以零
+                          const daysDiff = Math.max(1, (today.getTime() - new Date(monthAgoData.date).getTime()) / (1000 * 3600 * 24));
+                          
+                          // 计算纯月收益率
+                          const monthAgoRealTimeCapital = monthAgoAmount - pureMonthProfit + monthAgoFundChange; // 一个月前的实时本金
+                          const pureMonthReturn = pureMonthProfit / monthAgoRealTimeCapital;
+                          
+                          // 计算年化收益率: ((1 + 纯月收益率) ^ (365/天数) - 1) * 100
+                          const monthlyAPR = (Math.pow(1 + pureMonthReturn, 365 / daysDiff) - 1) * 100;
+                          
+                          // 根据纯收益率的正负值设置颜色
+                          const colorClass = monthlyAPR >= 0 ? 'text-green-600' : 'text-red-600';
+                          
+                          return (
+                            <span className={colorClass}>
+                              {monthlyAPR.toFixed(2)}%
+                            </span>
+                          );
+                          
+                        } catch (error) {
+                          console.error('计算30日APR时出错:', error);
                           return "-";
                         }
                       })()}
