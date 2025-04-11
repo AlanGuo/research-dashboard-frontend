@@ -1928,14 +1928,6 @@ export default function UserPage() {
           </CardContent>
         </Card>
       )}
-
-      {baseInfoItem && historicalHoldings && historicalHoldings.success && (
-        <div className="text-center mt-4">
-          <p className="text-sm text-muted-foreground mt-1">
-            最近更新: {new Date(historicalHoldings.timestamp).toLocaleString()}
-          </p>
-        </div>
-      )}
     </div>
   );
 }
