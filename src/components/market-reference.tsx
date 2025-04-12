@@ -11,7 +11,6 @@ interface CryptoPriceData {
   currentPrice: number
   dayChange: number | null // 24小时变动百分比
   weekChange: number | null // 7天变动百分比
-  lastUpdated: string
   error?: string // 添加错误字段，用于标记获取失败的资产
 }
 
@@ -55,22 +54,20 @@ export function MarketReference({ comparisonAssets = [] }: MarketReferenceProps)
               
               // 返回格式化的数据
               return {
-                symbol: symbol,
+                symbol,
                 currentPrice: data.data.price,
                 dayChange: data.data.priceChange24h,
-                weekChange: data.data.priceChange7d,
-                lastUpdated: data.data.lastUpdated
+                weekChange: data.data.priceChange7d
               };
             } catch (err) {
               console.error(`获取${symbol}数据失败:`, err);
               
               // 返回带有错误信息的数据对象
               return {
-                symbol: symbol,
+                symbol,
                 currentPrice: 0,
                 dayChange: null,
                 weekChange: null,
-                lastUpdated: new Date().toISOString(),
                 error: err instanceof Error ? err.message : '未知错误'
               };
             }
@@ -107,7 +104,7 @@ export function MarketReference({ comparisonAssets = [] }: MarketReferenceProps)
     <div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           {!cryptoData.length && [...Array(comparisonAssets.length)].map((_, i) => (
-            <Card key={i} className="bg-card">
+            <Card key={i} className="bg-card shadow-none">
               <CardContent className="p-2">
                 <div className="flex justify-between items-center">
                   <Skeleton className="h-6 w-16" />
@@ -118,13 +115,14 @@ export function MarketReference({ comparisonAssets = [] }: MarketReferenceProps)
             </Card>
           ))}
           {cryptoData.length > 0 && cryptoData.map((crypto) => (
-            <div key={crypto.symbol} className="p-2 border rounded-lg hover:shadow-sm transition-shadow duration-200 bg-card text-card-foreground">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-1">
-                  <AssetIcon symbol={crypto.symbol} size={16} />
-                  <div className="font-medium text-sm">{crypto.symbol}</div>
-                </div>
-                {crypto.error ? (
+            <Card key={crypto.symbol} className="bg-card shadow-none">
+              <CardContent className="p-2">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-1">
+                    <AssetIcon symbol={crypto.symbol} size={16} />
+                    <div className="font-medium text-sm">{crypto.symbol}</div>
+                  </div>
+                  {crypto.error ? (
                   <div className="text-xs text-red-500 dark:text-red-400 font-medium">
                     获取失败
                   </div>
@@ -133,12 +131,12 @@ export function MarketReference({ comparisonAssets = [] }: MarketReferenceProps)
                     ${crypto.currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: crypto.currentPrice < 10 ? 4 : 2 })}
                   </div>
                 )}
-              </div>
-              {!crypto.error && (
-                <div className="flex justify-between text-xs mt-1">
-                  <div>
-                    <span className="text-muted-foreground">24h: </span>
-                    <span className={getPriceChangeClass(crypto.dayChange)}>
+                </div>
+                {!crypto.error && (
+                  <div className="flex justify-between text-xs mt-1">
+                    <div>
+                      <span className="text-muted-foreground">24h: </span>
+                      <span className={getPriceChangeClass(crypto.dayChange)}>
                       {formatPriceChange(crypto.dayChange)}
                     </span>
                   </div>
@@ -158,7 +156,8 @@ export function MarketReference({ comparisonAssets = [] }: MarketReferenceProps)
                   <span className="truncate" title={crypto.error}>数据暂时不可用</span>
                 </div>
               )}
-            </div>
+               </CardContent>
+            </Card>
           ))}
       </div>
     </div>

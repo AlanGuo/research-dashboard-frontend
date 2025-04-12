@@ -825,7 +825,7 @@ export default function UserPage() {
           {/* 市场参考板块 Skeleton */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             {[...Array(4)].map((_, i) => (
-              <Card key={i} className="bg-card">
+              <Card key={i} className="bg-card shadow-none">
                 <CardContent className="p-2">
                   <div className="flex justify-between items-center">
                     <Skeleton className="h-6 w-16" />
