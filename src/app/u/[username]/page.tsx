@@ -420,7 +420,7 @@ export default function UserPage() {
 
   // 生成图表数据
   useEffect(() => {
-    async function fetchDataAndGenerateBaseChart(baseInfoItem: FundDataItem) {
+    async function fetchDataAndGenerateBaseChart(baseInfoItem: FundDataItem, totalMarketValue: number) {
       try {
         // 获取初始本金
         const initialCapital = baseInfoItem["初始本金"];
@@ -614,7 +614,7 @@ export default function UserPage() {
     }
     // 4个数据源准备好后，生成基础图表
     if (baseInfoItem && historicalHoldings && fundChangeData && totalMarketValue) {
-      fetchDataAndGenerateBaseChart(baseInfoItem).then(baseChartData => {
+      fetchDataAndGenerateBaseChart(baseInfoItem, totalMarketValue).then(baseChartData => {
         setChartLoading(false);
         // 如果成功生成了基础图表，启动获取比较资产数据的过程
         if (baseChartData && comparisonAssets.length > 0) {
@@ -624,7 +624,7 @@ export default function UserPage() {
     }
     // disable eslint warning
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [historicalHoldings, fundChangeData, totalMarketValue, comparisonAssets]);
+  }, [historicalHoldings, fundChangeData, totalMarketValue]);
 
   // 获取比较资产数据 - 精确获取资金曲线中指定日期的价格数据
   const fetchComparisonData = async (asset: string, startDate: string, endDate: string, assetDataMaps: Map<string, Map<string, number>>, specificDates: string[]) => {
@@ -873,10 +873,13 @@ export default function UserPage() {
             
             <Card className="hidden md:block">
               <CardHeader className="p-4 pb-2">
+              <div className="flex items-center justify-between w-full">
                 <div className="flex items-center gap-2">
                   <Skeleton className="h-6 w-6 rounded-full" />
                   <Skeleton className="h-6 w-24" />
                 </div>
+                <Skeleton className="h-6 w-24" />
+              </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
@@ -972,7 +975,7 @@ export default function UserPage() {
                   <CardTitle className="text-lg">总资产</CardTitle>
                 </div>
                 <div className="font-semibold text-lg">
-                  ${totalMarketValue ? totalMarketValue.toLocaleString() : "-"}
+                  {totalMarketValue ? `$${totalMarketValue.toLocaleString()}` : "-"}
                 </div>
               </CardHeader>
               <CardContent>
