@@ -403,7 +403,6 @@ export default function UserPage() {
       }
     }
     if (baseInfoItem) {
-      setChartLoading(true);
       fetchHoldingsAndFundChanges(baseInfoItem);
     }
     // disable eslint warning
@@ -420,7 +419,7 @@ export default function UserPage() {
 
   // 生成图表数据
   useEffect(() => {
-    async function fetchDataAndGenerateBaseChart(baseInfoItem: FundDataItem) {
+    async function generateBaseChart(baseInfoItem: FundDataItem) {
       try {
         // 获取初始本金
         const initialCapital = baseInfoItem["初始本金"];
@@ -614,12 +613,15 @@ export default function UserPage() {
     }
     // 4个数据源准备好后，生成基础图表
     if (baseInfoItem && historicalHoldings && fundChangeData && totalMarketValue) {
-      fetchDataAndGenerateBaseChart(baseInfoItem).then(baseChartData => {
+      generateBaseChart(baseInfoItem).then(baseChartData => {
         setChartLoading(false);
         // 如果成功生成了基础图表，启动获取比较资产数据的过程
         if (baseChartData && comparisonAssets.length > 0) {
           fetchComparisonAssetData(baseChartData);
         }
+      }).catch(error => {
+        console.error('Error generating base chart:', error);
+        setChartLoading(false);
       });
     }
     // disable eslint warning
