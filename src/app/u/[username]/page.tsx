@@ -1728,15 +1728,13 @@ export default function UserPage() {
                     </TableHeader>
                     <TableBody>
                       {historicalHoldings?.success && historicalHoldings.data.map((strategy, index) => {
-                        // 处理进场价格和平仓价值数据
-                        const entryPrice = typeof strategy["进场"] === 'string' ? parseFloat(strategy["进场"]) : strategy["进场"];
-                        
+                        // 处理进场价格和平仓价值数据                     
                         // 计算持仓成本: 优先使用"成本"字段，如果没有则计算"仓位"×"进场"
                         const entryCost = strategy["成本"]? 
                           strategy["成本"] : 
                           (strategy["仓位"] && strategy["进场"]) ? 
                             parseFloat(strategy["仓位"]) * strategy["进场"] : 
-                            entryPrice;
+                            0;
                         
                         // 计算平仓价值: 优先取"实时估值"字段，如果该字段为空，则通过"出场"*"仓位"计算得出
                         let closingValue;
@@ -1747,11 +1745,11 @@ export default function UserPage() {
                           const position = typeof strategy["仓位"] === 'string' ? parseFloat(strategy["仓位"]) : strategy["仓位"];
                           closingValue = exitPrice * position;
                         } else {
-                          closingValue = null;
+                          closingValue = 0;
                         }
                         
                         // 计算盈亏
-                        const profit = strategy["盈亏"];
+                        const profit = strategy["盈亏"] || closingValue - entryCost;
                         
                         // 计算实时市值总额
                         // 使用状态中的总市值变量
@@ -1819,7 +1817,7 @@ export default function UserPage() {
                 <div className="md:hidden space-y-3 p-4 pt-0">
                   {historicalHoldings.data.map((strategy, index) => {
                     // 处理进场价格和平仓价值数据
-                    const entryPrice = typeof strategy["进场"] === 'string' ? parseFloat(strategy["进场"]) : strategy["进场"];
+                    const entryPrice = strategy["进场"] ? strategy["进场"] : 0;
                     
                     // 计算持仓成本: 优先取"成本"字段，如果没有则计算"仓位"×"进场"
                     const entryCost = strategy["成本"]? 
@@ -1837,11 +1835,11 @@ export default function UserPage() {
                       const position = typeof strategy["仓位"] === 'string' ? parseFloat(strategy["仓位"]) : strategy["仓位"];
                       closingValue = exitPrice * position;
                     } else {
-                      closingValue = null;
+                      closingValue = 0;
                     }
                     
                     // 计算盈亏
-                    const profit = strategy["盈亏"];
+                    const profit = strategy["盈亏"] || (closingValue - entryCost);
                     // 计算实时市值总额
                     // 使用状态中的总市值变量
 
