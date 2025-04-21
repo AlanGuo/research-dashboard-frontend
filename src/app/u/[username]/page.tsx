@@ -38,6 +38,7 @@ interface HoldingStrategyItem {
   "策略": string;
   "标的": string;
   "仓位": string;
+  "占比": number;
   "进场日期": string;
   "进场": number;
   "成本": number;
@@ -1469,7 +1470,7 @@ export default function UserPage() {
                         <TableHead className="text-center" style={{width: '10%'}}>开仓日期</TableHead>
                         <TableHead className="text-right" style={{width: '8%'}}>仓位</TableHead>
                         <TableHead className="text-right" style={{width: '8%'}}>占比</TableHead>
-                        <TableHead className="text-right" style={{width: '12%'}}>成本</TableHead>
+                        <TableHead className="text-right" style={{width: '12%'}}>本金</TableHead>
                         <TableHead className="text-right" style={{width: '12%'}}>市值</TableHead>
                         <TableHead className="text-right" style={{width: '10%'}}>收益</TableHead>
                         <TableHead className="text-right" style={{width: '12%'}}>备注</TableHead>
@@ -1491,7 +1492,7 @@ export default function UserPage() {
                         const profitPercent = (profit / holdingCost) * 100;
                         
                         // 计算比例
-                        const proportion = totalMarketValue ? marketValue / totalMarketValue : 0;
+                        const proportion = strategy["占比"] ? strategy["占比"] : totalMarketValue ? marketValue / totalMarketValue : 0;
                         
                         return (
                           <TableRow key={index}>
@@ -1566,7 +1567,7 @@ export default function UserPage() {
                     const profitPercent = (profit / holdingCost) * 100;
                     
                     // 计算比例
-                    const proportion = totalMarketValue && holdingCost ? holdingCost / totalMarketValue : 0;
+                    const proportion = strategy["占比"] ? strategy["占比"] : totalMarketValue && holdingCost ? holdingCost / totalMarketValue : 0;
                     
                     return (
                       <div key={index} className="rounded-lg border bg-card text-card-foreground p-3">
@@ -1642,7 +1643,7 @@ export default function UserPage() {
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
                               </svg>
-                              成本
+                              本金
                             </div>
                             <div className="flex flex-col">
                               <div className="font-medium">${holdingCost ? holdingCost.toLocaleString(undefined, {maximumFractionDigits: 2}) : "-"}</div>
@@ -1754,7 +1755,7 @@ export default function UserPage() {
                         // 计算实时市值总额
                         // 使用状态中的总市值变量
                         
-                        const proportion = entryCost && totalMarketValue ? entryCost / totalMarketValue : 0;
+                        const proportion = strategy["占比"] ? strategy["占比"] : entryCost && totalMarketValue ? entryCost / totalMarketValue : 0;
                         const profitPercent = entryCost > 0 ? (profit / entryCost) * 100 : 0;
                         
                         return (
@@ -1843,7 +1844,7 @@ export default function UserPage() {
                     // 计算实时市值总额
                     // 使用状态中的总市值变量
 
-                    const proportion = entryCost ? entryCost / totalMarketValue : 0;
+                    const proportion = strategy["占比"] ? strategy["占比"] : entryCost ? entryCost / totalMarketValue : 0;
                     const profitPercent = entryCost > 0 ? (profit / entryCost) * 100 : 0;
                     
                     return (
