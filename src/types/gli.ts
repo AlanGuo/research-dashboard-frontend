@@ -52,21 +52,36 @@ export interface GliResponse {
   message?: string;
 }
 
+// 对比标的类型
+export type BenchmarkType = 'none' | 'btcusdt' | 'gold' | 'ndx' | 'spx';
+
+// 时间范围类型
+export type TimeRangeType = '1y' | '3y' | '5y' | '10y' | '20y';
+
 // GLI参数接口
 export interface GliParams {
+  // 美元净流动性控制
+  unl_active?: boolean;
+  // 原始参数
   fed_active?: boolean;
   rrp_active?: boolean;
   tga_active?: boolean;
+  // 其他央行
   ecb_active?: boolean;
   pbc_active?: boolean;
   boj_active?: boolean;
   other_active?: boolean;
+  // 货币供应
   usa_active?: boolean;
   europe_active?: boolean;
   china_active?: boolean;
   japan_active?: boolean;
   other_m2_active?: boolean;
+  // 对比标的
+  benchmark?: BenchmarkType;
+  // 查询参数
   interval?: string;
+  timeRange?: TimeRangeType; // 添加时间范围选项
   limit?: number;
   from?: number;
 }
