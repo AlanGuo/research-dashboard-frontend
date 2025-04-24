@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ui/theme-provider";
+import { Navbar } from "@/components/navigation/navbar";
 
 export const metadata: Metadata = {
-  title: "Funding Curve",
-  description: "Funding Curve for open holder",
+  title: "Research Dashboard",
+  description: "Research Dashboard for financial data analysis",
   icons: {
-    icon: "/favicon.svg",
-    apple: "/favicon.svg",
+    icon: "/dashboard-favicon.svg",
+    apple: "/dashboard-favicon.svg",
   },
 };
 
@@ -18,11 +19,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body
-        className="antialiased"
-      >
+      <body className="antialiased min-h-screen flex flex-col">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          {children}
+          <Navbar />
+          <main className="flex-1">
+            {children}
+          </main>
         </ThemeProvider>
       </body>
     </html>

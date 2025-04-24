@@ -1,31 +1,45 @@
 "use client"
 
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 export default function Home() {
-  const router = useRouter()
+  const dashboards = [
+    {
+      title: '全球流动性指数',
+      description: '监控来自各国央行和货币供应的全球流动性数据',
+      href: '/gli',
+      icon: '📈'
+    },
+    // 可以在这里添加更多仪表盘
+  ]
 
-  useEffect(() => {
-    // 检查URL中是否有hashtag
-    if (typeof window !== 'undefined') {
-      const hash = window.location.hash
-      if (hash && hash.length > 1) {
-        // 如果有hashtag，重定向到对应的用户页面
-        const username = hash.substring(1)
-        router.push(`/u/${username}`)
-      } else {
-        // 如果没有hashtag，重定向到默认用户页面
-        router.push('/u/demo')
-      }
-    }
-  }, [router])
-
-  // 显示加载中状态，直到重定向完成
   return (
-    <div className="flex flex-col justify-center items-center py-4 space-y-2 h-[50vh]">
-      <div className="h-10 w-10 border-t-2 border-primary rounded-full animate-spin"></div>
-      <p className="text-sm text-muted-foreground mt-2">加载数据中...</p>
+    <div className="container mx-auto py-12">
+      <div className="space-y-6">
+        <div className="text-center space-y-2">
+          <h1 className="text-4xl font-bold">研究仪表盘</h1>
+          <p className="text-muted-foreground">金融市场数据分析与可视化工具</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
+          {dashboards.map((dashboard) => (
+            <Link href={dashboard.href} key={dashboard.href} className="block group">
+              <Card className="h-full transition-all duration-200 group-hover:shadow-md">
+                <CardHeader>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-2xl">{dashboard.icon}</span>
+                    <CardTitle>{dashboard.title}</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <CardDescription>{dashboard.description}</CardDescription>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
