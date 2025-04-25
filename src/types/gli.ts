@@ -84,4 +84,6 @@ export interface GliParams {
   timeRange?: TimeRangeType; // 添加时间范围选项
   limit?: number;
   from?: number;
+  // 时间偏移参数，正数表示GLI领先，负数表示GLI滞后
+  offset?: number;
 }

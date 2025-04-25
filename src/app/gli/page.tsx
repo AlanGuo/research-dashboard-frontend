@@ -66,9 +66,9 @@ export default function GliDashboard() {
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  // 不再在组件加载时调用fetchData()
+  // 因为GliParams组件会在挂载时通过onParamsChange触发带参数的fetchData调用
+  // 这样可以避免初始时发送一个不带参数的冗余请求
 
   return (
     <div className="container mx-auto py-6">
