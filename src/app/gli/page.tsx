@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { GliChart } from '@/components/gli/gli-chart';
 import { GliParams } from '@/components/gli/gli-params';
 import { GliDataPoint, GliParams as GliParamsType, GliResponse } from '@/types/gli';

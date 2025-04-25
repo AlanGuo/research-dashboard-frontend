@@ -16,7 +16,7 @@ export async function GET(
      'other_active', 'usa_active', 'europe_active', 'china_active', 'japan_active', 'other_m2_active'].forEach(key => {
       const value = searchParams.get(key);
       if (value !== null) {
-        (params as any)[key] = value === 'true';
+        (params as Record<string, boolean | number | string>)[key] = value === 'true';
       }
     });
     
@@ -24,7 +24,7 @@ export async function GET(
     ['limit', 'from'].forEach(key => {
       const value = searchParams.get(key);
       if (value !== null) {
-        (params as any)[key] = Number(value);
+        (params as Record<string, boolean | number | string>)[key] = Number(value);
       }
     });
     
@@ -32,7 +32,7 @@ export async function GET(
     ['interval'].forEach(key => {
       const value = searchParams.get(key);
       if (value !== null) {
-        (params as any)[key] = value;
+        (params as Record<string, boolean | number | string>)[key] = value;
       }
     });
     

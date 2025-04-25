@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -15,7 +15,7 @@ interface GliParamsProps {
 
 export function GliParams({ onParamsChange }: GliParamsProps) {
   // 保存从API获取的对比标的列表
-  const [benchmarks, setBenchmarks] = useState<BenchmarkAsset[]>([]);
+  const [, setBenchmarks] = useState<BenchmarkAsset[]>([]);
   // 保存对比标的分类
   const [benchmarkCategories, setBenchmarkCategories] = useState<{[key: string]: BenchmarkAsset[]}>({});
   // 加载状态
@@ -170,11 +170,10 @@ export function GliParams({ onParamsChange }: GliParamsProps) {
     }
   };
 
-  // 当组件挂载时，立即应用默认参数
+  // 当参数变化时，通知父组件
   useEffect(() => {
-    // 触发初始数据加载
     onParamsChange(params);
-  }, []);
+  }, [params, onParamsChange]);
 
   return (
     <div className="space-y-6">

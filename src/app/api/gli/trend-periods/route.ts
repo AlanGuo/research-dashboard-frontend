@@ -1,9 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import config from '@/config';
 
-export async function GET(
-  request: NextRequest
-) {
+export async function GET() {
   try {
     // 使用内部API获取GLI趋势时段数据
     const apiBaseUrl = config.api?.baseUrl || 'http://localhost:3001/v1';
