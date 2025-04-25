@@ -1,13 +1,13 @@
 {
   "apps" : [
     {
-      "name"      : "funding-curve-frontend",
+      "name"      : "research-dashboard-frontend",
       "script"    : "./node_modules/next/dist/bin/next",
       "args"      : "start",
       "instances" : 1,
       "exec_mode" : "cluster",
-      "error_file": "logs/funding-curve-frontend.stderr.log",
-      "out_file"  : "logs/funding-curve-frontend.log",
+      "error_file": "logs/research-dashboard-frontend.stderr.log",
+      "out_file"  : "logs/research-dashboard-frontend.log",
       "mergeLogs" : false,
       "env": {
         "NODE_ENV": "production"
