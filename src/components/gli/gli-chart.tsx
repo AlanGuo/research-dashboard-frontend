@@ -14,7 +14,7 @@ import {
   ReferenceArea
 } from 'recharts';
 import type { BenchmarkAsset } from '@/types/benchmark';
-import { GliDataPoint, GliParams } from '@/types/gli';
+import { GliDataPoint, GliParams, TrendPeriod } from '@/types/gli';
 
 // K线数据接口
 interface KlineDataPoint {
@@ -30,15 +30,10 @@ interface KlineDataPoint {
 interface GliChartProps {
   data: GliDataPoint[];
   params: GliParams; // 添加params参数
+  trendPeriods: TrendPeriod[]; // 添加趋势时段数据
 }
 
-// GLI趋势时段定义
-interface TrendPeriod {
-  startDate: string;
-  endDate: string;
-  trend: 'up' | 'down'; // 上升或下降
-  label?: string; // 可选标签
-}
+// 使用从 types/gli 导入的 TrendPeriod 接口
 
 // 趋势背景颜色
 const TREND_COLORS = {
@@ -48,32 +43,14 @@ const TREND_COLORS = {
 
 // GLI趋势时段数据将从API获取
 
-export function GliChart({ data, params }: GliChartProps) {
+export function GliChart({ data, params, trendPeriods }: GliChartProps) {
   // 对比标的数据
   const [benchmarkData, setBenchmarkData] = useState<KlineDataPoint[]>([]);
-  const [trendPeriods, setTrendPeriods] = useState<TrendPeriod[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [benchmarkInfo, setBenchmarkInfo] = useState<BenchmarkAsset | null>(null);
   
-  // 获取GLI趋势时段数据
-  useEffect(() => {
-    fetch('/api/gli/trend-periods')
-      .then(response => {
-        if (!response.ok) {
-          throw new Error('获取趋势时段数据失败');
-        }
-        return response.json();
-      })
-      .then(result => {
-        if (result.success && Array.isArray(result.data)) {
-          setTrendPeriods(result.data);
-        }
-      })
-      .catch(err => {
-        console.error('获取趋势时段数据出错:', err);
-      });
-  }, []);
+  // 趋势时段数据现在通过props传入，不需要在组件内部获取
 
   // 获取对比标的数据
   useEffect(() => {
@@ -82,16 +59,21 @@ export function GliChart({ data, params }: GliChartProps) {
       setLoading(true);
       setError(null);
       
+      // 创建一个可以终止的控制器
+      const controller = new AbortController();
+      const signal = controller.signal;
+      
       // 获取对比标的信息，以确保使用正确的符号
       const fetchSymbolAndData = async () => {
         try {
           // 先获取对比标的信息
-          const benchmarkResponse = await fetch(`/api/benchmark/${params.benchmark}`);
+          const benchmarkResponse = await fetch(`/api/benchmark/${params.benchmark}`, { signal });
           if (!benchmarkResponse.ok) {
             throw new Error(`获取对比标信息失败: ${benchmarkResponse.status}`);
           }
           
           const benchmarkInfo = await benchmarkResponse.json();
+          setBenchmarkInfo(benchmarkInfo); // 保存对比标信息
           const symbol = benchmarkInfo.symbol; // 使用正确的交易符号
           
           // 构建查询参数
@@ -101,22 +83,12 @@ export function GliChart({ data, params }: GliChartProps) {
           const url = `/api/kline/${symbol}?${queryParams.toString()}`;
       
           // 请求对比标的数据
-          const response = await fetch(url);
+          const response = await fetch(url, { signal });
           if (!response.ok) {
             throw new Error(`获取${symbol}数据失败: ${response.status}`);
           }
-          return response.json();
-        } catch (error) {
-          console.error('获取对比标的数据失败:', error);
-          setError(error instanceof Error ? error.message : '获取数据时发生未知错误');
-          setBenchmarkData([]);
-          setLoading(false);
-        }
-      };
-      
-      // 执行异步函数
-      fetchSymbolAndData()
-        .then(result => {
+          const result = await response.json();
+          
           // 处理不同的数据格式
           let processedData: KlineDataPoint[] = [];
           
@@ -133,13 +105,30 @@ export function GliChart({ data, params }: GliChartProps) {
             setError('无法解析对比标的数据');
             setBenchmarkData([]);
           }
-        })
-        .finally(() => {
+          
           setLoading(false);
-        });
+        } catch (error) {
+          // 如果不是因为终止而导致的错误，才记录日志和设置错误状态
+          if (!(error instanceof DOMException && error.name === 'AbortError')) {
+            console.error('获取对比标的数据失败:', error);
+            setError(error instanceof Error ? error.message : '获取数据时发生未知错误');
+            setBenchmarkData([]);
+            setLoading(false);
+          }
+        }
+      };
+      
+      // 执行异步函数
+      fetchSymbolAndData();
+      
+      // 清理函数
+      return () => {
+        controller.abort(); // 取消请求
+      };
     } else {
       // 如果没有选择对比标的或选择了'none'，清空数据
       setBenchmarkData([]);
+      setBenchmarkInfo(null);
     }
   }, [params.benchmark, params.interval, params.limit]);
   
@@ -514,6 +503,7 @@ export function GliChart({ data, params }: GliChartProps) {
               stroke="#000000"
               dot={false}
               strokeWidth={2}
+              isAnimationActive={false}
             />
             
             {/* 如果有对比标的，显示对比标的线 */}
@@ -526,6 +516,7 @@ export function GliChart({ data, params }: GliChartProps) {
                 stroke={getBenchmarkColor()}
                 dot={false}
                 strokeWidth={2}
+                isAnimationActive={false}
               />
             )}
             
@@ -537,18 +528,13 @@ export function GliChart({ data, params }: GliChartProps) {
               
               return (
                 <ReferenceArea
-                  key={`trend-${index}`}
+                  yAxisId="left"
+                  key={`trend-total-${index}`}
                   x1={startTimestamp}
                   x2={endTimestamp}
                   fill={TREND_COLORS[period.trend as keyof typeof TREND_COLORS]}
                   fillOpacity={0.2}
                   ifOverflow="hidden"
-                  label={period.label ? {
-                    value: period.label,
-                    position: 'insideTopLeft',
-                    fill: period.trend === 'up' ? '#006400' : '#8B0000',
-                    fontSize: 12
-                  } : undefined}
                 />
               );
             })}
@@ -577,119 +563,7 @@ export function GliChart({ data, params }: GliChartProps) {
             
             <Tooltip content={<CustomTooltip />} />
             <Legend />
-            
-            {/* 根据参数显示不同的数据系列 */}
-            {params.unl_active && (
-              <Area
-                type="monotone"
-                dataKey="netUsdLiquidity"
-                name="Net USD Liquidity"
-                stackId="1"
-                fill="#8884d8"
-                stroke="#8884d8"
-              />
-            )}
-            
-            {params.ecb_active && (
-              <Area
-                type="monotone"
-                dataKey="ecb"
-                name="ECB"
-                stackId="1"
-                fill="#82ca9d"
-                stroke="#82ca9d"
-              />
-            )}
-            
-            {params.pbc_active && (
-              <Area
-                type="monotone"
-                dataKey="pbc"
-                name="PBC"
-                stackId="1"
-                fill="#ffc658"
-                stroke="#ffc658"
-              />
-            )}
-            
-            {params.boj_active && (
-              <Area
-                type="monotone"
-                dataKey="boj"
-                name="BOJ"
-                stackId="1"
-                fill="#ff8042"
-                stroke="#ff8042"
-              />
-            )}
-            
-            {params.other_active && (
-              <Area
-                type="monotone"
-                dataKey="other_cb_total"
-                name="Other Central Banks"
-                stackId="1"
-                fill="#0088fe"
-                stroke="#0088fe"
-              />
-            )}
-            
-            {/* M2货币供应数据 */}
-            {params.usa_active && (
-              <Area
-                type="monotone"
-                dataKey="usa"
-                name="USA M2"
-                stackId="1"
-                fill="#00C49F"
-                stroke="#00C49F"
-              />
-            )}
-            
-            {params.europe_active && (
-              <Area
-                type="monotone"
-                dataKey="eu"
-                name="Europe M2"
-                stackId="1"
-                fill="#FFBB28"
-                stroke="#FFBB28"
-              />
-            )}
-            
-            {params.china_active && (
-              <Area
-                type="monotone"
-                dataKey="china"
-                name="China M2"
-                stackId="1"
-                fill="#FF8042"
-                stroke="#FF8042"
-              />
-            )}
-            
-            {params.japan_active && (
-              <Area
-                type="monotone"
-                dataKey="japan"
-                name="Japan M2"
-                stackId="1"
-                fill="#0088FE"
-                stroke="#0088FE"
-              />
-            )}
-            
-            {params.other_m2_active && (
-              <Area
-                type="monotone"
-                dataKey="other_m2_total"
-                name="Other M2"
-                stackId="1"
-                fill="#FF00FF"
-                stroke="#FF00FF"
-              />
-            )}
-            
+
             {/* 添加趋势时期背景 */}
             {trendPeriods.map((period, index) => {
               // 将日期字符串转换为时间戳
@@ -707,6 +581,129 @@ export function GliChart({ data, params }: GliChartProps) {
                 />
               );
             })}
+
+            {/* 根据参数显示不同的数据系列 */}
+            {params.unl_active && (
+              <Area
+                type="monotone"
+                dataKey="netUsdLiquidity"
+                name="Net USD Liquidity"
+                stackId="1"
+                fill="#8884d8"
+                stroke="#8884d8"
+                isAnimationActive={false}
+              />
+            )}
+            
+            {params.ecb_active && (
+              <Area
+                type="monotone"
+                dataKey="ecb"
+                name="ECB"
+                stackId="1"
+                fill="#82ca9d"
+                stroke="#82ca9d"
+                isAnimationActive={false}
+              />
+            )}
+            
+            {params.pbc_active && (
+              <Area
+                type="monotone"
+                dataKey="pbc"
+                name="PBC"
+                stackId="1"
+                fill="#ffc658"
+                stroke="#ffc658"
+                isAnimationActive={false}
+              />
+            )}
+            
+            {params.boj_active && (
+              <Area
+                type="monotone"
+                dataKey="boj"
+                name="BOJ"
+                stackId="1"
+                fill="#ff8042"
+                stroke="#ff8042"
+                isAnimationActive={false}
+              />
+            )}
+            
+            {params.other_active && (
+              <Area
+                type="monotone"
+                dataKey="other_cb_total"
+                name="Other Central Banks"
+                stackId="1"
+                fill="#0088fe"
+                stroke="#0088fe"
+                isAnimationActive={false}
+              />
+            )}
+            
+            {/* M2货币供应数据 */}
+            {params.usa_active && (
+              <Area
+                type="monotone"
+                dataKey="usa"
+                name="USA M2"
+                stackId="1"
+                fill="#00C49F"
+                stroke="#00C49F"
+                isAnimationActive={false}
+              />
+            )}
+            
+            {params.europe_active && (
+              <Area
+                type="monotone"
+                dataKey="eu"
+                name="Europe M2"
+                stackId="1"
+                fill="#FFBB28"
+                stroke="#FFBB28"
+                isAnimationActive={false}
+              />
+            )}
+            
+            {params.china_active && (
+              <Area
+                type="monotone"
+                dataKey="china"
+                name="China M2"
+                stackId="1"
+                fill="#FF8042"
+                stroke="#FF8042"
+                isAnimationActive={false}
+              />
+            )}
+            
+            {params.japan_active && (
+              <Area
+                type="monotone"
+                dataKey="japan"
+                name="Japan M2"
+                stackId="1"
+                fill="#0088FE"
+                stroke="#0088FE"
+                isAnimationActive={false}
+              />
+            )}
+            
+            {params.other_m2_active && (
+              <Area
+                type="monotone"
+                dataKey="other_m2_total"
+                name="Other M2"
+                stackId="1"
+                fill="#FF00FF"
+                stroke="#FF00FF"
+                isAnimationActive={false}
+              />
+            )}
+            
           </ComposedChart>
         </ResponsiveContainer>
       </div>

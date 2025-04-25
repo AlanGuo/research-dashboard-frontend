@@ -170,10 +170,8 @@ export function GliParams({ onParamsChange }: GliParamsProps) {
     }
   };
 
-  // 当参数变化时，通知父组件
-  useEffect(() => {
-    onParamsChange(params);
-  }, [params, onParamsChange]);
+  // 移除这个useEffect钩子，因为它会在组件挂载时自动触发参数变化
+  // 现在我们只在用户主动改变参数时才触发onParamsChange
 
   return (
     <div className="space-y-6">

@@ -58,6 +58,14 @@ export type BenchmarkType = 'none' | 'btcusdt' | 'gold' | 'ndx' | 'spx';
 // 时间范围类型
 export type TimeRangeType = '1y' | '3y' | '5y' | '10y' | '20y';
 
+// GLI趋势时段定义
+export interface TrendPeriod {
+  startDate: string;
+  endDate: string;
+  trend: 'up' | 'down'; // 上升或下降
+  label?: string; // 可选标签
+}
+
 // GLI参数接口
 export interface GliParams {
   // 美元净流动性控制
