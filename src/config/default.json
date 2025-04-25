@@ -1,10 +1,10 @@
 {
   "app": {
-    "name": "Funding Curve",
+    "name": "Research Dashboard",
     "version": "1.0.0"
   },
   "api": {
-    "baseUrl": "http://localhost:3001/v1"
+    "baseUrl": "http://localhost:4001/v1"
   },
   "features": {
     "darkMode": true,
