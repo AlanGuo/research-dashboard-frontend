@@ -464,7 +464,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
       {/* 总量图表 - 显示GLI总量和对比标的的线图 */}
       <div className="w-full" style={{ height: totalChartHeight }}>
         <ResponsiveContainer width="100%" height="100%"> 
-          <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+          <ComposedChart data={chartData} margin={{ top: 0, right: 5, left: 5, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis 
               dataKey="timestamp" 
@@ -473,6 +473,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
               tick={{ fontSize: 12 }}
               tickFormatter={(value) => formatDateByInterval(value, params.interval || '1D')}
               domain={[timeRange.min, timeRange.max]}
+              hide
             />
             {/* 左侧Y轴，显示GLI总量数据 */}
             <YAxis 
@@ -545,7 +546,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
       {/* 组件图表 - 显示GLI各组成部分的堆叠面积图 */}
       <div className="w-full" style={{ height: componentsChartHeight }}>
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+          <ComposedChart data={chartData} margin={{ top: 0, right: 5, left: 5, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis 
               dataKey="timestamp" 
@@ -556,10 +557,20 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
               domain={[timeRange.min, timeRange.max]}
             />
             {/* 左侧Y轴，显示GLI组件数据 */}
-            <YAxis 
-              tickFormatter={(value) => `${(value / 1000000000000).toFixed(1)}T`}
+            <YAxis
+              yAxisId="left"
+              tick={{ fontSize: 12 }}
+              tickFormatter={(value) => `${value.toFixed(1)}T`}
               domain={['auto', 'auto']}
             />
+            {/* 如果有对比标的，显示右侧Y轴 */}
+            {showBenchmark && (
+              <YAxis 
+                yAxisId="right"
+                orientation="right"
+                domain={['auto', 'auto']}
+              />
+            )}
             
             <Tooltip content={<CustomTooltip />} />
             <Legend />
@@ -592,6 +603,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
                 fill="#8884d8"
                 stroke="#8884d8"
                 isAnimationActive={false}
+                yAxisId="left"
               />
             )}
             
@@ -604,6 +616,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
                 fill="#82ca9d"
                 stroke="#82ca9d"
                 isAnimationActive={false}
+                yAxisId="left"
               />
             )}
             
@@ -616,6 +629,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
                 fill="#ffc658"
                 stroke="#ffc658"
                 isAnimationActive={false}
+                yAxisId="left"
               />
             )}
             
@@ -628,6 +642,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
                 fill="#ff8042"
                 stroke="#ff8042"
                 isAnimationActive={false}
+                yAxisId="left"
               />
             )}
             
@@ -640,6 +655,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
                 fill="#0088fe"
                 stroke="#0088fe"
                 isAnimationActive={false}
+                yAxisId="left"
               />
             )}
             
@@ -653,6 +669,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
                 fill="#00C49F"
                 stroke="#00C49F"
                 isAnimationActive={false}
+                yAxisId="left"
               />
             )}
             
@@ -665,6 +682,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
                 fill="#FFBB28"
                 stroke="#FFBB28"
                 isAnimationActive={false}
+                yAxisId="left"
               />
             )}
             
@@ -677,6 +695,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
                 fill="#FF8042"
                 stroke="#FF8042"
                 isAnimationActive={false}
+                yAxisId="left"
               />
             )}
             
@@ -689,6 +708,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
                 fill="#0088FE"
                 stroke="#0088FE"
                 isAnimationActive={false}
+                yAxisId="left"
               />
             )}
             
@@ -701,6 +721,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
                 fill="#FF00FF"
                 stroke="#FF00FF"
                 isAnimationActive={false}
+                yAxisId="left"
               />
             )}
             
