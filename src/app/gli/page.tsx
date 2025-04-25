@@ -10,6 +10,7 @@ export default function GliDashboard() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [trendPeriods, setTrendPeriods] = useState<TrendPeriod[]>([]);
+
   // 添加参数状态
   const [currentParams, setCurrentParams] = useState<GliParamsType>({
     unl_active: true,
@@ -31,6 +32,7 @@ export default function GliDashboard() {
     limit: 520,
     offset: 0
   });
+
 
   // 获取GLI趋势时段数据 - 只获取一次
   useEffect(() => {
@@ -125,19 +127,20 @@ export default function GliDashboard() {
         
         {/* 图表显示 */}
         <div className="mt-8">
-          {loading ? (
-            <div className="flex justify-center items-center h-64 bg-white rounded-lg">
-              <p className="text-lg">加载数据中...</p>
-            </div>
-          ) : error ? (
-            <div className="flex justify-center items-center h-64 bg-white rounded-lg">
-              <p className="text-red-500">{error}</p>
-            </div>
-          ) : (
-            <div className="bg-white rounded-lg">
+          <div className="bg-background rounded-lg transition-colors">
+            {loading ? (
+              <div className="flex flex-col items-center justify-center h-[800px] gap-2">
+                <div className="h-5 w-5 border-t-2 border-primary rounded-full animate-spin"></div>
+                <p className="text-muted-foreground">图表加载中...</p>
+              </div>
+            ) : error ? (
+              <div className="flex justify-center items-center h-[800px]">
+                <p className="text-red-500">{error}</p>
+              </div>
+            ) : (
               <GliChart data={data} params={currentParams} trendPeriods={trendPeriods} />
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>

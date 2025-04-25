@@ -820,7 +820,10 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
       </div>
       
       {/* 显示加载状态和错误信息 */}
-      {loading && <div className="mt-4 text-center">Loading benchmark data...</div>}
+      {loading && <div className="flex flex-col items-center justify-center h-full gap-2">
+          <div className="h-5 w-5 border-t-2 border-primary rounded-full animate-spin"></div>
+          <p className="text-muted-foreground">图表加载中...</p>
+        </div>}
       {error && <div className="mt-4 text-center text-red-500">{error}</div>}
     </div>
   );
