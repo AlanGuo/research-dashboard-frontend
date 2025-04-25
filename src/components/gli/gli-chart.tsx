@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useEffect, useState, useCallback } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import {
   ResponsiveContainer,
   Area,
