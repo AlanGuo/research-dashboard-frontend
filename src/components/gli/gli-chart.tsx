@@ -304,15 +304,11 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
       // 首先按时间戳排序，确保从旧到新处理数据
       const sortedBenchmarkData = [...benchmarkData].sort((a, b) => a.timestamp - b.timestamp);
       
-      // 记录最近的有效价格，用于填充缺失数据
-      let lastValidClose: number | null = null;
-      
       sortedBenchmarkData.forEach(item => {
         if (item && typeof item.timestamp === 'number' && typeof item.close === 'number') {
           // 根据时间间隔生成日期键
           const dateKey = getDateKey(item.timestamp, interval);
           benchmarkMap[dateKey] = item.close; // 使用收盘价
-          lastValidClose = item.close; // 更新最近的有效价格
           
           // 更新最大和最小值
           if (item.close > maxValue) maxValue = item.close;
