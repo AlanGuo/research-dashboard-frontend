@@ -94,4 +94,6 @@ export interface GliParams {
   from?: number;
   // 时间偏移参数，正数表示GLI领先，负数表示GLI滞后
   offset?: number;
+  // 是否反转对比标的的Y轴
+  invertBenchmarkYAxis?: boolean;
 }

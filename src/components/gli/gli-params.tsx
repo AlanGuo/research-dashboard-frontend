@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -88,7 +88,8 @@ export function GliParams({ onParamsChange }: GliParamsProps) {
     interval: '1W',  // 默认时间间隔为一周
     timeRange: '10y', // 默认时间范围为10年
     limit: 520,
-    offset: 0  // 默认偏移为0
+    offset: 0,  // 默认偏移为0
+    invertBenchmarkYAxis: false // 默认不反转Y轴
   });
 
   const handleCheckboxChange = (name: string, checked: boolean) => {
@@ -105,11 +106,17 @@ export function GliParams({ onParamsChange }: GliParamsProps) {
       };
     }
     
-    // 如果是单独的 FED、RRP 或 TGA 复选框，不允许单独更改
-    // 这里实际上不会执行，因为我们将禁用这些复选框
-    
+    // 更新本地状态
     setParams(newParams);
-    onParamsChange(newParams);
+    
+    // 如果是反转对比标的Y轴复选框，不触发API请求
+    if (name === 'invertBenchmarkYAxis') {
+      // 只更新父组件中的参数状态，不触发API请求
+      onParamsChange(newParams);
+    } else {
+      // 其他参数正常触发API请求
+      onParamsChange(newParams);
+    }
   };
 
   // 根据时间间隔和时间范围计算limit
@@ -160,18 +167,42 @@ export function GliParams({ onParamsChange }: GliParamsProps) {
     onParamsChange(newParams);
   };
 
+  // 添加防抖定时器引用
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
   const handleNumberChange = (name: string, value: string) => {
-    // 确保输入是有效数字
-    const numValue = value === '' ? 0 : parseInt(value);
+    const numValue = parseInt(value, 10);
     if (!isNaN(numValue)) {
+      // 更新本地状态立即显示
       const newParams = { ...params, [name]: numValue };
       setParams(newParams);
-      onParamsChange(newParams);
+      
+      // 如果是领先时间设置，添加防抖
+      if (name === 'offset') {
+        // 清除之前的定时器
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current);
+        }
+        
+        // 设置新的定时器，3秒后更新
+        debounceTimerRef.current = setTimeout(() => {
+          onParamsChange(newParams);
+        }, 3000);
+      } else {
+        // 其他参数立即更新
+        onParamsChange(newParams);
+      }
     }
   };
 
-  // 移除这个useEffect钩子，因为它会在组件挂载时自动触发参数变化
-  // 现在我们只在用户主动改变参数时才触发onParamsChange
+  // 组件卸载时清除定时器
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -409,6 +440,19 @@ export function GliParams({ onParamsChange }: GliParamsProps) {
                   </div>
                   <p className="text-xs text-gray-600 mt-2">
                     正数：GLI领先{params.benchmark} | 负数：GLI滞后{params.benchmark}
+                  </p>
+                  
+                  {/* 添加Y轴反转复选框 */}
+                  <div className="flex items-center space-x-2 mt-4">
+                    <Checkbox
+                      id="invertBenchmarkYAxis"
+                      checked={params.invertBenchmarkYAxis || false}
+                      onCheckedChange={(checked) => handleCheckboxChange('invertBenchmarkYAxis', checked === true)}
+                    />
+                    <Label htmlFor="invertBenchmarkYAxis" className="text-sm">反转对比标的Y轴</Label>
+                  </div>
+                  <p className="text-xs text-gray-600 mt-1">
+                    反转后可以更直观地显示负相关性
                   </p>
                 </div>
               )}

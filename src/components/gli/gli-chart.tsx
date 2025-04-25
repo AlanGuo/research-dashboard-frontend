@@ -244,6 +244,41 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
     return new Date(dateStr).getTime();
   };
   
+  // 查找最近的对比标的值
+  const findNearestBenchmarkValue = (dateKey: number, benchmarkMap: Record<number, number>): number | undefined => {
+    // 如果当前日期有数据，直接返回
+    if (benchmarkMap[dateKey] !== undefined) {
+      return benchmarkMap[dateKey];
+    }
+    
+    // 如果没有数据，向前查找最近的有效数据
+    // 首先获取所有日期键并排序
+    const dateKeys = Object.keys(benchmarkMap).map(Number).sort((a, b) => a - b);
+    
+    // 如果没有任何数据，返回undefined
+    if (dateKeys.length === 0) {
+      return undefined;
+    }
+    
+    // 找到小于当前日期的最大日期键（最近的过去数据）
+    let nearestPastKey = null;
+    for (let i = dateKeys.length - 1; i >= 0; i--) {
+      if (dateKeys[i] < dateKey) {
+        nearestPastKey = dateKeys[i];
+        break;
+      }
+    }
+    
+    // 如果找到了最近的过去数据，返回它
+    if (nearestPastKey !== null) {
+      return benchmarkMap[nearestPastKey];
+    }
+    
+    // 如果没有找到过去的数据，使用未来最近的数据
+    const nearestFutureKey = dateKeys.find(key => key > dateKey);
+    return nearestFutureKey !== undefined ? benchmarkMap[nearestFutureKey] : undefined;
+  };
+  
   // 准备图表数据
   const chartData = useMemo(() => {
     // 确保数据是按时间排序的（从旧到新，因为图表通常从左到右显示）
@@ -266,11 +301,18 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
       let maxValue = -Infinity;
       let minValue = Infinity;
       
-      benchmarkData.forEach(item => {
+      // 首先按时间戳排序，确保从旧到新处理数据
+      const sortedBenchmarkData = [...benchmarkData].sort((a, b) => a.timestamp - b.timestamp);
+      
+      // 记录最近的有效价格，用于填充缺失数据
+      let lastValidClose: number | null = null;
+      
+      sortedBenchmarkData.forEach(item => {
         if (item && typeof item.timestamp === 'number' && typeof item.close === 'number') {
           // 根据时间间隔生成日期键
           const dateKey = getDateKey(item.timestamp, interval);
           benchmarkMap[dateKey] = item.close; // 使用收盘价
+          lastValidClose = item.close; // 更新最近的有效价格
           
           // 更新最大和最小值
           if (item.close > maxValue) maxValue = item.close;
@@ -328,7 +370,8 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
         other_m2_total: d.other_m2_total ? d.other_m2_total / trillion : undefined,
         
         // 对比标的数据 - 使用偏移后的日期键
-        benchmarkValue: benchmarkMap[offsetDateKey]
+        // 如果当前日期没有数据，尝试查找最近的有效数据
+        benchmarkValue: findNearestBenchmarkValue(offsetDateKey, benchmarkMap)
       };
     });
     
@@ -573,6 +616,8 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
                 tick={{ fill: themeColors.text, fontSize: 12  }}
                 stroke={themeColors.grid}
                 domain={['auto', 'auto']}
+                // 如果启用了反转Y轴，则反转数据方向
+                reversed={params.invertBenchmarkYAxis}
               />
             )}
             
@@ -590,20 +635,19 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
               isAnimationActive={false}
             />
             
-            {/* 如果有对比标的，显示对比标的线 */}
-            {showBenchmark && (
+            {/* 对比标的数据 */}
+            {params.benchmark && params.benchmark !== 'none' && benchmarkData.length > 0 && (
               <Line
-                yAxisId="right"
                 type="monotone"
                 dataKey="benchmarkValue"
                 name={getBenchmarkName()}
                 stroke={getBenchmarkColor()}
-                dot={false}
                 strokeWidth={2}
+                dot={false}
                 isAnimationActive={false}
+                yAxisId="right"
               />
             )}
-            
             {/* 添加趋势时期背景 */}
             {trendPeriods.map((period, index) => {
               // 将日期字符串转换为时间戳
