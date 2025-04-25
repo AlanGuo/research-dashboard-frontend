@@ -5,7 +5,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
 import { GliParams as GliParamsType, BenchmarkType, TimeRangeType } from '@/types/gli';
 
 interface GliParamsProps {
@@ -289,7 +288,7 @@ export function GliParams({ onParamsChange }: GliParamsProps) {
                 <Label htmlFor="interval">时间间隔</Label>
                 <Select 
                   value={params.interval} 
-                  onValueChange={(value) => handleSelectChange('interval', value)}
+                  onValueChange={(value: string) => handleSelectChange('interval', value)}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="选择时间间隔" />
@@ -306,7 +305,7 @@ export function GliParams({ onParamsChange }: GliParamsProps) {
                 <Label htmlFor="timeRange">时间范围</Label>
                 <Select 
                   value={params.timeRange || '1y'} 
-                  onValueChange={(value) => handleSelectChange('timeRange', value)}
+                  onValueChange={(value: string) => handleSelectChange('timeRange', value)}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="选择时间范围" />

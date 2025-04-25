@@ -11,7 +11,11 @@ import {
   Tooltip, 
   Legend, 
   ResponsiveContainer,
-  ReferenceArea
+  ReferenceArea,
+  ScatterChart,
+  ZAxis,
+  Scatter,
+  LineChart
 } from 'recharts';
 import { GliDataPoint, GliParams } from '@/types/gli';
 
@@ -47,8 +51,8 @@ const TREND_COLORS = {
 
 // GLI趋势时段数据
 const gliTrendPeriods: TrendPeriod[] = [
-  { startDate: '2024-12-31', endDate: '2025-04-23', trend: 'up', label: '上升' },
-  { startDate: '2024-09-17', endDate: '2024-12-31', trend: 'down', label: '下降' },
+  { startDate: '2024-12-31', endDate: '2025-04-23', trend: 'up'},
+  { startDate: '2024-09-17', endDate: '2024-12-31', trend: 'down'},
   { startDate: '2024-07-01', endDate: '2024-09-17', trend: 'up' },
   { startDate: '2024-01-02', endDate: '2024-07-01', trend: 'down' },
   { startDate: '2023-10-02', endDate: '2024-01-02', trend: 'up' },
@@ -56,7 +60,7 @@ const gliTrendPeriods: TrendPeriod[] = [
   { startDate: '2022-11-04', endDate: '2023-02-01', trend: 'up' },
   { startDate: '2022-03-09', endDate: '2022-11-04', trend: 'down' },
   { startDate: '2020-03-20', endDate: '2021-09-16', trend: 'up' },
-  { startDate: '2018-03-06', endDate: '2018-11-01', trend: 'up' },
+  { startDate: '2018-03-06', endDate: '2018-11-01', trend: 'down' },
   { startDate: '2016-12-30', endDate: '2018-03-06', trend: 'up' },
   { startDate: '2016-09-08', endDate: '2016-12-30', trend: 'down' },
   { startDate: '2016-01-29', endDate: '2016-09-08', trend: 'up' },
@@ -242,7 +246,6 @@ export function GliChart({ data, params }: GliChartProps) {
       // 根据时间间隔生成日期键和格式化日期
       const dateKey = getDateKey(d.timestamp, interval);
       const dateStr = formatDateByInterval(d.timestamp, interval);
-      
       return {
         date: dateStr,
         timestamp: d.timestamp,
@@ -269,7 +272,6 @@ export function GliChart({ data, params }: GliChartProps) {
     
     // 检查是否有对比标的数据
     const hasBenchmarkData = result.some(item => item.benchmarkValue !== undefined);
-    console.log('图表数据中包含对比标的数据:', hasBenchmarkData);
     if (!hasBenchmarkData && benchmarkData.length > 0) {
       console.log('警告: 对比标的数据没有成功映射到图表数据中');
       
@@ -379,17 +381,19 @@ export function GliChart({ data, params }: GliChartProps) {
   // 自定义tooltip内容
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
-      // 找到当前数据点
-      const currentDataPoint = chartData.find(item => item.date === label);
+      // 找到当前数据点 - 现在label是时间戳
+      const currentDataPoint = chartData.find(item => item.timestamp === label);
       if (!currentDataPoint) return null;
       
       // 计算总量
-      const total = calculateTotal(currentDataPoint);
       let benchmarkValue = currentDataPoint.benchmarkValue;
+      
+      // 格式化日期显示
+      const formattedDate = formatDateByInterval(label, params.interval || '1D');
       
       return (
         <div className="bg-white p-2 border rounded shadow">
-          <p className="font-semibold">Day: {label}</p>
+          <p className="font-semibold">Day: {formattedDate}</p>
 
           {payload.map((entry: any, index: number) => {
             // 只显示非total和非benchmarkValue的数据系列
@@ -421,21 +425,40 @@ export function GliChart({ data, params }: GliChartProps) {
   // 计算图表高度比例 - 上部图表更大
   const totalChartHeight = '60%';
   const componentsChartHeight = '40%';
-
+  
+  // 计算X轴的时间范围
+  const timeRange = useMemo(() => {
+    if (chartData.length === 0) return { min: 0, max: 0 };
+    
+    // 找出数据中的最小和最大时间戳
+    const timestamps = chartData.map(item => item.timestamp);
+    const minTime = Math.min(...timestamps);
+    const maxTime = Math.max(...timestamps);
+    
+    const padding = 0
+    
+    return {
+      min: minTime - padding,
+      max: maxTime + padding
+    };
+  }, [chartData]);
+      
   return (
     <div className="w-full h-[600px] flex flex-col">
       {/* 总量图表 - 显示GLI总量和对比标的的线图 */}
       <div className="w-full" style={{ height: totalChartHeight }}>
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%"> 
           <ComposedChart
             data={chartData}
-            margin={{ top: 5, right: 30, left: 20, bottom: 0 }}
+            margin={{ top: 5, right: 5, left: 5, bottom: 0 }}
           >
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis 
-              dataKey="date" 
+              dataKey="timestamp" 
+              type="number"
               tick={{ fontSize: 12 }}
-              tickFormatter={(value) => value}
+              tickFormatter={(value) => formatDateByInterval(value, params.interval || '1D')}
+              domain={[timeRange.min, timeRange.max]}
               hide // 隐藏X轴，只在底部图表显示
             />
             {/* 左侧Y轴，显示GLI总量数据 */}
@@ -458,49 +481,26 @@ export function GliChart({ data, params }: GliChartProps) {
             
             <Tooltip content={CustomTooltip} />
             <Legend />
-            
+
             <CartesianGrid strokeDasharray="3 3" />
             
-            {/* 趋势时段背景标注 - 使用自定义矩形实现 */}
-            {chartData.map((point, index) => {
-              // 判断该点是否在趋势时段内
-              const timestamp = point.timestamp;
-              let trendColor = null;
-              let trendLabel = null;
+            {/* 趋势时段背景标注 */}
+            {gliTrendPeriods.map((period, index) => {
+              // 将日期字符串转换为时间戳
+              const x1 = dateToTimestamp(period.startDate);
+              const x2 = dateToTimestamp(period.endDate);
               
-              // 使用gliTrendPeriods检查每个趋势时段
-              for (const period of gliTrendPeriods) {
-                if (timestamp >= dateToTimestamp(period.startDate) && timestamp <= dateToTimestamp(period.endDate)) {
-                  trendColor = TREND_COLORS[period.trend];
-                  trendLabel = period.label;
-                  break;
-                }
-              }
-              
-              // 如果在趋势时段内，返回一个矩形元素
-              if (trendColor && index < chartData.length - 1) {
-                // 计算矩形宽度
-                const nextPoint = chartData[index + 1];
-                const width = 100 / chartData.length;
-                const xPos = (index / chartData.length) * 100;
-                
-                return (
-                  <rect 
-                    key={`trend-bg-${index}`}
-                    x={`${xPos}%`}
-                    y="0"
-                    width={`${width}%`}
-                    height="100%"
-                    fill={trendColor}
-                    fillOpacity={0.3}
-                  >
-                    {trendLabel && (
-                      <title>{trendLabel}</title>
-                    )}
-                  </rect>
-                );
-              }
-              return null;
+              return (
+                <ReferenceArea 
+                  key={`trend-${index}`}
+                  yAxisId="left"
+                  x1={x1} 
+                  x2={x2} 
+                  fill={TREND_COLORS[period.trend]} 
+                  fillOpacity={0.2}
+                  label={period.label}
+                />
+              );
             })} 
             {/* 总量线图 */}
             <Line 
@@ -511,7 +511,7 @@ export function GliChart({ data, params }: GliChartProps) {
               dot={false}
               name="GLI"
               isAnimationActive={false}
-              strokeWidth={1} // 增加线宽使黑线更明显
+              strokeWidth={1}
             />
             
             {/* 对比标的数据 - 使用线形图和右侧Y轴 */}
@@ -536,13 +536,15 @@ export function GliChart({ data, params }: GliChartProps) {
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={chartData}
-            margin={{ top: 0, right: 30, left: 20, bottom: 5 }}
+            margin={{ top: 0, right: 5, left: 5, bottom: 5 }}
           >
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis 
-              dataKey="date" 
+              dataKey="timestamp" 
+              type="number"
               tick={{ fontSize: 12 }}
-              tickFormatter={(value) => value}
+              tickFormatter={(value) => formatDateByInterval(value, params.interval || '1D')}
+              domain={[timeRange.min, timeRange.max]}
             />
             {/* 左侧Y轴，显示GLI组件数据 */}
             <YAxis 
@@ -555,6 +557,24 @@ export function GliChart({ data, params }: GliChartProps) {
             <Tooltip content={CustomTooltip} />
             <Legend />
             
+            {/* 趋势时段背景标注 */}
+            {gliTrendPeriods.map((period, index) => {
+              // 将日期字符串转换为时间戳
+              const x1 = dateToTimestamp(period.startDate);
+              const x2 = dateToTimestamp(period.endDate);
+              
+              return (
+                <ReferenceArea 
+                  key={`trend-comp-${index}`}
+                  yAxisId="left"
+                  x1={x1} 
+                  x2={x2} 
+                  fill={TREND_COLORS[period.trend]} 
+                  fillOpacity={0.2}
+                />
+              );
+            })}
+            
             {/* 美元净流动性 */}
             {params.unl_active && chartData[0]?.netUsdLiquidity !== undefined && (
               <Area 
@@ -565,6 +585,7 @@ export function GliChart({ data, params }: GliChartProps) {
                 stroke="#ff7300" 
                 fill="#ff7300" 
                 name="UNL"
+                isAnimationActive={false}
               />
             )}
             
@@ -578,6 +599,7 @@ export function GliChart({ data, params }: GliChartProps) {
                 stroke="#0088fe" 
                 fill="#0088fe" 
                 name="ECB"
+                isAnimationActive={false}
               />
             )}
             
@@ -591,6 +613,7 @@ export function GliChart({ data, params }: GliChartProps) {
                 stroke="#00c49f" 
                 fill="#00c49f" 
                 name="PBC"
+                isAnimationActive={false}
               />
             )}
             
@@ -604,6 +627,7 @@ export function GliChart({ data, params }: GliChartProps) {
                 stroke="#ff8042" 
                 fill="#ff8042" 
                 name="BOJ"
+                isAnimationActive={false}
               />
             )}
             
@@ -617,6 +641,7 @@ export function GliChart({ data, params }: GliChartProps) {
                 stroke="#8884d8" 
                 fill="#8884d8" 
                 name="其他央行"
+                isAnimationActive={false}
               />
             )}
             
@@ -630,6 +655,7 @@ export function GliChart({ data, params }: GliChartProps) {
                 stroke="#82ca9d" 
                 fill="#82ca9d" 
                 name="美国M2"
+                isAnimationActive={false}
               />
             )}
             
@@ -642,6 +668,7 @@ export function GliChart({ data, params }: GliChartProps) {
                 stroke="#8dd1e1" 
                 fill="#8dd1e1" 
                 name="欧洲M2"
+                isAnimationActive={false}
               />
             )}
             
@@ -654,6 +681,7 @@ export function GliChart({ data, params }: GliChartProps) {
                 stroke="#a4de6c" 
                 fill="#a4de6c" 
                 name="中国M2"
+                isAnimationActive={false}
               />
             )}
             
@@ -666,6 +694,7 @@ export function GliChart({ data, params }: GliChartProps) {
                 stroke="#d0ed57" 
                 fill="#d0ed57" 
                 name="日本M2"
+                isAnimationActive={false}
               />
             )}
             
@@ -678,6 +707,7 @@ export function GliChart({ data, params }: GliChartProps) {
                 stroke="#ffc658" 
                 fill="#ffc658" 
                 name="其他M2"
+                isAnimationActive={false}
               />
             )}
           </ComposedChart>
