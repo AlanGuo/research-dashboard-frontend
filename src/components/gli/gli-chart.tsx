@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useEffect, useState } from 'react';
+import React, { useMemo, useEffect, useState, useCallback } from 'react';
 import {
   ResponsiveContainer,
   Area,
@@ -35,10 +35,54 @@ interface GliChartProps {
 
 // 使用从 types/gli 导入的 TrendPeriod 接口
 
-// 趋势背景颜色
-const TREND_COLORS = {
-  up: '#90EE90',   // 上升趋势，浅绿色
-  down: '#FFB6C1', // 下降趋势，浅红色
+// 主题相关颜色配置
+const THEME_COLORS = {
+  light: {
+    text: '#000000',
+    grid: '#e0e0e0',
+    background: '#ffffff',
+    total: '#444',
+    trend: {
+      up: '#90EE90',   // 上升趋势，浅绿色
+      down: '#FFB6C1', // 下降趋势，浅红色
+    },
+    // 流动性组件颜色
+    components: {
+      netUsdLiquidity: '#8884d8',
+      ecb: '#82ca9d',
+      pbc: '#ffc658',
+      boj: '#ff8042',
+      other_cb: '#0088fe',
+      usa: '#00C49F',
+      europe: '#FFBB28',
+      china: '#FF8042',
+      japan: '#0088FE',
+      other_m2: '#FF00FF'
+    }
+  },
+  dark: {
+    text: '#ffffff',
+    grid: '#333333',
+    background: '#121212',
+    total: '#888', // 青色，在深色背景上更加醒目
+    trend: {
+      up: '#004d00',   // 上升趋势，深绿色
+      down: '#5c0000', // 下降趋势，深红色
+    },
+    // 流动性组件颜色 - 暗黑模式下更高饱和度和亮度
+    components: {
+      netUsdLiquidity: '#a4a0ff', // 更亮的紫色
+      ecb: '#4ade80', // 更亮的绿色
+      pbc: '#ffd700', // 更亮的黄色
+      boj: '#ff9966', // 更亮的橙色
+      other_cb: '#60a5fa', // 更亮的蓝色
+      usa: '#34d399', // 更亮的青绿色
+      europe: '#fbbf24', // 更亮的金色
+      china: '#f97316', // 更亮的橙红色
+      japan: '#3b82f6', // 更亮的蓝色
+      other_m2: '#e879f9' // 更亮的粉色
+    }
+  }
 }
 
 // GLI趋势时段数据将从API获取
@@ -49,6 +93,37 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [benchmarkInfo, setBenchmarkInfo] = useState<BenchmarkAsset | null>(null);
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
+  
+  // 检测当前主题
+  useEffect(() => {
+    // 初始检查暗黑模式
+    const checkDarkMode = () => {
+      const isDark = document.documentElement.classList.contains('dark');
+      setIsDarkMode(isDark);
+    };
+    
+    // 初始检查
+    checkDarkMode();
+    
+    // 创建一个MutationObserver来监听class变化
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName === 'class') {
+          checkDarkMode();
+        }
+      });
+    });
+    
+    // 开始观察document.documentElement的class属性变化
+    observer.observe(document.documentElement, { attributes: true });
+    
+    // 清理函数
+    return () => observer.disconnect();
+  }, []);
+  
+  // 根据当前主题获取颜色
+  const themeColors = isDarkMode ? THEME_COLORS.dark : THEME_COLORS.light;
   
   // 趋势时段数据现在通过props传入，不需要在组件内部获取
 
@@ -330,7 +405,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
   
   // 获取对比标的颜色
   const getBenchmarkColor = () => {
-    return benchmarkInfo?.color || '#8884d8'; // 默认紫色
+    return benchmarkInfo?.color
   };
 
 
@@ -391,7 +466,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
   };
   
   // 自定义Tooltip内容
-  const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<Record<string, unknown>>; label?: number }) => {
+  const CustomTooltip = ({ active, payload, label, isDarkMode }: { active?: boolean; payload?: Array<Record<string, unknown>>; label?: number; isDarkMode?: boolean }) => {
     if (active && payload && payload.length) {
       // 找到当前数据点 - 现在label是时间戳
       const currentDataPoint = chartData.find(item => item.timestamp === Number(label));
@@ -404,8 +479,8 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
       const formattedDate = formatDateByInterval(Number(label), params.interval || '1D');
       
       return (
-        <div className="bg-white p-2 border rounded shadow">
-          <p className="font-semibold">Day: {formattedDate}</p>
+        <div className={`custom-tooltip p-3 border shadow-md rounded-md ${isDarkMode ? 'bg-gray-800 border-gray-700 text-white' : 'bg-white border-gray-200 text-black'}`}>
+          <p className="font-semibold">日期: {formattedDate}</p>
           
           {payload.map((entry, index) => {
             // 只显示非total和非benchmarkValue的数据系列
@@ -419,9 +494,14 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
             return null;
           })}
           
+          {/* 添加分隔线 */}
+          {showBenchmark && benchmarkValue !== undefined && (
+            <div className={`border-t my-2 ${isDarkMode ? 'border-gray-600' : 'border-gray-200'}`}></div>
+          )}
+          
           {/* 显示对比标的数据 */}
           {benchmarkValue !== null && benchmarkValue !== undefined && (
-            <p className="mt-2 pt-2 border-t border-gray-200" style={{ color: '#8884d8' }}>
+            <p className="mt-2 pt-2">
               {getBenchmarkName()}: {formatValue(benchmarkValue)}
             </p>
           )}
@@ -460,17 +540,17 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
   }
 
   return (
-    <div className="w-full h-[800px] flex flex-col">
+    <div className="w-full h-[800px] flex flex-col" style={{ backgroundColor: themeColors.background, borderRadius: '8px', padding: '16px' }}>
       {/* 总量图表 - 显示GLI总量和对比标的的线图 */}
-      <div className="w-full" style={{ height: totalChartHeight }}>
+      <div className="w-full" style={{ height: totalChartHeight, backgroundColor: themeColors.background }}>
         <ResponsiveContainer width="100%" height="100%"> 
           <ComposedChart data={chartData} margin={{ top: 0, right: 5, left: 5, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" />
+            <CartesianGrid strokeDasharray="3 3" stroke={themeColors.grid} />
             <XAxis 
               dataKey="timestamp" 
               scale="time" 
               type="number" 
-              tick={{ fontSize: 12 }}
+              tick={{ fontSize: 12, fill: themeColors.text }}
               tickFormatter={(value) => formatDateByInterval(value, params.interval || '1D')}
               domain={[timeRange.min, timeRange.max]}
               hide
@@ -479,8 +559,10 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
             <YAxis 
               yAxisId="left"
               orientation="left"
-              tickFormatter={(value) => `${(value / 1000000000000).toFixed(1)}T`}
+              tickFormatter={(value) => `${value.toFixed(1)}T`}
               domain={['auto', 'auto']}
+              tick={{ fill: themeColors.text, fontSize: 12  }}
+              stroke={themeColors.grid}
             />
             
             {/* 如果有对比标的，显示右侧Y轴 */}
@@ -488,12 +570,13 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
               <YAxis 
                 yAxisId="right"
                 orientation="right"
+                tick={{ fill: themeColors.text, fontSize: 12  }}
+                stroke={themeColors.grid}
                 domain={['auto', 'auto']}
               />
             )}
             
             <Tooltip content={<CustomTooltip />} />
-            <Legend />
             
             {/* 显示GLI总量线 */}
             <Line
@@ -501,7 +584,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
               type="monotone"
               dataKey={(data) => calculateTotal(data)}
               name="GLI总量"
-              stroke="#000000"
+              stroke={themeColors.total}
               dot={false}
               strokeWidth={2}
               isAnimationActive={false}
@@ -533,7 +616,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
                   key={`trend-total-${index}`}
                   x1={startTimestamp}
                   x2={endTimestamp}
-                  fill={TREND_COLORS[period.trend as keyof typeof TREND_COLORS]}
+                  fill={period.trend === 'up' ? themeColors.trend.up : themeColors.trend.down}
                   fillOpacity={0.2}
                   ifOverflow="hidden"
                 />
@@ -544,10 +627,13 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
       </div>
       
       {/* 组件图表 - 显示GLI各组成部分的堆叠面积图 */}
-      <div className="w-full" style={{ height: componentsChartHeight }}>
+      <div className="w-full" style={{ height: componentsChartHeight, backgroundColor: themeColors.background }}>
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={chartData} margin={{ top: 0, right: 5, left: 5, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" />
+          <ComposedChart 
+            data={chartData} 
+            margin={{ top: 0, right: 5, left: 5, bottom: 0 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke={themeColors.grid} />
             <XAxis 
               dataKey="timestamp" 
               scale="time" 
@@ -559,7 +645,8 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
             {/* 左侧Y轴，显示GLI组件数据 */}
             <YAxis
               yAxisId="left"
-              tick={{ fontSize: 12 }}
+              tick={{ fill: themeColors.text, fontSize: 12 }}
+              stroke={themeColors.grid}
               tickFormatter={(value) => `${value.toFixed(1)}T`}
               domain={['auto', 'auto']}
             />
@@ -568,6 +655,8 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
               <YAxis 
                 yAxisId="right"
                 orientation="right"
+                tick={{ fill: themeColors.text, fontSize: 12  }}
+                stroke={themeColors.grid}
                 domain={['auto', 'auto']}
               />
             )}
@@ -584,9 +673,10 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
               return (
                 <ReferenceArea
                   key={`trend-comp-${index}`}
+                  yAxisId="left"
                   x1={startTimestamp}
                   x2={endTimestamp}
-                  fill={TREND_COLORS[period.trend as keyof typeof TREND_COLORS]}
+                  fill={period.trend === 'up' ? themeColors.trend.up : themeColors.trend.down}
                   fillOpacity={0.2}
                   ifOverflow="hidden"
                 />
@@ -600,8 +690,8 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
                 dataKey="netUsdLiquidity"
                 name="Net USD Liquidity"
                 stackId="1"
-                fill="#8884d8"
-                stroke="#8884d8"
+                fill={themeColors.components.netUsdLiquidity}
+                stroke={themeColors.components.netUsdLiquidity}
                 isAnimationActive={false}
                 yAxisId="left"
               />
@@ -613,8 +703,8 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
                 dataKey="ecb"
                 name="ECB"
                 stackId="1"
-                fill="#82ca9d"
-                stroke="#82ca9d"
+                fill={themeColors.components.ecb}
+                stroke={themeColors.components.ecb}
                 isAnimationActive={false}
                 yAxisId="left"
               />
@@ -626,8 +716,8 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
                 dataKey="pbc"
                 name="PBC"
                 stackId="1"
-                fill="#ffc658"
-                stroke="#ffc658"
+                fill={themeColors.components.pbc}
+                stroke={themeColors.components.pbc}
                 isAnimationActive={false}
                 yAxisId="left"
               />
@@ -639,8 +729,8 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
                 dataKey="boj"
                 name="BOJ"
                 stackId="1"
-                fill="#ff8042"
-                stroke="#ff8042"
+                fill={themeColors.components.boj}
+                stroke={themeColors.components.boj}
                 isAnimationActive={false}
                 yAxisId="left"
               />
@@ -652,8 +742,8 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
                 dataKey="other_cb_total"
                 name="Other Central Banks"
                 stackId="1"
-                fill="#0088fe"
-                stroke="#0088fe"
+                fill={themeColors.components.other_cb}
+                stroke={themeColors.components.other_cb}
                 isAnimationActive={false}
                 yAxisId="left"
               />
@@ -666,8 +756,8 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
                 dataKey="usa"
                 name="USA M2"
                 stackId="1"
-                fill="#00C49F"
-                stroke="#00C49F"
+                fill={themeColors.components.usa}
+                stroke={themeColors.components.usa}
                 isAnimationActive={false}
                 yAxisId="left"
               />
@@ -679,8 +769,8 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
                 dataKey="eu"
                 name="Europe M2"
                 stackId="1"
-                fill="#FFBB28"
-                stroke="#FFBB28"
+                fill={themeColors.components.europe}
+                stroke={themeColors.components.europe}
                 isAnimationActive={false}
                 yAxisId="left"
               />
@@ -692,8 +782,8 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
                 dataKey="china"
                 name="China M2"
                 stackId="1"
-                fill="#FF8042"
-                stroke="#FF8042"
+                fill={themeColors.components.china}
+                stroke={themeColors.components.china}
                 isAnimationActive={false}
                 yAxisId="left"
               />
@@ -705,8 +795,8 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
                 dataKey="japan"
                 name="Japan M2"
                 stackId="1"
-                fill="#0088FE"
-                stroke="#0088FE"
+                fill={themeColors.components.japan}
+                stroke={themeColors.components.japan}
                 isAnimationActive={false}
                 yAxisId="left"
               />
@@ -718,8 +808,8 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
                 dataKey="other_m2_total"
                 name="Other M2"
                 stackId="1"
-                fill="#FF00FF"
-                stroke="#FF00FF"
+                fill={themeColors.components.other_m2}
+                stroke={themeColors.components.other_m2}
                 isAnimationActive={false}
                 yAxisId="left"
               />

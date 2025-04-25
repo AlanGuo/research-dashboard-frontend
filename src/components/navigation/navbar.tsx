@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 export function Navbar() {
   const pathname = usePathname();
@@ -38,6 +39,9 @@ export function Navbar() {
                   {item.name}
                 </Link>
               ))}
+              <div className="ml-2">
+                <ThemeToggle />
+              </div>
             </div>
           </div>
         </div>
