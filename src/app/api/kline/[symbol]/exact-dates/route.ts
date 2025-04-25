@@ -26,7 +26,7 @@ export async function GET(
   
   try {
     // 使用内部的kline API获取数据
-    const apiBaseUrl = config.api?.baseUrl || 'http://localhost:3001/v1';
+    const apiBaseUrl = config.api?.baseUrl;
     
     // 构建日期查询参数
     const dateParams = dates.map(date => `dates[]=${encodeURIComponent(date)}`).join('&');

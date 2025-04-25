@@ -4,7 +4,7 @@ import config from '@/config';
 export async function GET() {
   try {
     // 使用内部API获取GLI趋势时段数据
-    const apiBaseUrl = config.api?.baseUrl || 'http://localhost:3001/v1';
+    const apiBaseUrl = config.api?.baseUrl;
     const url = `${apiBaseUrl}/gli/trend-periods`;
     
     const response = await fetch(url);
