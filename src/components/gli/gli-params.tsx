@@ -439,7 +439,7 @@ export function GliParams({ onParamsChange }: GliParamsProps) {
               {/* 添加时间偏移控制 */}
               {params.benchmark && params.benchmark !== 'none' && (
                 <div className="space-y-2 border p-3 rounded-md mt-4">
-                  <Label htmlFor="offset" className="font-medium">落后时间设置</Label>
+                  <Label htmlFor="offset" className="font-medium">滞后时间设置</Label>
                   <div className="flex items-center space-x-2 mt-2">
                     <Input
                       type="number"
