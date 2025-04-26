@@ -156,7 +156,7 @@ export default function GliDashboard() {
   // 这样可以避免初始时发送一个不带参数的冗余请求
 
   return (
-    <div className="container mx-auto p-6">
+    <div className="container mx-auto p-6 max-w-[1920px]">
       <h1 className="text-2xl font-bold mb-2">全球流动性指数</h1>
       
       <div className="mb-8">
@@ -190,7 +190,10 @@ export default function GliDashboard() {
         
         {/* 趋势表格 - 显示各资产在不同趋势时期的表现 */}
         <div className="mt-12 bg-background rounded-lg p-6 shadow-sm">
-          <GliTrendTable trendPeriods={trendPeriods} />
+          <GliTrendTable 
+            trendPeriods={trendPeriods} 
+            benchmark={currentParams.benchmark} 
+          />
         </div>
       </div>
     </div>

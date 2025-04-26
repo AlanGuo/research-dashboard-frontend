@@ -1,23 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import config from '@/config';
 
-export async function GET(
-  request: NextRequest
-) {
-  try {
-    // 获取查询参数
-    const searchParams = request.nextUrl.searchParams;
-    const forceUpdate = searchParams.get('forceUpdate');
-    
-    // 构建查询参数
-    const queryParams = new URLSearchParams();
-    if (forceUpdate) {
-      queryParams.append('forceUpdate', forceUpdate);
-    }
-    
+export async function GET() {
+  try {  
     // 使用内部API获取资产趋势数据
     const apiBaseUrl = config.api?.baseUrl;
-    const url = `${apiBaseUrl}/asset-trend${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    const url = `${apiBaseUrl}/asset-trend`;
     
     console.log(`Fetching asset trend data from: ${url}`);
     
