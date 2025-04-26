@@ -247,7 +247,7 @@ export function GliTrendTable({ trendPeriods, benchmark = 'none' }: GliTrendTabl
                   </TableRow>
                   {assets.map((asset) => (
                     <TableRow key={asset.id}>
-                      <TableCell className="font-medium sticky left-0 bg-background z-10 shadow-sm">
+                      <TableCell className="font-medium sticky left-0 bg-background z-10 shadow-sm whitespace-nowrap">
                         <div className="flex flex-col">
                           <span className="font-semibold">{asset.name}</span>
                           <span className="text-xs text-muted-foreground">{asset.symbol}</span>
