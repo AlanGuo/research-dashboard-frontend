@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import {
   Table,
   TableBody,
-  TableCaption,
   TableCell,
   TableHead,
   TableHeader,
@@ -79,7 +78,7 @@ export function GliTrendTable({ trendPeriods, benchmark = 'none' }: GliTrendTabl
         // 将后端数据转换为前端所需的格式
         const assetData = assets.map(asset => {
           // 查找该资产的趋势表现数据
-          const assetPerformance = result.data.find((item: any) => item.assetId === asset.id);
+          const assetPerformance = result.data.find((item: { assetId: string; performances: Array<{ periodId: string; change: number; startPrice?: number; endPrice?: number; dataStatus?: string; statusMessage?: string; }> }) => item.assetId === asset.id);
           
           // 如果找不到该资产的数据，返回空的趋势表现
           if (!assetPerformance) {
@@ -108,7 +107,7 @@ export function GliTrendTable({ trendPeriods, benchmark = 'none' }: GliTrendTabl
           }> = {};
           
           // 处理每个趋势期间的数据
-          assetPerformance.performances.forEach((performance: any) => {
+          assetPerformance.performances.forEach((performance: { periodId: string; change: number; startPrice?: number; endPrice?: number; dataStatus?: string; statusMessage?: string; }) => {
             trendPerformance[performance.periodId] = {
               change: performance.change,
               startPrice: performance.startPrice,
