@@ -451,7 +451,7 @@ export function GliParams({ onParamsChange }: GliParamsProps) {
                     <span className="text-sm text-gray-700">个{params.interval || '1W'}</span>
                   </div>
                   <p className="text-xs text-gray-600 mt-2">
-                    正数：GLI领先{params.benchmark} | 负数：GLI滞后{params.benchmark}
+                    正数：{params.benchmark}领先GLI | 负数：{params.benchmark}滞后GLI
                   </p>
                   
                   {/* 添加Y轴反转复选框 */}
