@@ -64,6 +64,7 @@ export interface TrendPeriod {
   endDate: string;
   trend: 'up' | 'down'; // 上升或下降
   label?: string; // 可选标签
+  percentChange?: number; // GLI在该时段的百分比变化
 }
 
 // GLI参数接口

@@ -36,6 +36,7 @@ export function GliTrendTable({ trendPeriods, benchmark = 'none' }: GliTrendTabl
   const [assetTrendData, setAssetTrendData] = useState<AssetTrendData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  // 不再需要计算GLI涨跌幅，直接使用后端返回的数据
 
   // 获取所有对比标的
   useEffect(() => {
@@ -52,9 +53,10 @@ export function GliTrendTable({ trendPeriods, benchmark = 'none' }: GliTrendTabl
         setError('无法加载对比标的列表');
       }
     };
-
     fetchAssets();
   }, []);
+  
+  // 不再需要计算GLI涨跌幅，直接使用后端返回的数据
 
   // 获取所有资产在各趋势期间的表现数据（从后端API获取）
   useEffect(() => {
@@ -140,7 +142,7 @@ export function GliTrendTable({ trendPeriods, benchmark = 'none' }: GliTrendTabl
   // 格式化日期为更友好的显示
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
+    return date.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '/');
   };
 
   // 格式化涨跌幅
@@ -231,6 +233,15 @@ export function GliTrendTable({ trendPeriods, benchmark = 'none' }: GliTrendTabl
                         >
                           {formatDate(period.startDate)} {formatDate(period.endDate)}
                         </span>
+                        {/* 显示GLI涨跌幅 */}
+                        {period.percentChange !== undefined && (
+                          <div className={`text-xs font-bold mt-1 ${period.trend === 'up' 
+                            ? 'text-green-800 dark:text-green-300' 
+                            : 'text-red-800 dark:text-red-300'}`}
+                          >
+                            {formatChange(period.percentChange)}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </TableHead>

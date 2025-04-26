@@ -4,8 +4,8 @@ import { ThemeProvider } from "@/components/ui/theme-provider";
 import { Navbar } from "@/components/navigation/navbar";
 
 export const metadata: Metadata = {
-  title: "Research Dashboard",
-  description: "Research Dashboard for financial data analysis",
+  title: "金融实验室",
+  description: "金融数据研究看板",
   icons: {
     icon: "/dashboard-favicon.svg",
     apple: "/dashboard-favicon.svg",

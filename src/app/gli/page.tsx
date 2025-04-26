@@ -68,17 +68,30 @@ export default function GliDashboard() {
     };
   }, []);
   
-  // 获取GLI趋势时段数据 - 只获取一次
+  // 获取GLI趋势时段数据 - 在API参数变化时重新获取
   useEffect(() => {
     const controller = new AbortController();
     const signal = controller.signal;
     
     const fetchTrendPeriods = async () => {
       try {
-        const response = await fetch('/api/gli/trend-periods', { signal });
+        // 构建查询参数 - 与GLI数据请求保持一致
+        const queryParams = new URLSearchParams();
+        
+        Object.entries(apiParams).forEach(([key, value]) => {
+          if (value !== undefined) {
+            queryParams.append(key, value.toString());
+          }
+        });
+        
+        // 直接请求API路由
+        const url = `/api/gli/trend-periods${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+        const response = await fetch(url, { signal });
+        
         if (!response.ok) {
           throw new Error('获取趋势时段数据失败');
         }
+        
         const result = await response.json();
         if (result.success && Array.isArray(result.data)) {
           setTrendPeriods(result.data);
@@ -96,7 +109,7 @@ export default function GliDashboard() {
     return () => {
       controller.abort();
     };
-  }, []);
+  }, [apiParams]); // 仅在API参数变化时重新获取数据
 
   // 使用useEffect来处理API参数变化和数据获取
   useEffect(() => {
@@ -192,7 +205,7 @@ export default function GliDashboard() {
         <div className="mt-12 bg-background rounded-lg p-6 shadow-sm">
           <GliTrendTable 
             trendPeriods={trendPeriods} 
-            benchmark={currentParams.benchmark} 
+            benchmark={currentParams.benchmark}
           />
         </div>
       </div>
