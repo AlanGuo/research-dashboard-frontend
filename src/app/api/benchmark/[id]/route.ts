@@ -7,7 +7,7 @@ export async function GET(
 ) {
   try {
     const { id } = await context.params;
-    const apiBaseUrl = config.api?.baseUrl || 'http://localhost:3001/v1';
+    const apiBaseUrl = config.api?.baseUrl;
     const url = `${apiBaseUrl}/benchmark`;
     const response = await fetch(`${url}/${id}`);
     

@@ -127,7 +127,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
   
   // 趋势时段数据现在通过props传入，不需要在组件内部获取
 
-  // 获取对比标的数据
+  // 单独管理对比标的数据获取，避免触发 GLI 数据的重新渲染
   useEffect(() => {
     // 如果选择了对比标的且不是'none'
     if (params.benchmark && params.benchmark !== 'none') {
@@ -138,9 +138,11 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
       const controller = new AbortController();
       const signal = controller.signal;
       
-      // 获取对比标的信息，以确保使用正确的符号
-      const fetchSymbolAndData = async () => {
+      // 获取对比标的信息和数据
+      const fetchBenchmarkData = async () => {
         try {
+          console.log(`获取对比标的数据: ${params.benchmark}`);
+          
           // 先获取对比标的信息
           const benchmarkResponse = await fetch(`/api/benchmark/${params.benchmark}`, { signal });
           if (!benchmarkResponse.ok) {
@@ -194,7 +196,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
       };
       
       // 执行异步函数
-      fetchSymbolAndData();
+      fetchBenchmarkData();
       
       // 清理函数
       return () => {
@@ -251,12 +253,25 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
       return benchmarkMap[dateKey];
     }
     
-    // 如果没有数据，向前查找最近的有效数据
-    // 首先获取所有日期键并排序
+    // 首先获取所有日期键并按时间排序
     const dateKeys = Object.keys(benchmarkMap).map(Number).sort((a, b) => a - b);
     
     // 如果没有任何数据，返回undefined
     if (dateKeys.length === 0) {
+      return undefined;
+    }
+    
+    // 获取资产的最早和最晚数据日期
+    const earliestDataKey = dateKeys[0];
+    const latestDataKey = dateKeys[dateKeys.length - 1];
+    
+    // 如果当前日期早于资产的最早数据日期，不进行填充
+    if (dateKey < earliestDataKey) {
+      return undefined;
+    }
+    
+    // 如果当前日期晚于资产的最晚数据日期，也不进行填充
+    if (dateKey > latestDataKey) {
       return undefined;
     }
     
@@ -342,7 +357,8 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
         }
         
         // 计算偏移后的时间
-        const offsetDate = new Date(d.timestamp + offsetMs);
+        // 反转偏移方向，让正数表示 GLI 领先，负数表示 GLI 滞后
+        const offsetDate = new Date(d.timestamp - offsetMs); // 使用减法而不是加法
         offsetDateKey = getDateKey(offsetDate.getTime(), interval);
       }
       

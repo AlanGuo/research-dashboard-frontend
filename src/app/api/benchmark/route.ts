@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    const apiBaseUrl = config.api?.baseUrl || 'http://localhost:3001/v1';
+    const apiBaseUrl = config.api?.baseUrl;
     const url = `${apiBaseUrl}/benchmark`;
     
     const response = await fetch(url);

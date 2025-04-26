@@ -109,12 +109,15 @@ export function GliParams({ onParamsChange }: GliParamsProps) {
     // 更新本地状态
     setParams(newParams);
     
-    // 如果是反转对比标的Y轴复选框，不触发API请求
+    // 对于 invertBenchmarkYAxis 参数，使用特殊处理避免触发 API 请求
     if (name === 'invertBenchmarkYAxis') {
-      // 只更新父组件中的参数状态，不触发API请求
-      onParamsChange(newParams);
+      // 创建一个事件，通知父组件 UI 参数变化
+      const event = new CustomEvent('ui-params-change', { 
+        detail: { name, value: checked } 
+      });
+      window.dispatchEvent(event);
     } else {
-      // 其他参数正常触发API请求
+      // 其他参数正常处理
       onParamsChange(newParams);
     }
   };
@@ -164,7 +167,12 @@ export function GliParams({ onParamsChange }: GliParamsProps) {
   const handleBenchmarkChange = (value: string) => {
     const newParams = { ...params, benchmark: value as BenchmarkType };
     setParams(newParams);
-    onParamsChange(newParams);
+    
+    // 使用自定义事件通知父组件，避免触发 GLI 数据的重新请求
+    const event = new CustomEvent('ui-params-change', { 
+      detail: { name: 'benchmark', value: value } 
+    });
+    window.dispatchEvent(event);
   };
 
   // 添加防抖定时器引用
@@ -177,17 +185,21 @@ export function GliParams({ onParamsChange }: GliParamsProps) {
       const newParams = { ...params, [name]: numValue };
       setParams(newParams);
       
-      // 如果是领先时间设置，添加防抖
+      // 如果是 offset 参数，使用特殊处理避免触发 API 请求
       if (name === 'offset') {
         // 清除之前的定时器
         if (debounceTimerRef.current) {
           clearTimeout(debounceTimerRef.current);
         }
         
-        // 设置新的定时器，3秒后更新
+        // 设置新的定时器，使用自定义事件通知父组件
         debounceTimerRef.current = setTimeout(() => {
-          onParamsChange(newParams);
-        }, 3000);
+          // 创建一个事件，通知父组件 UI 参数变化
+          const event = new CustomEvent('ui-params-change', { 
+            detail: { name, value: numValue } 
+          });
+          window.dispatchEvent(event);
+        }, 500); // 减少延迟时间，提高响应速度
       } else {
         // 其他参数立即更新
         onParamsChange(newParams);

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { GliChart } from '@/components/gli/gli-chart';
 import { GliParams } from '@/components/gli/gli-params';
+import { GliTrendTable } from '@/components/gli/gli-trend-table';
 import { GliDataPoint, GliParams as GliParamsType, GliResponse, TrendPeriod } from '@/types/gli';
 
 export default function GliDashboard() {
@@ -11,8 +12,8 @@ export default function GliDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [trendPeriods, setTrendPeriods] = useState<TrendPeriod[]>([]);
 
-  // 添加参数状态
-  const [currentParams, setCurrentParams] = useState<GliParamsType>({
+  // 将参数分为两部分：API参数（需要重新请求数据）和UI参数（只影响显示）
+  const [apiParams, setApiParams] = useState<Omit<GliParamsType, 'offset' | 'invertBenchmarkYAxis' | 'benchmark'>>({    
     unl_active: true,
     fed_active: true,
     rrp_active: true,
@@ -26,14 +27,47 @@ export default function GliDashboard() {
     china_active: false,
     japan_active: false,
     other_m2_active: false,
-    benchmark: 'none',
     interval: '1W',
-    timeRange: '10y',
-    limit: 520,
-    offset: 0
+    timeRange: '10y' as GliParamsType['timeRange'],
+    limit: 520
   });
+  
+  // UI参数（不需要重新请求API）
+  const [uiParams, setUiParams] = useState<Pick<GliParamsType, 'offset' | 'invertBenchmarkYAxis' | 'benchmark'>>({    
+    offset: 0,
+    invertBenchmarkYAxis: false,
+    benchmark: 'none' as GliParamsType['benchmark']
+  });
+  
+  // 合并两种参数，用于传递给子组件
+  const currentParams: GliParamsType = {
+    ...apiParams,
+    ...uiParams
+  };
 
 
+  // 监听 UI 参数变化的自定义事件
+  useEffect(() => {
+    // 处理 UI 参数变化事件
+    const handleUiParamsChange = (event: CustomEvent) => {
+      const { name, value } = event.detail;
+      
+      // 更新 UI 参数
+      setUiParams(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    };
+    
+    // 添加事件监听器
+    window.addEventListener('ui-params-change', handleUiParamsChange as EventListener);
+    
+    // 清理函数
+    return () => {
+      window.removeEventListener('ui-params-change', handleUiParamsChange as EventListener);
+    };
+  }, []);
+  
   // 获取GLI趋势时段数据 - 只获取一次
   useEffect(() => {
     const controller = new AbortController();
@@ -64,16 +98,16 @@ export default function GliDashboard() {
     };
   }, []);
 
-  // 使用useEffect来处理参数变化和数据获取
+  // 使用useEffect来处理API参数变化和数据获取
   useEffect(() => {
     const fetchGliData = async () => {
       try {
         setLoading(true);
         
-        // 构建查询参数
+        // 构建查询参数 - 只包含API参数
         const queryParams = new URLSearchParams();
         
-        Object.entries(currentParams).forEach(([key, value]) => {
+        Object.entries(apiParams).forEach(([key, value]) => {
           if (value !== undefined) {
             queryParams.append(key, value.toString());
           }
@@ -99,11 +133,22 @@ export default function GliDashboard() {
     };
     
     fetchGliData();
-  }, [currentParams]); // 仅在参数变化时重新获取数据
+  }, [apiParams]); // 仅在API参数变化时重新获取数据
   
   // 更新参数的处理函数
   const handleParamsChange = (params: GliParamsType) => {
-    setCurrentParams(params);
+    // 分离API参数和UI参数
+    const { offset, invertBenchmarkYAxis, benchmark, ...restParams } = params;
+    
+    // 更新UI参数（不触发API请求）
+    setUiParams({ 
+      offset: offset !== undefined ? offset : 0, 
+      invertBenchmarkYAxis: invertBenchmarkYAxis !== undefined ? invertBenchmarkYAxis : false,
+      benchmark: benchmark || 'none' as GliParamsType['benchmark']
+    });
+    
+    // 更新API参数（会触发API请求）
+    setApiParams(restParams as Omit<GliParamsType, 'offset' | 'invertBenchmarkYAxis' | 'benchmark'>);
   };
 
   // 不再在组件加载时调用fetchData()
@@ -126,7 +171,7 @@ export default function GliDashboard() {
         </div>
         
         {/* 图表显示 */}
-        <div className="mt-8">
+        <div className="mt-8 mb-12">
           <div className="bg-background rounded-lg transition-colors">
             {loading ? (
               <div className="flex flex-col items-center justify-center h-[800px] gap-2">
@@ -141,6 +186,11 @@ export default function GliDashboard() {
               <GliChart data={data} params={currentParams} trendPeriods={trendPeriods} />
             )}
           </div>
+        </div>
+        
+        {/* 趋势表格 - 显示各资产在不同趋势时期的表现 */}
+        <div className="mt-12 bg-background rounded-lg p-6 shadow-sm">
+          <GliTrendTable trendPeriods={trendPeriods} />
         </div>
       </div>
     </div>
