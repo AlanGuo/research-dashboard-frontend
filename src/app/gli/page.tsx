@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { GliChart } from '@/components/gli/gli-chart';
 import { GliParams } from '@/components/gli/gli-params';
 import { GliTrendTable } from '@/components/gli/gli-trend-table';
+import { GliBenchmarkTrendTable } from '@/components/gli/gli-benchmark-trend-table';
 import { GliDataPoint, GliParams as GliParamsType, GliResponse, TrendPeriod } from '@/types/gli';
 
 export default function GliDashboard() {
@@ -164,10 +165,6 @@ export default function GliDashboard() {
     setApiParams(restParams as Omit<GliParamsType, 'offset' | 'invertBenchmarkYAxis' | 'benchmark'>);
   };
 
-  // 不再在组件加载时调用fetchData()
-  // 因为GliParams组件会在挂载时通过onParamsChange触发带参数的fetchData调用
-  // 这样可以避免初始时发送一个不带参数的冗余请求
-
   return (
     <div className="container mx-auto p-6 max-w-[1920px]">
       <h1 className="text-2xl font-bold mb-2">全球流动性指数</h1>
@@ -183,6 +180,18 @@ export default function GliDashboard() {
           <GliParams onParamsChange={handleParamsChange} />
         </div>
         
+        {/* 当选择了对比标的时，显示对比标的趋势表格 */}
+        {currentParams.benchmark !== 'none' && (
+          <div className="bg-background rounded-lg p-6 shadow-sm">
+            <GliBenchmarkTrendTable 
+              trendPeriods={trendPeriods} 
+              benchmark={currentParams.benchmark}
+              offset={currentParams.offset}
+              interval={currentParams.interval}
+            />
+          </div>
+        )}
+
         {/* 图表显示 */}
         <div className="mt-8 mb-12">
           <div className="bg-background rounded-lg transition-colors">
@@ -204,8 +213,7 @@ export default function GliDashboard() {
         {/* 趋势表格 - 显示各资产在不同趋势时期的表现 */}
         <div className="mt-12 bg-background rounded-lg p-6 shadow-sm">
           <GliTrendTable 
-            trendPeriods={trendPeriods} 
-            benchmark={currentParams.benchmark}
+            trendPeriods={trendPeriods}
           />
         </div>
       </div>

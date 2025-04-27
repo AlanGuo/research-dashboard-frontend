@@ -17,6 +17,7 @@ interface AssetTrendData {
   name: string;
   symbol: string;
   category: string;
+  lagDays: number;
   trendPerformance: Record<string, {
     change: number;
     startPrice?: number;
@@ -29,9 +30,10 @@ interface AssetTrendData {
 interface GliTrendTableProps {
   trendPeriods: TrendPeriod[];
   benchmark?: BenchmarkType; // 添加对比标的参数
+  offset?: number; // 添加偏移参数
 }
 
-export function GliTrendTable({ trendPeriods, benchmark = 'none' }: GliTrendTableProps) {
+export function GliTrendTable({ trendPeriods, benchmark = 'none', offset = 0 }: GliTrendTableProps) {
   const [assets, setAssets] = useState<BenchmarkAsset[]>([]);
   const [assetTrendData, setAssetTrendData] = useState<AssetTrendData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -58,65 +60,35 @@ export function GliTrendTable({ trendPeriods, benchmark = 'none' }: GliTrendTabl
   
   // 不再需要计算GLI涨跌幅，直接使用后端返回的数据
 
-  // 获取所有资产在各趋势期间的表现数据（从后端API获取）
-  useEffect(() => {
+  // 获取资产趋势数据的函数
+  const fetchAssetTrendData = async () => {
     if (assets.length === 0 || trendPeriods.length === 0) return;
-
-    const fetchAssetTrendData = async () => {
-      setLoading(true);
-      try {
-        // 从前端API路由获取所有资产的趋势表现数据
-        const response = await fetch('/api/asset-trend');
-        if (!response.ok) {
-          throw new Error('获取资产趋势表现数据失败');
-        }
+    
+    setLoading(true);
+    try {
+      // 从前端API路由获取所有资产的趋势表现数据
+      const response = await fetch('/api/asset-trend');
+      if (!response.ok) {
+        throw new Error('获取资产趋势表现数据失败');
+      }
+      
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.message || '获取资产趋势表现数据失败');
+      }
+      
+      // 将后端数据转换为前端所需的格式
+      const assetData = assets.map(asset => {
+        // 查找该资产的趋势表现数据
+        const assetPerformance = result.data.find((item: { assetId: string; performances: Array<{ periodId: string; change: number; startPrice?: number; endPrice?: number; dataStatus?: string; statusMessage?: string; }> }) => item.assetId === asset.id);
         
-        const result = await response.json();
-        
-        if (!result.success) {
-          throw new Error(result.message || '获取资产趋势表现数据失败');
-        }
-        
-        // 将后端数据转换为前端所需的格式
-        const assetData = assets.map(asset => {
-          // 查找该资产的趋势表现数据
-          const assetPerformance = result.data.find((item: { assetId: string; performances: Array<{ periodId: string; change: number; startPrice?: number; endPrice?: number; dataStatus?: string; statusMessage?: string; }> }) => item.assetId === asset.id);
-          
-          // 如果找不到该资产的数据，返回空的趋势表现
-          if (!assetPerformance) {
-            const emptyTrendPerformance: Record<string, { change: number }> = {};
-            trendPeriods.forEach(period => {
-              const periodId = `${period.startDate}_${period.endDate}`;
-              emptyTrendPerformance[periodId] = { change: 0 };
-            });
-            
-            return {
-              id: asset.id,
-              name: asset.name,
-              symbol: asset.symbol,
-              category: asset.category,
-              trendPerformance: emptyTrendPerformance
-            };
-          }
-          
-          // 将后端的趋势表现数据转换为前端所需的格式
-          const trendPerformance: Record<string, { 
-            change: number; 
-            startPrice?: number; 
-            endPrice?: number;
-            dataStatus?: string;
-            statusMessage?: string;
-          }> = {};
-          
-          // 处理每个趋势期间的数据
-          assetPerformance.performances.forEach((performance: { periodId: string; change: number; startPrice?: number; endPrice?: number; dataStatus?: string; statusMessage?: string; }) => {
-            trendPerformance[performance.periodId] = {
-              change: performance.change,
-              startPrice: performance.startPrice,
-              endPrice: performance.endPrice,
-              dataStatus: performance.dataStatus,
-              statusMessage: performance.statusMessage
-            };
+        // 如果找不到该资产的数据，返回空的趋势表现
+        if (!assetPerformance) {
+          const emptyTrendPerformance: Record<string, { change: number }> = {};
+          trendPeriods.forEach(period => {
+            const periodId = `${period.startDate}_${period.endDate}`;
+            emptyTrendPerformance[periodId] = { change: 0 };
           });
           
           return {
@@ -124,18 +96,52 @@ export function GliTrendTable({ trendPeriods, benchmark = 'none' }: GliTrendTabl
             name: asset.name,
             symbol: asset.symbol,
             category: asset.category,
-            trendPerformance
+            lagDays: asset.lagDays,
+            trendPerformance: emptyTrendPerformance
+          };
+        }
+        
+        // 将后端的趋势表现数据转换为前端所需的格式
+        const trendPerformance: Record<string, { 
+          change: number; 
+          startPrice?: number; 
+          endPrice?: number;
+          dataStatus?: string;
+          statusMessage?: string;
+        }> = {};
+        
+        // 处理每个趋势期间的数据
+        assetPerformance.performances.forEach((performance: { periodId: string; change: number; startPrice?: number; endPrice?: number; dataStatus?: string; statusMessage?: string; }) => {
+          trendPerformance[performance.periodId] = {
+            change: performance.change,
+            startPrice: performance.startPrice,
+            endPrice: performance.endPrice,
+            dataStatus: performance.dataStatus,
+            statusMessage: performance.statusMessage
           };
         });
-        setAssetTrendData(assetData);
-      } catch (err) {
-        console.error('获取资产趋势数据出错:', err);
-        setError('无法加载资产趋势数据');
-      } finally {
-        setLoading(false);
-      }
-    };
-    
+        
+        return {
+          id: asset.id,
+          name: asset.name,
+          symbol: asset.symbol,
+          category: asset.category,
+          lagDays: asset.lagDays || (assetPerformance.lagDays ? assetPerformance.lagDays : 90), // 使用资产或者API返回的lagDays
+          trendPerformance
+        };
+      });
+      setAssetTrendData(assetData);
+    } catch (err) {
+      console.error('获取资产趋势数据出错:', err);
+      setError('无法加载资产趋势数据');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // 获取所有资产在各趋势期间的表现数据（从后端API获取）
+  useEffect(() => {
+    if (assets.length === 0 || trendPeriods.length === 0) return;
     fetchAssetTrendData();
   }, [assets, trendPeriods]);
 
@@ -261,8 +267,7 @@ export function GliTrendTable({ trendPeriods, benchmark = 'none' }: GliTrendTabl
                       <TableCell className="font-medium sticky left-0 bg-background z-10 shadow-sm whitespace-nowrap">
                         <div className="flex flex-col">
                           <span className="font-semibold">{asset.name}</span>
-                          <span className="text-xs text-muted-foreground">{asset.symbol}</span>
-                          {/* <span className="text-xs text-muted-foreground">{getCategoryName(asset.category)}</span> */}
+                          <span className="text-xs text-muted-foreground">滞后{asset.lagDays}天</span>
                         </div>
                       </TableCell>
                       {sortedTrendPeriods.map((period) => {

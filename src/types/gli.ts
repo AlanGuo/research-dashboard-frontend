@@ -53,7 +53,7 @@ export interface GliResponse {
 }
 
 // 对比标的类型
-export type BenchmarkType = 'none' | 'btcusdt' | 'gold' | 'ndx' | 'spx';
+export type BenchmarkType = string | undefined;
 
 // 时间范围类型
 export type TimeRangeType = '1y' | '3y' | '5y' | '10y' | '20y';

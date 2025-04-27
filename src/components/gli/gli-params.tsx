@@ -177,6 +177,7 @@ export function GliParams({ onParamsChange }: GliParamsProps) {
 
   // 添加防抖定时器引用
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [updatingLagDays, setUpdatingLagDays] = useState(false);
   
   const handleNumberChange = (name: string, value: string) => {
     const numValue = parseInt(value, 10);
@@ -199,11 +200,45 @@ export function GliParams({ onParamsChange }: GliParamsProps) {
             detail: { name, value: numValue } 
           });
           window.dispatchEvent(event);
+          
+          // 如果选择了对比标的，则更新该标的的lagDays并重新计算趋势表现
+          if (params.benchmark && params.benchmark !== 'none') {
+            updateAssetLagDays(params.benchmark, params.interval || '1W', numValue);
+          }
         }, 500); // 减少延迟时间，提高响应速度
       } else {
         // 其他参数立即更新
         onParamsChange(newParams);
       }
+    }
+  };
+  
+  // 触发事件，请求计算资产在特定滞后天数下的趋势表现
+  const updateAssetLagDays = (assetId: string, intervalType: string, intervalCount: number) => {
+    if (updatingLagDays) return; // 避免重复请求
+    
+    try {
+      setUpdatingLagDays(true);
+      
+      // 创建一个事件，通知趋势表格组件计算并更新数据
+      const event = new CustomEvent('asset-trend-update-request', {
+        detail: { 
+          assetId,
+          intervalType,
+          intervalCount
+        }
+      });
+      
+      // 触发事件
+      window.dispatchEvent(event);
+      console.log(`已发送请求，计算资产 ${assetId} 在 ${intervalType} 间隔下偏移 ${intervalCount} 个单位的趋势表现`);
+    } catch (error) {
+      console.error('发送计算请求出错:', error);
+    } finally {
+      // 等待一小段时间再允许发送新请求，避免过快触发
+      setTimeout(() => {
+        setUpdatingLagDays(false);
+      }, 300);
     }
   };
 
@@ -451,7 +486,7 @@ export function GliParams({ onParamsChange }: GliParamsProps) {
                     <span className="text-sm text-gray-700">个{params.interval || '1W'}</span>
                   </div>
                   <p className="text-xs text-gray-600 mt-2">
-                    正数：{params.benchmark}领先GLI | 负数：{params.benchmark}滞后GLI
+                  正数：{params.benchmark}滞后GLI | 负数：{params.benchmark}领先GLI
                   </p>
                   
                   {/* 添加Y轴反转复选框 */}

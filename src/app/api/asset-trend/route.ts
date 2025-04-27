@@ -7,8 +7,6 @@ export async function GET() {
     const apiBaseUrl = config.api?.baseUrl;
     const url = `${apiBaseUrl}/asset-trend`;
     
-    console.log(`Fetching asset trend data from: ${url}`);
-    
     const response = await fetch(url, {
       next: { revalidate: 3600 } // 缓存1小时
     });

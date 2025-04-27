@@ -358,7 +358,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
         
         // 计算偏移后的时间
         // 反转偏移方向，让正数表示 GLI 领先，负数表示 GLI 滞后
-        const offsetDate = new Date(d.timestamp - offsetMs); // 使用减法而不是加法
+        const offsetDate = new Date(d.timestamp + offsetMs);
         offsetDateKey = getDateKey(offsetDate.getTime(), interval);
       }
       

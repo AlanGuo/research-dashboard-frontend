@@ -4,4 +4,5 @@ export interface BenchmarkAsset {
   symbol: string;
   category: string;
   color: string;
+  lagDays: number;
 }

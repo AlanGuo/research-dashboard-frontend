@@ -3,10 +3,10 @@ import { NextResponse } from 'next/server';
 
 export async function GET(
   request: Request,
-  context: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = await context.params;
+    const { id } = await params;
     const apiBaseUrl = config.api?.baseUrl;
     const url = `${apiBaseUrl}/benchmark`;
     const response = await fetch(`${url}/${id}`);
