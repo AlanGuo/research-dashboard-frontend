@@ -44,7 +44,7 @@ export function GliBenchmarkTrendTable({ trendPeriods, benchmark, offset = 0, in
   const [benchmarkData, setBenchmarkData] = useState<AssetTrendData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [updatingTrend, setUpdatingTrend] = useState<boolean>(false); // 仅更新趋势数据时的状态
+  const [, setUpdatingTrend] = useState<boolean>(false); // 仅更新趋势数据时的状态
   
   // 记录当前正在请求的benchmark ID，避免重复请求
   const fetchingRef = useRef<string | null>(null);
@@ -195,6 +195,7 @@ export function GliBenchmarkTrendTable({ trendPeriods, benchmark, offset = 0, in
     };
     
     fetchBenchmarkData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [benchmark, offset, interval, trendPeriods]);
   
   // 根据间隔类型计算滞后天数（用于显示）

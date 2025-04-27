@@ -33,7 +33,7 @@ interface GliTrendTableProps {
   offset?: number; // 添加偏移参数
 }
 
-export function GliTrendTable({ trendPeriods, benchmark = 'none', offset = 0 }: GliTrendTableProps) {
+export function GliTrendTable({ trendPeriods, benchmark = 'none' }: GliTrendTableProps) {
   const [assets, setAssets] = useState<BenchmarkAsset[]>([]);
   const [assetTrendData, setAssetTrendData] = useState<AssetTrendData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -143,6 +143,7 @@ export function GliTrendTable({ trendPeriods, benchmark = 'none', offset = 0 }: 
   useEffect(() => {
     if (assets.length === 0 || trendPeriods.length === 0) return;
     fetchAssetTrendData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assets, trendPeriods]);
 
   // 格式化日期为更友好的显示

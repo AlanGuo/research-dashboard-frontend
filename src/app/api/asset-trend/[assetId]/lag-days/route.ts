@@ -6,10 +6,10 @@ import config from '@/config';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { assetId: string } }
+  context: { params: Promise<{ assetId: string }> }
 ) {
   try {
-    const { assetId } = await params;
+    const { assetId } = await context.params;
     
     // 从 URL 参数中获取间隔类型和数量
     const { searchParams } = new URL(request.url);
