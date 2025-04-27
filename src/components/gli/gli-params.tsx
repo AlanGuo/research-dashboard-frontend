@@ -213,7 +213,7 @@ export function GliParams({ onParamsChange }: GliParamsProps) {
       const selectedBenchmark = benchmarks.find(b => b.id === value);
       if (selectedBenchmark) {
         // 根据当前interval计算offset
-        let offsetValue = calculateOffsetFromLagDays(selectedBenchmark.lagDays, params.interval || '1W');
+        const offsetValue = calculateOffsetFromLagDays(selectedBenchmark.lagDays, params.interval || '1W');
         newParams = { ...newParams, offset: offsetValue };
       }
     }
