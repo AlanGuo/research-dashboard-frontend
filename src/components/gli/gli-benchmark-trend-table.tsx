@@ -54,16 +54,26 @@ export function GliBenchmarkTrendTable({ trendPeriods, benchmark, offset = 0, in
   const prevOffsetRef = useRef<number | null>(null);
   const prevIntervalRef = useRef<string | null>(null);
 
+  // 使用 useRef 来跟踪是否已经加载过对比标的数据
+  const initialLoadDone = useRef(false);
+  
   // 获取对比标的数据
   useEffect(() => {
+    // 如果没有选择对比标，则不进行任何操作
+    if (benchmark === 'none') {
+      setBenchmarkData(null);
+      setLoading(false);
+      setUpdatingTrend(false);
+      return;
+    }
+    
+    // 如果是首次加载且没有趋势期间数据，则等待趋势期间数据加载完成
+    if (!initialLoadDone.current && trendPeriods.length === 0) {
+      console.log('等待趋势期间数据加载完成...');
+      return;
+    }
+    
     const fetchBenchmarkData = async () => {
-      if (benchmark === 'none') {
-        setBenchmarkData(null);
-        setLoading(false);
-        setUpdatingTrend(false);
-        return;
-      }
-      
       // 确保 benchmark 是字符串且非 undefined
       const benchmarkId = benchmark as string;
       
@@ -102,6 +112,7 @@ export function GliBenchmarkTrendTable({ trendPeriods, benchmark, offset = 0, in
           fetchingRef.current = benchmarkId;
           
           // 请求API获取数据
+          console.log(`请求对比标详情: ${benchmarkId}`);
           const benchmarkResponse = await fetch(`/api/benchmark/${benchmarkId}`);
           if (!benchmarkResponse.ok) {
             throw new Error('获取对比标的详情失败');
@@ -129,6 +140,9 @@ export function GliBenchmarkTrendTable({ trendPeriods, benchmark, offset = 0, in
         if (!result.success) {
           throw new Error(result.message || '获取对比标的趋势表现数据失败');
         }
+        
+        // 标记初始加载已完成
+        initialLoadDone.current = true;
         
         // 处理趋势表现数据
         const trendPerformance: Record<string, { 

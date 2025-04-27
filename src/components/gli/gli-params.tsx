@@ -21,11 +21,18 @@ export function GliParams({ onParamsChange }: GliParamsProps) {
   // 加载状态
   const [loading, setLoading] = useState(false);
   
-  // 从API获取对比标的的列表
+  // 使用 useRef 来跟踪是否已经加载过对比标的数据
+  const benchmarksLoaded = useRef(false);
+  
+  // 从API获取对比标的的列表，只在组件首次挂载时获取一次
   useEffect(() => {
+    // 如果已经加载过，不再重复加载
+    if (benchmarksLoaded.current) return;
+    
     const fetchBenchmarks = async () => {
       setLoading(true);
       try {
+        console.log('Fetching benchmark list from API...');
         const response = await fetch('/api/benchmark');
         if (response.ok) {
           const data = await response.json();
@@ -40,6 +47,10 @@ export function GliParams({ onParamsChange }: GliParamsProps) {
             categorized[benchmark.category].push(benchmark);
           });
           setBenchmarkCategories(categorized);
+          
+          // 标记为已加载
+          benchmarksLoaded.current = true;
+          console.log('Benchmark list loaded and cached');
         } else {
           console.error('Failed to fetch benchmarks');
         }

@@ -7,9 +7,7 @@ export async function GET() {
     const apiBaseUrl = config.api?.baseUrl;
     const url = `${apiBaseUrl}/asset-trend`;
     
-    const response = await fetch(url, {
-      next: { revalidate: 3600 } // 缓存1小时
-    });
+    const response = await fetch(url);
     
     if (!response.ok) {
       throw new Error(`Asset Trend API请求失败: ${response.status}`);
