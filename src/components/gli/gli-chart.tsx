@@ -813,7 +813,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
               <Area
                 type="monotone"
                 dataKey="netUsdLiquidity"
-                name="Net USD Liquidity"
+                name="美元净流动性(UNL)"
                 stackId="1"
                 fill={themeColors.components.netUsdLiquidity}
                 stroke={themeColors.components.netUsdLiquidity}
