@@ -159,11 +159,6 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
             benchmarkInfo = benchmarkCache[benchmarkId];
             console.log(`使用缓存的对比标数据: ${benchmarkId}`);
             setBenchmarkInfo(benchmarkInfo);
-          } else if (benchmarkId && fetchingBenchmarkRef.current === benchmarkId) {
-            // 如果正在请求相同的benchmark，等待一下再重试
-            console.log(`正在请求对比标数据: ${benchmarkId}，稍后重试`);
-            setTimeout(() => fetchBenchmarkData(), 100);
-            return;
           } else {
             // 记录当前正在请求的benchmark
             if (benchmarkId) {
@@ -239,6 +234,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
       
       // 清理函数
       return () => {
+        setLoading(false);
         controller.abort(); // 取消请求
       };
     } else {

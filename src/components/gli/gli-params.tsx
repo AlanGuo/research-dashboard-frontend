@@ -15,7 +15,7 @@ interface GliParamsProps {
 
 export function GliParams({ onParamsChange }: GliParamsProps) {
   // 保存从API获取的对比标的列表
-  const [, setBenchmarks] = useState<BenchmarkAsset[]>([]);
+  const [benchmarks, setBenchmarks] = useState<BenchmarkAsset[]>([]);
   // 保存对比标的分类
   const [benchmarkCategories, setBenchmarkCategories] = useState<{[key: string]: BenchmarkAsset[]}>({});
   // 加载状态
@@ -99,7 +99,7 @@ export function GliParams({ onParamsChange }: GliParamsProps) {
     interval: '1W',  // 默认时间间隔为一周
     timeRange: '10y', // 默认时间范围为10年
     limit: 520,
-    offset: 0,  // 默认偏移为0
+    offset: 13,  // 默认偏移为13w
     invertBenchmarkYAxis: false // 默认不反转Y轴
   });
 
@@ -135,27 +135,49 @@ export function GliParams({ onParamsChange }: GliParamsProps) {
 
   // 根据时间间隔和时间范围计算limit
   const calculateLimit = (interval: string, timeRange: TimeRangeType): number => {
-    // 各个时间间隔的一年数据点数量
-    const pointsPerYear = {
-      '1D': 365, // 日线，一年约365个数据点
-      '1W': 52,  // 周线，一年约52个数据点
-      '1M': 12   // 月线，一年约12个数据点
-    };
+    // 计算每年的数据点数量
+    let pointsPerYear = 0;
+    switch (interval) {
+      case '1D':
+        pointsPerYear = 365; // 日线，每年约365个数据点
+        break;
+      case '1W':
+        pointsPerYear = 52;  // 周线，每年约52个数据点
+        break;
+      case '1M':
+        pointsPerYear = 12;  // 月线，每年约12个数据点
+        break;
+      default:
+        pointsPerYear = 52;  // 默认使用周线
+    }
     
-    // 各个时间范围的年数
-    const years = {
-      '1y': 1,
-      '3y': 3,
-      '5y': 5,
-      '10y': 10,
-      '20y': 20
-    };
+    // 根据时间范围计算总数据点数量
+    let years = 0;
+    switch (timeRange) {
+      case '1y': years = 1; break;
+      case '3y': years = 3; break;
+      case '5y': years = 5; break;
+      case '10y': years = 10; break;
+      case '20y': years = 20; break;
+      default: years = 10; // 默认10年
+    }
     
-    // 计算数据点数量
-    const basePoints = pointsPerYear[interval as keyof typeof pointsPerYear] || 365;
-    const yearMultiplier = years[timeRange];
-    
-    return basePoints * yearMultiplier;
+    return Math.ceil(pointsPerYear * years);
+  };
+  
+  // 根据lagDays和时间间隔计算offset
+  const calculateOffsetFromLagDays = (lagDays: number, interval: string): number => {
+    // 根据不同的时间间隔，将lagDays转换为对应的offset
+    switch (interval) {
+      case '1D':
+        return lagDays; // 日线，offset直接等于lagDays
+      case '1W':
+        return Math.round(lagDays / 7); // 周线，将天数转换为周数
+      case '1M':
+        return Math.round(lagDays / 30); // 月线，将天数转换为月数（近似）
+      default:
+        return Math.round(lagDays / 7); // 默认按周线处理
+    }
   };
 
   const handleSelectChange = (name: string, value: string) => {
@@ -165,9 +187,17 @@ export function GliParams({ onParamsChange }: GliParamsProps) {
     if (name === 'interval' || name === 'timeRange') {
       const interval = name === 'interval' ? value : (params.interval || '1D');
       const timeRange = name === 'timeRange' ? value as TimeRangeType : (params.timeRange as TimeRangeType || '1y');
-      
       const newLimit = calculateLimit(interval, timeRange);
       newParams = { ...newParams, limit: newLimit };
+      
+      // 如果时间间隔变化且有选择对比标的，重新计算offset
+      if (name === 'interval' && params.benchmark && params.benchmark !== 'none') {
+        const selectedBenchmark = benchmarks.find(b => b.id === params.benchmark);
+        if (selectedBenchmark) {
+          const offsetValue = calculateOffsetFromLagDays(selectedBenchmark.lagDays, interval);
+          newParams = { ...newParams, offset: offsetValue };
+        }
+      }
     }
     
     setParams(newParams);
@@ -176,8 +206,20 @@ export function GliParams({ onParamsChange }: GliParamsProps) {
   
   // 处理对比标的选择变化
   const handleBenchmarkChange = (value: string) => {
-    const newParams = { ...params, benchmark: value as BenchmarkType };
+    let newParams = { ...params, benchmark: value as BenchmarkType };
+    
+    // 如果选择了对比标的，根据lagDays自动计算offset
+    if (value !== 'none') {
+      const selectedBenchmark = benchmarks.find(b => b.id === value);
+      if (selectedBenchmark) {
+        // 根据当前interval计算offset
+        let offsetValue = calculateOffsetFromLagDays(selectedBenchmark.lagDays, params.interval || '1W');
+        newParams = { ...newParams, offset: offsetValue };
+      }
+    }
+    
     setParams(newParams);
+    onParamsChange(newParams);
     
     // 使用自定义事件通知父组件，避免触发 GLI 数据的重新请求
     const event = new CustomEvent('ui-params-change', { 
