@@ -87,6 +87,10 @@ const THEME_COLORS = {
 
 // GLI趋势时段数据将从API获取
 
+// 对比标的缓存机制，避免重复请求
+// 使用组件外部的变量来缓存数据，这样即使组件重新渲染也不会丢失缓存
+const benchmarkCache: Record<string, BenchmarkAsset> = {};
+
 export function GliChart({ data, params, trendPeriods }: GliChartProps) {
   // 对比标的数据
   const [benchmarkData, setBenchmarkData] = useState<KlineDataPoint[]>([]);
@@ -94,6 +98,12 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
   const [error, setError] = useState<string | null>(null);
   const [benchmarkInfo, setBenchmarkInfo] = useState<BenchmarkAsset | null>(null);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
+  
+  // 记录当前正在请求的benchmark ID，避免重复请求
+  const fetchingBenchmarkRef = React.useRef<string | null>(null);
+  
+  // 将 params.benchmark 转换为字符串类型，用于缓存查询
+  const benchmarkId = params.benchmark && params.benchmark !== 'none' ? params.benchmark : null;
   
   // 检测当前主题
   useEffect(() => {
@@ -125,8 +135,6 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
   // 根据当前主题获取颜色
   const themeColors = isDarkMode ? THEME_COLORS.dark : THEME_COLORS.light;
   
-  // 趋势时段数据现在通过props传入，不需要在组件内部获取
-
   // 单独管理对比标的数据获取，避免触发 GLI 数据的重新渲染
   useEffect(() => {
     // 如果选择了对比标的且不是'none'
@@ -143,14 +151,45 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
         try {
           console.log(`获取对比标的数据: ${params.benchmark}`);
           
-          // 先获取对比标的信息
-          const benchmarkResponse = await fetch(`/api/benchmark/${params.benchmark}`, { signal });
-          if (!benchmarkResponse.ok) {
-            throw new Error(`获取对比标信息失败: ${benchmarkResponse.status}`);
+          // 获取对比标的信息（优先使用缓存）
+          let benchmarkInfo: BenchmarkAsset;
+          
+          if (benchmarkId && benchmarkCache[benchmarkId]) {
+            // 使用缓存的数据
+            benchmarkInfo = benchmarkCache[benchmarkId];
+            console.log(`使用缓存的对比标数据: ${benchmarkId}`);
+            setBenchmarkInfo(benchmarkInfo);
+          } else if (benchmarkId && fetchingBenchmarkRef.current === benchmarkId) {
+            // 如果正在请求相同的benchmark，等待一下再重试
+            console.log(`正在请求对比标数据: ${benchmarkId}，稍后重试`);
+            setTimeout(() => fetchBenchmarkData(), 100);
+            return;
+          } else {
+            // 记录当前正在请求的benchmark
+            if (benchmarkId) {
+              fetchingBenchmarkRef.current = benchmarkId;
+              
+              // 请求API获取数据
+              const benchmarkResponse = await fetch(`/api/benchmark/${benchmarkId}`, { signal });
+              if (!benchmarkResponse.ok) {
+                throw new Error(`获取对比标信息失败: ${benchmarkResponse.status}`);
+              }
+              
+              benchmarkInfo = await benchmarkResponse.json();
+              
+              // 将数据存入缓存
+              benchmarkCache[benchmarkId] = benchmarkInfo;
+              console.log(`对比标数据已缓存: ${benchmarkId}`);
+              
+              // 清除正在请求的标记
+              fetchingBenchmarkRef.current = null;
+              
+              setBenchmarkInfo(benchmarkInfo);
+            } else {
+              throw new Error('无效的对比标ID');
+            }
           }
           
-          const benchmarkInfo = await benchmarkResponse.json();
-          setBenchmarkInfo(benchmarkInfo); // 保存对比标信息
           const symbol = benchmarkInfo.symbol; // 使用正确的交易符号
           
           // 构建查询参数
@@ -429,21 +468,50 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
 
   // 当选择的对比标的变化时，获取对比标的信息
   useEffect(() => {
+    // 获取对比标的信息（使用缓存机制）
     const fetchBenchmarkInfo = async () => {
-      if (params.benchmark && params.benchmark !== 'none') {
+      // 将 params.benchmark 转换为字符串类型，用于缓存查询
+      const benchId = params.benchmark && params.benchmark !== 'none' ? params.benchmark : null;
+      
+      if (benchId) {
         try {
+          // 优先使用缓存数据
+          if (benchmarkCache[benchId]) {
+            console.log(`使用缓存的对比标信息: ${benchId}`);
+            setBenchmarkInfo(benchmarkCache[benchId]);
+            return;
+          }
+          
+          // 如果正在请求相同的benchmark，等待一下再重试
+          if (fetchingBenchmarkRef.current === benchId) {
+            console.log(`正在请求对比标信息: ${benchId}，稍后重试`);
+            setTimeout(() => fetchBenchmarkInfo(), 100);
+            return;
+          }
+          
+          // 记录当前正在请求的benchmark
+          fetchingBenchmarkRef.current = benchId;
+          
           // 使用正确的API路径
-          const response = await fetch(`/api/benchmark/${params.benchmark}`);
+          const response = await fetch(`/api/benchmark/${benchId}`);
           if (response.ok) {
             const info = await response.json();
+            // 将数据存入缓存
+            benchmarkCache[benchId] = info;
+            console.log(`对比标信息已缓存: ${benchId}`);
             setBenchmarkInfo(info);
           } else {
             console.error(`Error fetching benchmark: ${response.statusText}`);
             setBenchmarkInfo(null);
           }
+          
+          // 清除正在请求的标记
+          fetchingBenchmarkRef.current = null;
         } catch (error) {
-          console.error(`Failed to fetch benchmark with id ${params.benchmark}:`, error);
+          console.error(`Failed to fetch benchmark with id ${benchId}:`, error);
           setBenchmarkInfo(null);
+          // 清除正在请求的标记
+          fetchingBenchmarkRef.current = null;
         }
       } else {
         setBenchmarkInfo(null);

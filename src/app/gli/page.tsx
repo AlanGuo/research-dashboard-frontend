@@ -182,7 +182,7 @@ export default function GliDashboard() {
         
         {/* 当选择了对比标的时，显示对比标的趋势表格 */}
         {currentParams.benchmark !== 'none' && (
-          <div className="bg-background rounded-lg p-6 shadow-sm">
+          <div className="bg-background rounded-lg p-6 pb-2 shadow-sm">
             <GliBenchmarkTrendTable 
               trendPeriods={trendPeriods} 
               benchmark={currentParams.benchmark}
