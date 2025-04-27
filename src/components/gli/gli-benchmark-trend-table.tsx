@@ -112,9 +112,6 @@ export function GliBenchmarkTrendTable({ trendPeriods, benchmark, offset = 0, in
       const isSameBenchmark = prevBenchmarkRef.current === benchmarkId;
       const isParamChange = isSameBenchmark && (prevOffsetRef.current !== offset || prevIntervalRef.current !== interval);
       
-      // 检查是否有缓存数据
-      const hasCachedData = benchmarkId && benchmarkCache[benchmarkId];
-      
       // 更新当前值为下次比较的基准
       prevBenchmarkRef.current = benchmarkId;
       prevOffsetRef.current = offset;

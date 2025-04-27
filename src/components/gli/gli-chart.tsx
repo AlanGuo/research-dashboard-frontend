@@ -246,6 +246,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
       setBenchmarkData([]);
       setBenchmarkInfo(null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.benchmark, params.interval, params.limit]);
   
   // 根据时间间隔格式化日期
@@ -466,60 +467,60 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
     return result;
   }, [data, benchmarkData, params.interval, params.offset]);
 
-  // 当选择的对比标的变化时，获取对比标的信息
-  useEffect(() => {
-    // 获取对比标的信息（使用缓存机制）
-    const fetchBenchmarkInfo = async () => {
-      // 将 params.benchmark 转换为字符串类型，用于缓存查询
-      const benchId = params.benchmark && params.benchmark !== 'none' ? params.benchmark : null;
+  // // 当选择的对比标的变化时，获取对比标的信息
+  // useEffect(() => {
+  //   // 获取对比标的信息（使用缓存机制）
+  //   const fetchBenchmarkInfo = async () => {
+  //     // 将 params.benchmark 转换为字符串类型，用于缓存查询
+  //     const benchId = params.benchmark && params.benchmark !== 'none' ? params.benchmark : null;
       
-      if (benchId) {
-        try {
-          // 优先使用缓存数据
-          if (benchmarkCache[benchId]) {
-            console.log(`使用缓存的对比标信息: ${benchId}`);
-            setBenchmarkInfo(benchmarkCache[benchId]);
-            return;
-          }
+  //     if (benchId) {
+  //       try {
+  //         // 优先使用缓存数据
+  //         if (benchmarkCache[benchId]) {
+  //           console.log(`使用缓存的对比标信息: ${benchId}`);
+  //           setBenchmarkInfo(benchmarkCache[benchId]);
+  //           return;
+  //         }
           
-          // 如果正在请求相同的benchmark，等待一下再重试
-          if (fetchingBenchmarkRef.current === benchId) {
-            console.log(`正在请求对比标信息: ${benchId}，稍后重试`);
-            setTimeout(() => fetchBenchmarkInfo(), 100);
-            return;
-          }
+  //         // 如果正在请求相同的benchmark，等待一下再重试
+  //         if (fetchingBenchmarkRef.current === benchId) {
+  //           console.log(`正在请求对比标信息: ${benchId}，稍后重试`);
+  //           setTimeout(() => fetchBenchmarkInfo(), 100);
+  //           return;
+  //         }
           
-          // 记录当前正在请求的benchmark
-          fetchingBenchmarkRef.current = benchId;
+  //         // 记录当前正在请求的benchmark
+  //         fetchingBenchmarkRef.current = benchId;
           
-          // 使用正确的API路径
-          const response = await fetch(`/api/benchmark/${benchId}`);
-          if (response.ok) {
-            const info = await response.json();
-            // 将数据存入缓存
-            benchmarkCache[benchId] = info;
-            console.log(`对比标信息已缓存: ${benchId}`);
-            setBenchmarkInfo(info);
-          } else {
-            console.error(`Error fetching benchmark: ${response.statusText}`);
-            setBenchmarkInfo(null);
-          }
+  //         // 使用正确的API路径
+  //         const response = await fetch(`/api/benchmark/${benchId}`);
+  //         if (response.ok) {
+  //           const info = await response.json();
+  //           // 将数据存入缓存
+  //           benchmarkCache[benchId] = info;
+  //           console.log(`对比标信息已缓存: ${benchId}`);
+  //           setBenchmarkInfo(info);
+  //         } else {
+  //           console.error(`Error fetching benchmark: ${response.statusText}`);
+  //           setBenchmarkInfo(null);
+  //         }
           
-          // 清除正在请求的标记
-          fetchingBenchmarkRef.current = null;
-        } catch (error) {
-          console.error(`Failed to fetch benchmark with id ${benchId}:`, error);
-          setBenchmarkInfo(null);
-          // 清除正在请求的标记
-          fetchingBenchmarkRef.current = null;
-        }
-      } else {
-        setBenchmarkInfo(null);
-      }
-    };
+  //         // 清除正在请求的标记
+  //         fetchingBenchmarkRef.current = null;
+  //       } catch (error) {
+  //         console.error(`Failed to fetch benchmark with id ${benchId}:`, error);
+  //         setBenchmarkInfo(null);
+  //         // 清除正在请求的标记
+  //         fetchingBenchmarkRef.current = null;
+  //       }
+  //     } else {
+  //       setBenchmarkInfo(null);
+  //     }
+  //   };
     
-    fetchBenchmarkInfo();
-  }, [params.benchmark]);
+  //   fetchBenchmarkInfo();
+  // }, [params.benchmark]);
   
   // 获取对比标的名称
   const getBenchmarkName = () => {
