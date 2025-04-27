@@ -305,7 +305,7 @@ export function GliBenchmarkTrendTable({ trendPeriods, benchmark, offset = 0, in
                           ? 'text-green-800 dark:text-green-300' 
                           : 'text-red-800 dark:text-red-300'}`}
                         >
-                          {formatDate(period.startDate)} - {formatDate(period.endDate)}
+                          {formatDate(period.startDate)} {formatDate(period.endDate)}
                         </span>
                         {/* 显示GLI涨跌幅 */}
                         {period.percentChange !== undefined && (
