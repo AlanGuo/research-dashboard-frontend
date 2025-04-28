@@ -17,7 +17,6 @@ interface AssetTrendData {
   name: string;
   symbol: string;
   category: string;
-  lagDays: number;
   intervalType?: string; // 时间间隔类型
   trendPerformance: Record<string, {
     change: number;
@@ -222,7 +221,6 @@ export function GliBenchmarkTrendTable({ trendPeriods, benchmark, offset = 0, in
             
             return {
               ...prevData,
-              lagDays: calculateLagDaysForDisplay(interval, offset),
               intervalType: interval,
               trendPerformance: trendPerformance
             };
@@ -235,7 +233,6 @@ export function GliBenchmarkTrendTable({ trendPeriods, benchmark, offset = 0, in
             name: benchmarkInfo.name,
             symbol: benchmarkInfo.symbol,
             category: benchmarkInfo.category,
-            lagDays: calculateLagDaysForDisplay(interval, offset), // 根据间隔类型计算滞后天数
             intervalType: interval, // 保存间隔类型以便显示
             trendPerformance
           };
@@ -255,16 +252,6 @@ export function GliBenchmarkTrendTable({ trendPeriods, benchmark, offset = 0, in
     fetchBenchmarkData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [benchmark, offset, interval, trendPeriods.length]); // 只依赖trendPeriods.length而不是整个数组
-  
-  // 根据间隔类型计算滞后天数（用于显示）
-  const calculateLagDaysForDisplay = (intervalType: string, intervalCount: number): number => {
-    switch (intervalType) {
-      case '1D': return intervalCount; // 日线，直接显示天数
-      case '1W': return intervalCount * 7; // 周线，转换为天数
-      case '1M': return intervalCount * 30; // 月线，转换为天数（约数）
-      default: return intervalCount * 7; // 默认使用周间隔
-    }
-  };
 
   // 格式化日期为更友好的显示
   const formatDate = (dateString: string): string => {
@@ -371,14 +358,9 @@ export function GliBenchmarkTrendTable({ trendPeriods, benchmark, offset = 0, in
                 <TableCell className="font-medium sticky left-0 bg-background z-10 shadow-sm whitespace-nowrap">
                   <div className="flex flex-col">
                     <span className="font-semibold">{benchmarkData.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      滞后{benchmarkData.lagDays}天 
-                      {benchmarkData.intervalType && (
-                        <span className="ml-1 text-gray-400">
-                          ({offset}{getIntervalTypeDisplay(benchmarkData.intervalType)})
-                        </span>
-                      )}
-                    </span>
+                    {benchmarkData.intervalType && (<span className="text-xs text-muted-foreground">
+                      滞后{offset}{getIntervalTypeDisplay(benchmarkData.intervalType)}
+                    </span>)}
                   </div>
                 </TableCell>
                 {sortedTrendPeriods.map((period) => {
