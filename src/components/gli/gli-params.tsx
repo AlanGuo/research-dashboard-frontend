@@ -159,6 +159,8 @@ export function GliParams({ onParamsChange }: GliParamsProps) {
       case '5y': years = 5; break;
       case '10y': years = 10; break;
       case '20y': years = 20; break;
+      case '30y': years = 30; break;
+      case '50y': years = 50; break;
       default: years = 10; // 默认10年
     }
     
@@ -485,6 +487,8 @@ export function GliParams({ onParamsChange }: GliParamsProps) {
                     <SelectItem value="5y">5 年</SelectItem>
                     <SelectItem value="10y">10 年</SelectItem>
                     <SelectItem value="20y">20 年</SelectItem>
+                    <SelectItem value="30y">30 年</SelectItem>
+                    <SelectItem value="50y">50 年</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

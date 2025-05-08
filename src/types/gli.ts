@@ -69,7 +69,7 @@ export interface GliTrendResponse {
 export type BenchmarkType = string | undefined;
 
 // 时间范围类型
-export type TimeRangeType = '1y' | '3y' | '5y' | '10y' | '20y';
+export type TimeRangeType = '1y' | '3y' | '5y' | '10y' | '20y' | '30y' | '50y';
 
 // GLI趋势时段定义
 export interface TrendPeriod {
