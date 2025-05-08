@@ -39,7 +39,9 @@ export interface GliDataPoint {
   other_m2_total?: number;
   
   // 总计
-  total: number;
+  central_bank_total?: number;
+  m2_total?: number;
+  central_bank_div_m2_ratio?: number;
 }
 
 // GLI API响应接口
@@ -50,6 +52,17 @@ export interface GliResponse {
   timestamp?: string;
   params?: GliParams;
   message?: string;
+}
+
+// GLI趋势API响应接口
+export interface GliTrendResponse {
+  success: boolean;
+  data: {
+    centralBankTrendPeriods: TrendPeriod[];
+    m2TrendPeriods: TrendPeriod[];
+  };
+  timestamp: string;
+  error?: string;
 }
 
 // 对比标的类型

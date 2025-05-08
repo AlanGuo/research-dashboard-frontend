@@ -6,12 +6,16 @@ import { GliParams } from '@/components/gli/gli-params';
 import { GliTrendTable } from '@/components/gli/gli-trend-table';
 import { GliBenchmarkTrendTable } from '@/components/gli/gli-benchmark-trend-table';
 import { GliDataPoint, GliParams as GliParamsType, GliResponse, TrendPeriod } from '@/types/gli';
+import Head from 'next/head';
 
 export default function GliDashboard() {
   const [data, setData] = useState<GliDataPoint[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [trendPeriods, setTrendPeriods] = useState<TrendPeriod[]>([]);
+  const [trendPeriods, setTrendPeriods] = useState<{
+    centralBankTrendPeriods: TrendPeriod[];
+    m2TrendPeriods: TrendPeriod[];
+  }>({ centralBankTrendPeriods: [], m2TrendPeriods: [] });
 
   // 将参数分为两部分：API参数（需要重新请求数据）和UI参数（只影响显示）
   const [apiParams, setApiParams] = useState<Omit<GliParamsType, 'offset' | 'invertBenchmarkYAxis' | 'benchmark'>>({    
@@ -23,10 +27,10 @@ export default function GliDashboard() {
     pbc_active: true,
     boj_active: true,
     other_active: false,
-    usa_active: false,
-    europe_active: false,
-    china_active: false,
-    japan_active: false,
+    usa_active: true,
+    europe_active: true,
+    china_active: true,
+    japan_active: true,
     other_m2_active: false,
     interval: '1W',
     timeRange: '10y' as GliParamsType['timeRange'],
@@ -94,8 +98,11 @@ export default function GliDashboard() {
         }
         
         const result = await response.json();
-        if (result.success && Array.isArray(result.data)) {
-          setTrendPeriods(result.data);
+        if (result.success && result.data && result.data.centralBankTrendPeriods && result.data.m2TrendPeriods) {
+          setTrendPeriods({
+            centralBankTrendPeriods: result.data.centralBankTrendPeriods,
+            m2TrendPeriods: result.data.m2TrendPeriods
+          });
         }
       } catch (err) {
         // 如果不是因为终止而导致的错误，才记录日志
@@ -166,55 +173,68 @@ export default function GliDashboard() {
   };
 
   return (
-    <div className="container mx-auto p-6 max-w-[1920px]">
-      <h1 className="text-2xl font-bold mb-2">全球流动性指数</h1>
-      
-      <div className="mb-8">
-        <p className="text-gray-600 mb-6">
-          监控来自各国央行和货币供应的全球流动性数据
-        </p>
+    <div>
+      <Head>
+          <title>全球流动性</title> 
+      </Head>
+      <div className="container mx-auto p-6 max-w-[1920px]">
+        <h1 className="text-2xl font-bold mb-2">全球流动性指数</h1>
         
-        {/* 参数选择放在图表上方 */}
-        <div className="mb-8 rounded-lg">
-          <h3 className="text-lg font-medium mb-4">参数设置</h3>
-          <GliParams onParamsChange={handleParamsChange} />
-        </div>
-        
-        {/* 当选择了对比标的时，显示对比标的趋势表格 */}
-        {currentParams.benchmark !== 'none' && (
-          <div className="bg-background rounded-lg p-6 pb-2 shadow-sm">
-            <GliBenchmarkTrendTable 
-              trendPeriods={trendPeriods} 
-              benchmark={currentParams.benchmark}
-              offset={currentParams.offset}
-              interval={currentParams.interval}
-            />
+        <div className="mb-8">
+          <p className="text-gray-600 mb-6">
+            监控来自各国央行和货币供应的全球流动性数据
+          </p>
+          
+          {/* 参数选择放在图表上方 */}
+          <div className="mb-8 rounded-lg">
+            <h3 className="text-lg font-medium mb-4">参数设置</h3>
+            <GliParams onParamsChange={handleParamsChange} />
           </div>
-        )}
+          
+          {/* 当选择了对比标的时，显示对比标的趋势表格 */}
+          {currentParams.benchmark !== 'none' && (
+            <div className="bg-background rounded-lg p-6 pb-2 shadow-sm">
+              <GliBenchmarkTrendTable 
+                trendPeriods={trendPeriods} 
+                benchmark={currentParams.benchmark}
+                offset={currentParams.offset}
+                interval={currentParams.interval}
+              />
+            </div>
+          )}
 
-        {/* 图表显示 */}
-        <div className="mt-8 mb-12">
-          <div className="bg-background rounded-lg transition-colors">
-            {loading ? (
-              <div className="flex flex-col items-center justify-center h-[800px] gap-2">
-                <div className="h-5 w-5 border-t-2 border-primary rounded-full animate-spin"></div>
-                <p className="text-muted-foreground">图表加载中...</p>
-              </div>
-            ) : error ? (
-              <div className="flex justify-center items-center h-[800px]">
-                <p className="text-red-500">{error}</p>
-              </div>
-            ) : (
-              <GliChart data={data} params={currentParams} trendPeriods={trendPeriods} />
-            )}
+          {/* 图表显示 */}
+          <div className="mt-8 mb-12">
+            <div className="bg-background rounded-lg transition-colors">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center h-[800px] gap-2">
+                  <div className="h-5 w-5 border-t-2 border-primary rounded-full animate-spin"></div>
+                  <p className="text-muted-foreground">图表加载中...</p>
+                </div>
+              ) : error ? (
+                <div className="flex justify-center items-center h-[800px]">
+                  <div className="flex-1 overflow-hidden">
+                    <div className="h-full overflow-auto">
+                      <GliChart data={data} params={currentParams} trendPeriods={trendPeriods} />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex-1 overflow-hidden">
+                  <div className="h-full overflow-auto">
+                    <GliChart data={data} params={currentParams} trendPeriods={trendPeriods} />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-        
-        {/* 趋势表格 - 显示各资产在不同趋势时期的表现 */}
-        <div className="mt-12 bg-background rounded-lg p-6 shadow-sm">
-          <GliTrendTable 
-            trendPeriods={trendPeriods}
-          />
+          
+          {/* 趋势表格 - 显示各资产在不同趋势时期的表现 */}
+          <div className="flex-1 overflow-hidden">
+            <div className="h-full overflow-auto">
+              <GliTrendTable trendPeriods={trendPeriods} benchmark={currentParams.benchmark} offset={currentParams.offset} />
+            </div>
+          </div>
         </div>
       </div>
     </div>

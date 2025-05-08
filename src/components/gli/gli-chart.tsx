@@ -30,10 +30,11 @@ interface KlineDataPoint {
 interface GliChartProps {
   data: GliDataPoint[];
   params: GliParams; // 添加params参数
-  trendPeriods: TrendPeriod[]; // 添加趋势时段数据
+  trendPeriods: {
+    centralBankTrendPeriods: TrendPeriod[];
+    m2TrendPeriods: TrendPeriod[];
+  }; // 添加央行和M2的趋势时段数据
 }
-
-// 使用从 types/gli 导入的 TrendPeriod 接口
 
 // 主题相关颜色配置
 const THEME_COLORS = {
@@ -41,15 +42,17 @@ const THEME_COLORS = {
     text: '#000000',
     grid: '#e0e0e0',
     background: '#ffffff',
-    total: '#444',
     trend: {
       up: '#90EE90',   // 上升趋势，浅绿色
       down: '#FFB6C1', // 下降趋势，浅红色
     },
     // 流动性组件颜色
     components: {
+      centralBankTotal: '#000', // 央行总负债
+      m2Total: '#666',        // M2总量
+      ratio: '#444',          // 央行总负债/M2比率，黑色
       netUsdLiquidity: '#8884d8',
-      ecb: '#82ca9d',
+      ecb: '#006400',
       pbc: '#ffc658',
       boj: '#ff8042',
       other_cb: '#0088fe',
@@ -64,15 +67,17 @@ const THEME_COLORS = {
     text: '#ffffff',
     grid: '#333333',
     background: '#121212',
-    total: '#888', // 青色，在深色背景上更加醒目
     trend: {
       up: '#004d00',   // 上升趋势，深绿色
       down: '#5c0000', // 下降趋势，深红色
     },
     // 流动性组件颜色 - 暗黑模式下更高饱和度和亮度
     components: {
+      centralBankTotal: '#ddd', // 央行总负债
+      m2Total: '#888',        // M2总量
+      ratio: '#ddd',          // 央行总负债/M2比率，白色（暗黑模式下的“黑色”）
       netUsdLiquidity: '#a4a0ff', // 更亮的紫色
-      ecb: '#4ade80', // 更亮的绿色
+      ecb: '#008800', // 更亮的绿色
       pbc: '#ffd700', // 更亮的黄色
       boj: '#ff9966', // 更亮的橙色
       other_cb: '#60a5fa', // 更亮的蓝色
@@ -278,9 +283,186 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
   };
 
   // 将日期字符串转换为时间戳
-  const dateToTimestamp = (dateStr: string): number => {
-    return new Date(dateStr).getTime();
+  const dateToTimestamp = (dateString: string): number => {
+    return new Date(dateString).getTime();
   };
+  
+  // 分析央行和M2趋势的组合关系
+  const analyzeTrendCombinations = () => {
+    // 定义返回结果类型
+    type TrendCombination = {
+      startDate: string;
+      endDate: string;
+      cbTrend?: 'up' | 'down'; // 可能没有央行趋势
+      m2Trend?: 'up' | 'down'; // 可能没有M2趋势
+      // 根据要求定义的组合类型
+      combinationType: 'both-up' | 'both-down' | 'm2-up-cb-down' | 'm2-down-cb-up' | 'only-cb-up' | 'only-cb-down' | 'only-m2-up' | 'only-m2-down';
+    };
+    
+    const combinations: TrendCombination[] = [];
+    
+    // 处理重叠的趋势期间
+    // 对每个央行趋势期间
+    trendPeriods.centralBankTrendPeriods.forEach(cbPeriod => {
+      // 对每个M2趋势期间
+      trendPeriods.m2TrendPeriods.forEach(m2Period => {
+        // 检查是否有时间重叠
+        const cbStart = new Date(cbPeriod.startDate).getTime();
+        const cbEnd = new Date(cbPeriod.endDate).getTime();
+        const m2Start = new Date(m2Period.startDate).getTime();
+        const m2End = new Date(m2Period.endDate).getTime();
+        
+        // 判断是否有时间重叠
+        const hasOverlap = (cbStart <= m2End && cbEnd >= m2Start);
+        
+        if (hasOverlap) {
+          // 计算重叠区域
+          const overlapStart = Math.max(cbStart, m2Start);
+          const overlapEnd = Math.min(cbEnd, m2End);
+          
+          // 确定组合类型
+          let combinationType: TrendCombination['combinationType'];
+          
+          if (cbPeriod.trend === 'up' && m2Period.trend === 'up') {
+            combinationType = 'both-up';
+          } else if (cbPeriod.trend === 'down' && m2Period.trend === 'down') {
+            combinationType = 'both-down';
+          } else if (cbPeriod.trend === 'down' && m2Period.trend === 'up') {
+            combinationType = 'm2-up-cb-down';
+          } else {
+            combinationType = 'm2-down-cb-up';
+          }
+          
+          // 添加到组合列表
+          combinations.push({
+            startDate: new Date(overlapStart).toISOString().split('T')[0],
+            endDate: new Date(overlapEnd).toISOString().split('T')[0],
+            cbTrend: cbPeriod.trend,
+            m2Trend: m2Period.trend,
+            combinationType
+          });
+        }
+      });
+    });
+    
+    // 处理只有央行趋势的时间段
+    trendPeriods.centralBankTrendPeriods.forEach(cbPeriod => {
+      const cbStart = new Date(cbPeriod.startDate).getTime();
+      const cbEnd = new Date(cbPeriod.endDate).getTime();
+      
+      // 检查这个时间段是否已经被包含在组合中
+      let currentStart = cbStart;
+      
+      // 按时间排序组合
+      const sortedCombinations = [...combinations].sort((a, b) => {
+        return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+      });
+      
+      // 检查这个央行趋势期间是否有未被覆盖的部分
+      for (const combo of sortedCombinations) {
+        const comboStart = new Date(combo.startDate).getTime();
+        const comboEnd = new Date(combo.endDate).getTime();
+        
+        // 如果这个组合与当前央行趋势期间有重叠
+        if (comboStart <= cbEnd && comboEnd >= cbStart) {
+          // 如果有未覆盖的部分
+          if (comboStart > currentStart) {
+            // 添加未覆盖的部分
+            combinations.push({
+              startDate: new Date(currentStart).toISOString().split('T')[0],
+              endDate: new Date(comboStart).toISOString().split('T')[0],
+              cbTrend: cbPeriod.trend,
+              combinationType: cbPeriod.trend === 'up' ? 'only-cb-up' : 'only-cb-down'
+            });
+          }
+          // 更新当前起始时间
+          currentStart = Math.max(currentStart, comboEnd);
+        }
+      }
+      
+      // 如果还有未覆盖的部分
+      if (currentStart < cbEnd) {
+        combinations.push({
+          startDate: new Date(currentStart).toISOString().split('T')[0],
+          endDate: new Date(cbEnd).toISOString().split('T')[0],
+          cbTrend: cbPeriod.trend,
+          combinationType: cbPeriod.trend === 'up' ? 'only-cb-up' : 'only-cb-down'
+        });
+      }
+    });
+    
+    // 处理只有M2趋势的时间段
+    trendPeriods.m2TrendPeriods.forEach(m2Period => {
+      const m2Start = new Date(m2Period.startDate).getTime();
+      const m2End = new Date(m2Period.endDate).getTime();
+      
+      // 检查这个时间段是否已经被包含在组合中
+      let currentStart = m2Start;
+      
+      // 按时间排序组合
+      const sortedCombinations = [...combinations].sort((a, b) => {
+        return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+      });
+      
+      // 检查这个M2趋势期间是否有未被覆盖的部分
+      for (const combo of sortedCombinations) {
+        const comboStart = new Date(combo.startDate).getTime();
+        const comboEnd = new Date(combo.endDate).getTime();
+        
+        // 如果这个组合与当前M2趋势期间有重叠
+        if (comboStart <= m2End && comboEnd >= m2Start) {
+          // 如果有未覆盖的部分
+          if (comboStart > currentStart) {
+            // 添加未覆盖的部分
+            combinations.push({
+              startDate: new Date(currentStart).toISOString().split('T')[0],
+              endDate: new Date(comboStart).toISOString().split('T')[0],
+              m2Trend: m2Period.trend,
+              combinationType: m2Period.trend === 'up' ? 'only-m2-up' : 'only-m2-down'
+            });
+          }
+          // 更新当前起始时间
+          currentStart = Math.max(currentStart, comboEnd);
+        }
+      }
+      
+      // 如果还有未覆盖的部分
+      if (currentStart < m2End) {
+        combinations.push({
+          startDate: new Date(currentStart).toISOString().split('T')[0],
+          endDate: new Date(m2End).toISOString().split('T')[0],
+          m2Trend: m2Period.trend,
+          combinationType: m2Period.trend === 'up' ? 'only-m2-up' : 'only-m2-down'
+        });
+      }
+    });
+    
+    return combinations;
+  };
+  
+  // 获取趋势组合的颜色
+  const getTrendCombinationColor = (combinationType: string): string => {
+    switch (combinationType) {
+      case 'both-up':
+        return '#4CAF50'; // 绿色
+      case 'both-down':
+        return '#F44336'; // 红色
+      case 'm2-up-cb-down':
+      case 'm2-down-cb-up':
+        return '#FF9800'; // 橙色，走势不同的情况统一使用橙色
+      case 'only-cb-up':
+      case 'only-m2-up':
+        return '#A5D6A7'; // 淡绿色，只有一个趋势且为上升
+      case 'only-cb-down':
+      case 'only-m2-down':
+        return '#FFCDD2'; // 淡红色，只有一个趋势且为下降
+      default:
+        return '#9E9E9E'; // 灰色（默认）
+    }
+  };
+  
+  // 计算趋势组合
+  const trendCombinations = analyzeTrendCombinations();
   
   // 查找最近的对比标的值
   const findNearestBenchmarkValue = (dateKey: number, benchmarkMap: Record<number, number>): number | undefined => {
@@ -401,8 +583,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
       return {
         date: dateStr,
         timestamp: d.timestamp,
-        dateKey: dateKey, // 原始日期键用于其他目的
-        total: d.total / trillion,
+        dateKey, // 原始日期键用于其他目的
         // 央行数据
         netUsdLiquidity, // 美元净流动性
         ecb: d.ecb ? d.ecb / trillion : undefined,
@@ -416,6 +597,11 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
         china: d.china ? d.china / trillion : undefined,
         japan: d.japan ? d.japan / trillion : undefined,
         other_m2_total: d.other_m2_total ? d.other_m2_total / trillion : undefined,
+        
+        // 总计数据
+        central_bank_total: d.central_bank_total ? d.central_bank_total / trillion : undefined,
+        m2_total: d.m2_total ? d.m2_total / trillion : undefined,
+        central_bank_div_m2_ratio: d.central_bank_div_m2_ratio,
         
         // 对比标的数据 - 使用偏移后的日期键
         // 如果当前日期没有数据，尝试查找最近的有效数据
@@ -440,7 +626,6 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
             timestamp: item.timestamp,
             dateKey: dateWithoutTime,
             // 添加必要的空字段以符合类型
-            total: 0,
             netUsdLiquidity: undefined,
             ecb: undefined,
             pbc: undefined,
@@ -451,6 +636,9 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
             china: undefined,
             japan: undefined,
             other_m2_total: undefined,
+            central_bank_total: undefined,
+            m2_total: undefined,
+            central_bank_div_m2_ratio: undefined,
             benchmarkValue: item.close
           };
         });
@@ -462,61 +650,6 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
     
     return result;
   }, [data, benchmarkData, params.interval, params.offset]);
-
-  // // 当选择的对比标的变化时，获取对比标的信息
-  // useEffect(() => {
-  //   // 获取对比标的信息（使用缓存机制）
-  //   const fetchBenchmarkInfo = async () => {
-  //     // 将 params.benchmark 转换为字符串类型，用于缓存查询
-  //     const benchId = params.benchmark && params.benchmark !== 'none' ? params.benchmark : null;
-      
-  //     if (benchId) {
-  //       try {
-  //         // 优先使用缓存数据
-  //         if (benchmarkCache[benchId]) {
-  //           console.log(`使用缓存的对比标信息: ${benchId}`);
-  //           setBenchmarkInfo(benchmarkCache[benchId]);
-  //           return;
-  //         }
-          
-  //         // 如果正在请求相同的benchmark，等待一下再重试
-  //         if (fetchingBenchmarkRef.current === benchId) {
-  //           console.log(`正在请求对比标信息: ${benchId}，稍后重试`);
-  //           setTimeout(() => fetchBenchmarkInfo(), 100);
-  //           return;
-  //         }
-          
-  //         // 记录当前正在请求的benchmark
-  //         fetchingBenchmarkRef.current = benchId;
-          
-  //         // 使用正确的API路径
-  //         const response = await fetch(`/api/benchmark/${benchId}`);
-  //         if (response.ok) {
-  //           const info = await response.json();
-  //           // 将数据存入缓存
-  //           benchmarkCache[benchId] = info;
-  //           console.log(`对比标信息已缓存: ${benchId}`);
-  //           setBenchmarkInfo(info);
-  //         } else {
-  //           console.error(`Error fetching benchmark: ${response.statusText}`);
-  //           setBenchmarkInfo(null);
-  //         }
-          
-  //         // 清除正在请求的标记
-  //         fetchingBenchmarkRef.current = null;
-  //       } catch (error) {
-  //         console.error(`Failed to fetch benchmark with id ${benchId}:`, error);
-  //         setBenchmarkInfo(null);
-  //         // 清除正在请求的标记
-  //         fetchingBenchmarkRef.current = null;
-  //       }
-  //     } else {
-  //       setBenchmarkInfo(null);
-  //     }
-  //   };
-    
-  //   fetchBenchmarkInfo();
-  // }, [params.benchmark]);
   
   // 获取对比标的名称
   const getBenchmarkName = () => {
@@ -530,11 +663,17 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
 
 
   
-  // 计算总量 - 用于显示在tooltip中
-  const calculateTotal = (dataPoint: Record<string, number | undefined>) => {
+  // 计算央行总负债 - 用于显示在tooltip中
+  const calculateCentralBankTotal = (dataPoint: Record<string, number | undefined>) => {
+    // 如果数据点已经包含计算好的central_bank_total，直接使用
+    if (dataPoint.central_bank_total !== undefined) {
+      return dataPoint.central_bank_total;
+    }
+    
+    // 否则手动计算
     let total = 0;
     
-    // 添加所有活跃的GLI组件
+    // 添加所有活跃的央行组件
     if (params.unl_active && dataPoint.netUsdLiquidity !== undefined) {
       total += dataPoint.netUsdLiquidity;
     }
@@ -550,6 +689,21 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
     if (params.other_active && dataPoint.other_cb_total !== undefined) {
       total += dataPoint.other_cb_total;
     }
+    
+    return total;
+  };
+  
+  // 计算M2总量 - 用于显示在tooltip中
+  const calculateM2Total = (dataPoint: Record<string, number | undefined>) => {
+    // 如果数据点已经包含计算好的m2_total，直接使用
+    if (dataPoint.m2_total !== undefined) {
+      return dataPoint.m2_total;
+    }
+    
+    // 否则手动计算
+    let total = 0;
+    
+    // 添加所有活跃的M2组件
     if (params.usa_active && dataPoint.usa !== undefined) {
       total += dataPoint.usa;
     }
@@ -660,11 +814,11 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
   }
 
   return (
-    <div className="w-full h-[800px] flex flex-col" style={{ backgroundColor: themeColors.background, borderRadius: '8px', padding: '16px' }}>
+    <div className="w-full h-[900px] flex flex-col" style={{ backgroundColor: themeColors.background, borderRadius: '8px', padding: '16px' }}>
       {/* 总量图表 - 显示GLI总量和对比标的的线图 */}
       <div className="w-full" style={{ height: totalChartHeight, backgroundColor: themeColors.background }}>
         <ResponsiveContainer width="100%" height="100%"> 
-          <ComposedChart data={chartData} margin={{ top: 0, right: 5, left: 5, bottom: 0 }}>
+          <ComposedChart data={chartData} margin={{ top: 0, right: 5, left: 40, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={themeColors.grid} />
             <XAxis 
               dataKey="timestamp" 
@@ -675,14 +829,26 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
               domain={[timeRange.min, timeRange.max]}
               hide
             />
-            {/* 左侧Y轴，显示GLI总量数据 */}
+            {/* 左侧Y轴，显示央行总负债数据 */}
             <YAxis 
               yAxisId="left"
               orientation="left"
               tickFormatter={(value) => `${value.toFixed(1)}T`}
               domain={['auto', 'auto']}
-              tick={{ fill: themeColors.text, fontSize: 12  }}
+              tick={{ fill: themeColors.text, fontSize: 12 }}
               stroke={themeColors.grid}
+              label={{ value: '央行总负债', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fontSize: 12 } }}
+            />
+            
+            {/* 左侧第二个Y轴，显示M2总量数据 */}
+            <YAxis 
+              yAxisId="left2"
+              orientation="left"
+              tickFormatter={(value) => `${value.toFixed(1)}T`}
+              domain={['auto', 'auto']}
+              tick={{ fill: themeColors.text, fontSize: 12 }}
+              stroke={themeColors.grid}
+              label={{ value: 'M2总量', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fontSize: 12 } }}
             />
             
             {/* 如果有对比标的，显示右侧Y轴 */}
@@ -700,13 +866,25 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
             
             <Tooltip content={<CustomTooltip />} />
             
-            {/* 显示GLI总量线 */}
+            {/* 显示央行总负债线 */}
             <Line
               yAxisId="left"
               type="monotone"
-              dataKey={(data) => calculateTotal(data)}
-              name="GLI总量"
-              stroke={themeColors.total}
+              dataKey={(data) => calculateCentralBankTotal(data)}
+              name="央行总负债"
+              stroke={themeColors.components.centralBankTotal}
+              dot={false}
+              strokeWidth={1}
+              isAnimationActive={false}
+            />
+            
+            {/* 显示M2总量线 */}
+            <Line
+              yAxisId="left2"
+              type="monotone"
+              dataKey={(data) => calculateM2Total(data)}
+              name="M2总量"
+              stroke={themeColors.components.m2Total}
               dot={false}
               strokeWidth={2}
               isAnimationActive={false}
@@ -725,20 +903,21 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
                 yAxisId="right"
               />
             )}
-            {/* 添加趋势时期背景 */}
-            {trendPeriods.map((period, index) => {
+            {/* 根据央行和M2趋势组合显示背景 */}
+            {trendCombinations.map((combination, index) => {
               // 将日期字符串转换为时间戳
-              const startTimestamp = dateToTimestamp(period.startDate);
-              const endTimestamp = dateToTimestamp(period.endDate);
+              const startTimestamp = dateToTimestamp(combination.startDate);
+              const endTimestamp = dateToTimestamp(combination.endDate);
+              const fillColor = getTrendCombinationColor(combination.combinationType);
               
               return (
                 <ReferenceArea
                   yAxisId="left"
-                  key={`trend-total-${index}`}
+                  key={`trend-combo-${index}`}
                   x1={startTimestamp}
                   x2={endTimestamp}
-                  fill={period.trend === 'up' ? themeColors.trend.up : themeColors.trend.down}
-                  fillOpacity={0.2}
+                  fill={fillColor}
+                  fillOpacity={0.15}
                   ifOverflow="hidden"
                 />
               );
@@ -752,7 +931,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart 
             data={chartData} 
-            margin={{ top: 0, right: 5, left: 5, bottom: 0 }}
+            margin={{ top: 0, right: 5, left: 40, bottom: 0 }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke={themeColors.grid} />
             <XAxis 
@@ -771,6 +950,17 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
               tickFormatter={(value) => `${value.toFixed(1)}T`}
               domain={['auto', 'auto']}
             />
+            
+            {/* 左侧第二个Y轴，显示央行总负债/M2比率 */}
+            <YAxis
+              yAxisId="ratio"
+              orientation="left"
+              tick={{ fill: themeColors.text, fontSize: 12 }}
+              stroke={themeColors.grid}
+              tickFormatter={(value) => `${(value * 100).toFixed(1)}%`}
+              domain={['auto', 'auto']}
+              label={{ value: '央行/M2比率', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fontSize: 12 } }}
+            />
             {/* 如果有对比标的，显示右侧Y轴 */}
             {showBenchmark && (
               <YAxis 
@@ -785,20 +975,21 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
             <Tooltip content={<CustomTooltip />} />
             <Legend />
 
-            {/* 添加趋势时期背景 */}
-            {trendPeriods.map((period, index) => {
+            {/* 根据央行和M2趋势组合显示背景 */}
+            {trendCombinations.map((combination, index) => {
               // 将日期字符串转换为时间戳
-              const startTimestamp = dateToTimestamp(period.startDate);
-              const endTimestamp = dateToTimestamp(period.endDate);
+              const startTimestamp = dateToTimestamp(combination.startDate);
+              const endTimestamp = dateToTimestamp(combination.endDate);
+              const fillColor = getTrendCombinationColor(combination.combinationType);
               
               return (
                 <ReferenceArea
-                  key={`trend-comp-${index}`}
                   yAxisId="left"
+                  key={`trend-combo-${index}`}
                   x1={startTimestamp}
                   x2={endTimestamp}
-                  fill={period.trend === 'up' ? themeColors.trend.up : themeColors.trend.down}
-                  fillOpacity={0.2}
+                  fill={fillColor}
+                  fillOpacity={0.15}
                   ifOverflow="hidden"
                 />
               );
@@ -935,6 +1126,18 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
                 yAxisId="left"
               />
             )}
+            
+            {/* 央行总负债/M2比率线 - 放在最顶层 */}
+            <Line
+              yAxisId="ratio"
+              type="monotone"
+              dataKey="central_bank_div_m2_ratio"
+              name="央行/M2比率"
+              stroke={themeColors.components.ratio}
+              dot={false}
+              strokeWidth={1.5}
+              isAnimationActive={false}
+            />
             
           </ComposedChart>
         </ResponsiveContainer>

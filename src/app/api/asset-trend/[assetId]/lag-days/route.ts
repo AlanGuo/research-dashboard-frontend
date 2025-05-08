@@ -11,11 +11,12 @@ export async function GET(
   try {
     const { assetId } = await context.params;
     
-    // 从 URL 参数中获取间隔类型和数量
+    // 从 URL 参数中获取间隔类型、数量和趋势类型
     const { searchParams } = new URL(request.url);
     const intervalType = searchParams.get('intervalType');
     const intervalCountStr = searchParams.get('intervalCount');
     const intervalCount = intervalCountStr ? parseInt(intervalCountStr, 10) : undefined;
+    const trendType = searchParams.get('trendType') || 'centralBank'; // 默认为央行趋势
     
     if (!intervalType || intervalCount === undefined || isNaN(intervalCount)) {
       return NextResponse.json(
@@ -33,7 +34,7 @@ export async function GET(
     const url = `${apiBaseUrl}/asset-trend/${assetId}/lag-days`;
     
     // 构建带查询参数的URL
-    const queryUrl = `${url}?intervalType=${encodeURIComponent(intervalType)}&intervalCount=${intervalCount}`;
+    const queryUrl = `${url}?intervalType=${encodeURIComponent(intervalType)}&intervalCount=${intervalCount}&trendType=${encodeURIComponent(trendType)}`;
     
     const response = await fetch(queryUrl, {
       method: 'GET',

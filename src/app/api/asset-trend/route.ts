@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server';
 import config from '@/config';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {  
+    // 从 URL 参数中获取趋势类型
+    const { searchParams } = new URL(request.url);
+    const trendType = searchParams.get('trendType') || 'centralBank'; // 默认为央行趋势
+    
     // 使用内部API获取资产趋势数据
     const apiBaseUrl = config.api?.baseUrl;
-    const url = `${apiBaseUrl}/asset-trend`;
+    const url = `${apiBaseUrl}/asset-trend?trendType=${encodeURIComponent(trendType)}`;
     
     const response = await fetch(url);
     
