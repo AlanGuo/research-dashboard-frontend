@@ -837,7 +837,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
               domain={['auto', 'auto']}
               tick={{ fill: themeColors.text, fontSize: 12 }}
               stroke={themeColors.grid}
-              label={{ value: '央行总负债', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fontSize: 12 } }}
+              label={{ value: '央行流动性', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fontSize: 12 } }}
             />
             
             {/* 左侧第二个Y轴，显示M2总量数据 */}
@@ -871,7 +871,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
               yAxisId="left"
               type="monotone"
               dataKey={(data) => calculateCentralBankTotal(data)}
-              name="央行总负债"
+              name="央行流动性"
               stroke={themeColors.components.centralBankTotal}
               dot={false}
               strokeWidth={1}
@@ -959,7 +959,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
               stroke={themeColors.grid}
               tickFormatter={(value) => `${(value * 100).toFixed(1)}%`}
               domain={['auto', 'auto']}
-              label={{ value: '央行/M2比率', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fontSize: 12 } }}
+              label={{ value: '央行流动性/M2比率', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fontSize: 12 } }}
             />
             {/* 如果有对比标的，显示右侧Y轴 */}
             {showBenchmark && (
@@ -1132,7 +1132,7 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
               yAxisId="ratio"
               type="monotone"
               dataKey="central_bank_div_m2_ratio"
-              name="央行/M2比率"
+              name="央行流动性/M2比率"
               stroke={themeColors.components.ratio}
               dot={false}
               strokeWidth={1.5}
