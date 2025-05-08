@@ -390,9 +390,6 @@ export function GliBenchmarkTrendTable({ trendPeriods, benchmark, offset = 0, in
     return new Date(b.endDate).getTime() - new Date(a.endDate).getTime();
   });
 
-  // 合并两个趋势时期数组作为备用
-  const allTrendPeriods = [...sortedCentralBankTrendPeriods, ...sortedM2TrendPeriods];
-
   return (
     <div className="w-full">
       <h3 className="text-lg font-medium mb-4">{centralBankData?.name || "对比标的"}在各趋势时期的表现</h3>
