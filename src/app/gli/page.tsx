@@ -6,7 +6,6 @@ import { GliParams } from '@/components/gli/gli-params';
 import { GliTrendTable } from '@/components/gli/gli-trend-table';
 import { GliBenchmarkTrendTable } from '@/components/gli/gli-benchmark-trend-table';
 import { GliDataPoint, GliParams as GliParamsType, GliResponse, TrendPeriod } from '@/types/gli';
-import Head from 'next/head';
 
 export default function GliDashboard() {
   const [data, setData] = useState<GliDataPoint[]>([]);
@@ -53,7 +52,6 @@ export default function GliDashboard() {
 
   // 监听 UI 参数变化的自定义事件
   useEffect(() => {
-    document.title = "全球流动性指数";
     // 处理 UI 参数变化事件
     const handleUiParamsChange = (event: CustomEvent) => {
       const { name, value } = event.detail;
@@ -175,13 +173,6 @@ export default function GliDashboard() {
   
   return (
     <>
-      <Head>
-        <title>{document.title}</title>
-        <meta
-          name="description"
-          content="监控来自各国央行和货币供应的全球流动性数据"
-        />
-      </Head>
       <div className="container mx-auto p-6 max-w-[1920px]">
         <h1 className="text-2xl font-bold mb-2">全球流动性指数</h1>
         <div className="mb-8">
