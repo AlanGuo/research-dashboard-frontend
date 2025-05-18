@@ -19,7 +19,7 @@ export default function GliDashboard() {
   
   // Howell Liquidity 数据状态
   const [howellLiquidityData, setHowellLiquidityData] = useState<HowellLiquidityDataPoint[]>([]);
-  const [loadingHowellData, setLoadingHowellData] = useState<boolean>(false);
+  const [, setLoadingHowellData] = useState<boolean>(false);
 
   // 将参数分为两部分：API参数（需要重新请求数据）和UI参数（只影响显示）
   const [apiParams, setApiParams] = useState<Omit<GliParamsType, 'offset' | 'invertBenchmarkYAxis' | 'benchmark'>>({    
