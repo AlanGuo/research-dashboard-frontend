@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import config from '@/config';
+import { HowellLiquidityDataPoint } from '@/types/howell-liquidity';
 
 export async function GET(
   request: NextRequest
@@ -29,7 +30,7 @@ export async function GET(
     
     // 处理数据，为每个数据点添加timestamp
     if (liquidityData.data && Array.isArray(liquidityData.data)) {
-      liquidityData.data = liquidityData.data.map((point: { date: string; [key: string]: any }) => {
+      liquidityData.data = liquidityData.data.map((point: HowellLiquidityDataPoint) => {
         return {
           ...point,
           timestamp: parseDate(point.date).getTime()
