@@ -30,7 +30,7 @@ export async function GET(
     
     // 构建日期查询参数
     const dateParams = dates.map(date => `dates[]=${encodeURIComponent(date)}`).join('&');
-    const url = `${apiBaseUrl}/kline/${symbolLower}/exact-dates?${dateParams}`;
+    const url = `${apiBaseUrl}/v1/kline/${symbolLower}/exact-dates?${dateParams}`;
     
     const response = await fetch(url);
     

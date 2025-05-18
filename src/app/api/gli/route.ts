@@ -47,7 +47,7 @@ export async function GET(
     
     // 使用内部API获取GLI数据
     const apiBaseUrl = config.api?.baseUrl;
-    const url = `${apiBaseUrl}/gli${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    const url = `${apiBaseUrl}/v1/gli${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
     
     const response = await fetch(url);
     

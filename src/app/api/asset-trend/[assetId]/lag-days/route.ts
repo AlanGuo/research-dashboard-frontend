@@ -31,7 +31,7 @@ export async function GET(
     
     // 使用内部API临时计算资产在特定滞后天数下的趋势表现
     const apiBaseUrl = config.api?.baseUrl;
-    const url = `${apiBaseUrl}/asset-trend/${assetId}/lag-days`;
+    const url = `${apiBaseUrl}/v1/asset-trend/${assetId}/lag-days`;
     
     // 构建带查询参数的URL
     const queryUrl = `${url}?intervalType=${encodeURIComponent(intervalType)}&intervalCount=${intervalCount}&trendType=${encodeURIComponent(trendType)}`;

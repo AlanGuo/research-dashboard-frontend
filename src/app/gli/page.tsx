@@ -6,6 +6,7 @@ import { GliParams } from '@/components/gli/gli-params';
 import { GliTrendTable } from '@/components/gli/gli-trend-table';
 import { GliBenchmarkTrendTable } from '@/components/gli/gli-benchmark-trend-table';
 import { GliDataPoint, GliParams as GliParamsType, GliResponse, TrendPeriod } from '@/types/gli';
+import type { HowellLiquidityDataPoint } from '@/types/howell-liquidity';
 
 export default function GliDashboard() {
   const [data, setData] = useState<GliDataPoint[]>([]);
@@ -15,6 +16,10 @@ export default function GliDashboard() {
     centralBankTrendPeriods: TrendPeriod[];
     m2TrendPeriods: TrendPeriod[];
   }>({ centralBankTrendPeriods: [], m2TrendPeriods: [] });
+  
+  // Howell Liquidity 数据状态
+  const [howellLiquidityData, setHowellLiquidityData] = useState<HowellLiquidityDataPoint[]>([]);
+  const [loadingHowellData, setLoadingHowellData] = useState<boolean>(false);
 
   // 将参数分为两部分：API参数（需要重新请求数据）和UI参数（只影响显示）
   const [apiParams, setApiParams] = useState<Omit<GliParamsType, 'offset' | 'invertBenchmarkYAxis' | 'benchmark'>>({    
@@ -155,6 +160,30 @@ export default function GliDashboard() {
     fetchGliData();
   }, [apiParams]); // 仅在API参数变化时重新获取数据
   
+  // 获取 Howell Liquidity 数据
+  useEffect(() => {
+    const fetchHowellLiquidityData = async () => {
+      try {
+        setLoadingHowellData(true);
+        const response = await fetch('/api/howell-liquidity');
+        if (!response.ok) {
+          throw new Error(`API请求失败: ${response.status}`);
+        }
+        const data = await response.json();
+        if (data.success && data.data && Array.isArray(data.data)) {
+          setHowellLiquidityData(data.data);
+        }
+      } catch (err) {
+        console.error('获取Howell Liquidity数据失败:', err);
+        // 不设置错误状态，因为这是一个附加功能，不应影响主图表
+      } finally {
+        setLoadingHowellData(false);
+      }
+    };
+    
+    fetchHowellLiquidityData();
+  }, []); // 只在组件挂载时获取一次数据
+  
   // 更新参数的处理函数
   const handleParamsChange = (params: GliParamsType) => {
     // 分离API参数和UI参数
@@ -210,14 +239,24 @@ export default function GliDashboard() {
                 <div className="flex justify-center items-center h-[800px]">
                   <div className="flex-1 overflow-hidden">
                     <div className="h-full overflow-auto">
-                      <GliChart data={data} params={currentParams} trendPeriods={trendPeriods} />
+                      <GliChart 
+                        data={data} 
+                        params={currentParams} 
+                        trendPeriods={trendPeriods} 
+                        howellLiquidityData={howellLiquidityData} 
+                      />
                     </div>
                   </div>
                 </div>
               ) : (
                 <div className="flex-1 overflow-hidden">
                   <div className="h-full overflow-auto">
-                    <GliChart data={data} params={currentParams} trendPeriods={trendPeriods} />
+                    <GliChart 
+                      data={data} 
+                      params={currentParams} 
+                      trendPeriods={trendPeriods} 
+                      howellLiquidityData={howellLiquidityData} 
+                    />
                   </div>
                 </div>
               )}

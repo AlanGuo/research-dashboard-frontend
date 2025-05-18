@@ -15,6 +15,7 @@ import {
 } from 'recharts';
 import type { BenchmarkAsset } from '@/types/benchmark';
 import { GliDataPoint, GliParams, TrendPeriod } from '@/types/gli';
+import type { HowellLiquidityDataPoint } from '@/types/howell-liquidity';
 
 // K线数据接口
 interface KlineDataPoint {
@@ -34,6 +35,7 @@ interface GliChartProps {
     centralBankTrendPeriods: TrendPeriod[];
     m2TrendPeriods: TrendPeriod[];
   }; // 添加央行和M2的趋势时段数据
+  howellLiquidityData?: HowellLiquidityDataPoint[]; // Michael Howell全球流动性数据
 }
 
 // 主题相关颜色配置
@@ -51,6 +53,7 @@ const THEME_COLORS = {
       centralBankTotal: '#000', // 央行总负债
       m2Total: '#666',        // M2总量
       ratio: '#444',          // 央行总负债/M2比率，黑色
+      howellLiquidity: '#D2691E', // Michael Howell全球流动性，巧克力色
       netUsdLiquidity: '#8884d8',
       ecb: '#006400',
       pbc: '#ffc658',
@@ -76,6 +79,7 @@ const THEME_COLORS = {
       centralBankTotal: '#ddd', // 央行总负债
       m2Total: '#888',        // M2总量
       ratio: '#ddd',          // 央行总负债/M2比率，白色（暗黑模式下的“黑色”）
+      howellLiquidity: '#ff8c00', // Michael Howell全球流动性，深橙色
       netUsdLiquidity: '#a4a0ff', // 更亮的紫色
       ecb: '#008800', // 更亮的绿色
       pbc: '#ffd700', // 更亮的黄色
@@ -89,21 +93,19 @@ const THEME_COLORS = {
     }
   }
 }
-
-// GLI趋势时段数据将从API获取
-
 // 对比标的缓存机制，避免重复请求
 // 使用组件外部的变量来缓存数据，这样即使组件重新渲染也不会丢失缓存
 const benchmarkCache: Record<string, BenchmarkAsset> = {};
 
-export function GliChart({ data, params, trendPeriods }: GliChartProps) {
+export function GliChart({ data, params, trendPeriods, howellLiquidityData: propHowellData }: GliChartProps) {
   // 对比标的数据
   const [benchmarkData, setBenchmarkData] = useState<KlineDataPoint[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [benchmarkInfo, setBenchmarkInfo] = useState<BenchmarkAsset | null>(null);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
-  
+  const [howellLiquidityData, setHowellLiquidityData] = useState<HowellLiquidityDataPoint[]>([]);
+  const trillion = 1000000000000;
   // 记录当前正在请求的benchmark ID，避免重复请求
   const fetchingBenchmarkRef = React.useRef<string | null>(null);
   
@@ -136,6 +138,13 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
     // 清理函数
     return () => observer.disconnect();
   }, []);
+
+  // 使用从外部传入的 Howell Liquidity 数据
+  useEffect(() => {
+    if (propHowellData && propHowellData.length > 0) {
+      setHowellLiquidityData(propHowellData);
+    }
+  }, [propHowellData]);
   
   // 根据当前主题获取颜色
   const themeColors = isDarkMode ? THEME_COLORS.dark : THEME_COLORS.light;
@@ -516,7 +525,6 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
   const chartData = useMemo(() => {
     // 确保数据是按时间排序的（从旧到新，因为图表通常从左到右显示）
     const sortedData = [...data].sort((a, b) => a.timestamp - b.timestamp);
-    const trillion = 1000000000000;
     // 使用参数或默认值
     const interval = params.interval || '1D';
     const offset = params.offset || 0; // 获取时间偏移参数
@@ -730,8 +738,8 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
     if (value === undefined || value === null) return 'N/A';
     if (typeof value === 'number') {
       // 如果数值很大，以万亿为单位显示
-      if (value > 1000000000000) {
-        return `${(value / 1000000000000).toFixed(2)}T`;
+      if (value > trillion) {
+        return `${(value / trillion).toFixed(2)}T`;
       }
       // 否则正常显示两位小数
       return value.toFixed(2);
@@ -851,6 +859,17 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
               label={{ value: 'M2总量', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fontSize: 12 } }}
             />
             
+            {/* 左侧第三个Y轴，显示Howell流动性数据 */}
+            <YAxis 
+              yAxisId="howell"
+              orientation="left"
+              tickFormatter={(value) => `${value.toFixed(1)}T`}
+              domain={['auto', 'auto']}
+              tick={{ fill: themeColors.components.howellLiquidity, fontSize: 12 }}
+              stroke={themeColors.grid}
+              label={{ value: 'Howell全球流动性', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fontSize: 12, fill: themeColors.components.howellLiquidity } }}
+            />
+            
             {/* 如果有对比标的，显示右侧Y轴 */}
             {showBenchmark && (
               <YAxis 
@@ -889,6 +908,104 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
               strokeWidth={2}
               isAnimationActive={false}
             />
+            
+            {/* 已修订的Howell数据 - 实线 */}
+            {howellLiquidityData && howellLiquidityData.length > 0 && (
+              <Line
+                yAxisId="howell"
+                type="monotone"
+                connectNulls={false}
+                dataKey={(data) => {
+                  // 获取 Howell 数据的起始时间
+                  const howellStartTimestamp = howellLiquidityData.length > 0 ? 
+                    Math.min(...howellLiquidityData
+                      .filter(h => h.timestamp)
+                      .map(h => h.timestamp as number)) : 
+                    Infinity;
+                  
+                  const timestamp = data.timestamp;
+                  
+                  // 如果当前时间早于 Howell 数据的起始时间，不绘制
+                  if (timestamp < howellStartTimestamp) {
+                    return undefined;
+                  }
+                  
+                  // 找到匹配当前日期的 Howell 数据点
+                  // 使用年月匹配而不是精确时间戳匹配
+                  const date = new Date(timestamp);
+                  const year = date.getFullYear();
+                  const month = date.getMonth();
+                  
+                  const matchingPoint = howellLiquidityData.find(h => {
+                    if (!h.timestamp) return false;
+                    const hDate = new Date(h.timestamp);
+                    return hDate.getFullYear() === year && hDate.getMonth() === month;
+                  });
+                  
+                  // 只显示已修订数据
+                  if (matchingPoint && matchingPoint.isRevised !== false) {
+                    return matchingPoint.globalLiquidity;
+                  }
+                  
+                  return undefined; // 不绘制未修订数据点
+                }}
+                name="Howell全球流动性"
+                stroke={themeColors.components.howellLiquidity}
+                dot={false}
+                strokeWidth={2}
+                isAnimationActive={false}
+              />
+            )}
+
+            {/* 未修订的Howell数据 - 虚线 */}
+            {howellLiquidityData && howellLiquidityData.length > 0 && (
+              <Line
+              yAxisId="howell"
+              type="monotone"
+              connectNulls={false}
+              dataKey={(data) => {
+                // 获取 Howell 数据的起始时间
+                const howellStartTimestamp = howellLiquidityData.length > 0 ? 
+                  Math.min(...howellLiquidityData
+                    .filter(h => h.timestamp)
+                    .map(h => h.timestamp as number)) : 
+                  Infinity;
+                
+                const timestamp = data.timestamp;
+                
+                // 如果当前时间早于 Howell 数据的起始时间，不绘制
+                if (timestamp < howellStartTimestamp) {
+                  return undefined;
+                }
+                
+                // 找到匹配当前日期的 Howell 数据点
+                // 使用年月匹配而不是精确时间戳匹配
+                const date = new Date(timestamp);
+                const year = date.getFullYear();
+                const month = date.getMonth();
+                const day = date.getDate();
+                
+                const matchingPoint = howellLiquidityData.find(h => {
+                  if (!h.timestamp) return false;
+                  const hDate = new Date(h.timestamp);
+                  return hDate.getFullYear() === year && hDate.getMonth() === month && hDate.getDate() === day;
+                });
+                
+                // 只显示未修订数据
+                if (matchingPoint && matchingPoint.isRevised === false) {
+                  return matchingPoint.globalLiquidity;
+                }
+                
+                return undefined; // 不绘制已修订数据点
+              }}
+              name="Howell全球流动性(未修订)"
+              stroke={themeColors.components.howellLiquidity}
+              strokeDasharray="5 3" // 虚线样式
+              dot={false}
+              strokeWidth={2}
+              isAnimationActive={false}
+            />
+            )}
             
             {/* 对比标的数据 */}
             {params.benchmark && params.benchmark !== 'none' && benchmarkData.length > 0 && (
@@ -960,6 +1077,17 @@ export function GliChart({ data, params, trendPeriods }: GliChartProps) {
               tickFormatter={(value) => `${(value * 100).toFixed(1)}%`}
               domain={['auto', 'auto']}
               label={{ value: '央行流动性/M2比率', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fontSize: 12 } }}
+            />
+
+            {/* 左侧第三个Y轴，显示Howell流动性数据 */}
+            <YAxis 
+              yAxisId="howell"
+              orientation="left"
+              tickFormatter={(value) => `${value.toFixed(1)}T`}
+              domain={['auto', 'auto']}
+              tick={{ fill: themeColors.components.howellLiquidity, fontSize: 12 }}
+              stroke={themeColors.grid}
+              label={{ value: 'Howell全球流动性', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle', fontSize: 12, fill: themeColors.components.howellLiquidity } }}
             />
             {/* 如果有对比标的，显示右侧Y轴 */}
             {showBenchmark && (

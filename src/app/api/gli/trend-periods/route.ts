@@ -46,7 +46,7 @@ export async function GET(
     });
     // 使用内部API获取GLI趋势时段数据
     const apiBaseUrl = config.api?.baseUrl;
-    const url = `${apiBaseUrl}/gli/trend-periods${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    const url = `${apiBaseUrl}/v1/gli/trend-periods${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
     
     const response = await fetch(url);
     

@@ -9,7 +9,7 @@ export async function GET(request: Request) {
     
     // 使用内部API获取资产趋势数据
     const apiBaseUrl = config.api?.baseUrl;
-    const url = `${apiBaseUrl}/asset-trend?trendType=${encodeURIComponent(trendType)}`;
+    const url = `${apiBaseUrl}/v1/asset-trend?trendType=${encodeURIComponent(trendType)}`;
     
     const response = await fetch(url);
     

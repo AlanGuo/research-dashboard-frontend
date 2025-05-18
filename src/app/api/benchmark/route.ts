@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 export async function GET() {
   try {
     const apiBaseUrl = config.api?.baseUrl;
-    const url = `${apiBaseUrl}/benchmark`;
+    const url = `${apiBaseUrl}/v1/benchmark`;
     
     const response = await fetch(url);
     

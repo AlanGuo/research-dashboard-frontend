@@ -15,7 +15,7 @@ export async function GET(
     
     // 使用内部的kline API获取数据
     const apiBaseUrl = config.api?.baseUrl;
-    const response = await fetch(`${apiBaseUrl}/kline/${pair}?interval=1D&bars=8`); // 获取7天+今天的数据
+    const response = await fetch(`${apiBaseUrl}/v1/kline/${pair}?interval=1D&bars=8`); // 获取7天+今天的数据
     
     if (!response.ok) {
       throw new Error(`Kline API请求失败: ${response.status}`);

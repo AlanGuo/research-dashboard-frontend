@@ -18,7 +18,7 @@ export async function GET(
   try {
     // 使用内部的kline API获取数据
     const apiBaseUrl = config.api?.baseUrl;
-    let url = `${apiBaseUrl}/kline/${symbolLower}?interval=${interval}&bars=${bars}`;
+    let url = `${apiBaseUrl}/v1/kline/${symbolLower}?interval=${interval}&bars=${bars}`;
     
     // 如果提供了from参数，添加到请求URL中
     if (from) {
