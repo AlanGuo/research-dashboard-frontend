@@ -94,7 +94,6 @@ export default function BtcDomComparisonDashboard() {
   // 处理和合并数据
   const processAndMergeData = useCallback((strategyRawData: BtcDomStrategyData[], binanceRawData: KlineData) => {
     try {
-      
       // 处理策略数据
       const processedStrategyRecords = processStrategyData(strategyRawData);
       

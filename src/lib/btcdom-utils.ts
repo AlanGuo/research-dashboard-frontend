@@ -81,10 +81,9 @@ export function extractPricesFromKlineData(klineData: KlineData): Map<string, nu
   
   klineData.candles.forEach(candle => {
     const date = new Date(candle.timestamp).toISOString().split('T')[0];
-    priceMap.set(date, candle.close);
+    priceMap.set(date, candle.open);
   });
 
-  console.log(`Extracted ${priceMap.size} price points from kline data`);
   return priceMap;
 }
 
