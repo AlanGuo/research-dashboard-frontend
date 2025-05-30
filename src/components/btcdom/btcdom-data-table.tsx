@@ -15,7 +15,12 @@ interface BtcDomDataTableProps {
 export function BtcDomDataTable({ data, loading }: BtcDomDataTableProps) {
   const [showAll, setShowAll] = useState(false);
 
-  const displayData = showAll ? data : data.slice(0, 10);
+  // 按结束时间倒序排列
+  const sortedData = [...data].sort((a, b) => 
+    new Date(b.closeDate).getTime() - new Date(a.closeDate).getTime()
+  );
+
+  const displayData = showAll ? sortedData : sortedData.slice(0, 10);
 
   const getPerformanceBadge = (performanceDiff: number | null) => {
     if (performanceDiff === null || performanceDiff === undefined) return null;
@@ -78,7 +83,7 @@ export function BtcDomDataTable({ data, loading }: BtcDomDataTableProps) {
         <CardTitle className="flex items-center justify-between">
           <span>策略交易记录详情</span>
           <div className="text-sm text-muted-foreground">
-            显示 {displayData.length} / {data.length} 条记录
+            显示 {displayData.length} / {sortedData.length} 条记录
           </div>
         </CardTitle>
       </CardHeader>
@@ -162,7 +167,7 @@ export function BtcDomDataTable({ data, loading }: BtcDomDataTableProps) {
           </table>
         </div>
 
-        {data.length > 10 && (
+        {sortedData.length > 10 && (
           <div className="mt-4 flex justify-center">
             <Button 
               variant="outline" 
@@ -186,29 +191,29 @@ export function BtcDomDataTable({ data, loading }: BtcDomDataTableProps) {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div className="text-center">
               <div className="text-muted-foreground">总交易次数</div>
-              <div className="font-semibold text-lg">{data.length}</div>
+              <div className="font-semibold text-lg">{sortedData.length}</div>
             </div>
             <div className="text-center">
               <div className="text-muted-foreground">策略胜率</div>
               <div className="font-semibold text-lg">
-                {((data.filter(d => d.strategyReturn > 0).length / data.length) * 100).toFixed(1)}%
+                {((sortedData.filter(d => d.strategyReturn > 0).length / sortedData.length) * 100).toFixed(1)}%
               </div>
             </div>
             <div className="text-center">
               <div className="text-muted-foreground">币安胜率</div>
               <div className="font-semibold text-lg">
-                {data.filter(d => d.binanceReturn !== null).length > 0
-                  ? ((data.filter(d => d.binanceReturn !== null && d.binanceReturn! > 0).length / 
-                      data.filter(d => d.binanceReturn !== null).length) * 100).toFixed(1) + '%'
+                {sortedData.filter(d => d.binanceReturn !== null).length > 0
+                  ? ((sortedData.filter(d => d.binanceReturn !== null && d.binanceReturn! > 0).length / 
+                      sortedData.filter(d => d.binanceReturn !== null).length) * 100).toFixed(1) + '%'
                   : 'N/A'}
               </div>
             </div>
             <div className="text-center">
               <div className="text-muted-foreground">策略优于币安</div>
               <div className="font-semibold text-lg">
-                {data.filter(d => d.performanceDiff !== null).length > 0
-                  ? ((data.filter(d => d.performanceDiff !== null && d.performanceDiff! > 0).length / 
-                      data.filter(d => d.performanceDiff !== null).length) * 100).toFixed(1) + '%'
+                {sortedData.filter(d => d.performanceDiff !== null).length > 0
+                  ? ((sortedData.filter(d => d.performanceDiff !== null && d.performanceDiff! > 0).length / 
+                      sortedData.filter(d => d.performanceDiff !== null).length) * 100).toFixed(1) + '%'
                   : 'N/A'}
               </div>
             </div>
