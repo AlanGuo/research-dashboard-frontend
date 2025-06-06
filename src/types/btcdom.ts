@@ -21,13 +21,14 @@ export interface BtcDomStrategyData {
 
 export interface ProcessedStrategyRecord {
   openDate: string;
-  closeDate: string;
+  closeDate: string | null; // 持仓中的交易没有平仓日期
   totalPnl: number;
   btcPosition: number;
   btcInitialPrice: number;
   altInitialPosition: number;
   initialAmount: number; // 初始金额 = BTC仓位 * BTC初始价格 + ALT初始仓位(U)
   strategyReturn: number; // 策略收益率 = (总盈亏 + 初始金额) / 初始金额
+  isOpenPosition?: boolean; // 是否为持仓中的交易
 }
 
 export interface BinanceBtcDomData {
@@ -41,7 +42,7 @@ export interface BinanceBtcDomData {
 
 export interface BtcDomComparisonData {
   openDate: string;  // 开仓日期
-  closeDate: string;  // 平仓日期
+  closeDate: string | null;  // 平仓日期，持仓中为null
   
   // 策略数据
   strategyInitialAmount: number;  // 策略初始金额
@@ -59,6 +60,9 @@ export interface BtcDomComparisonData {
   // 用于图表显示的累计收益率数据
   strategyCumulativeReturn?: number;
   binanceCumulativeReturn?: number;
+  
+  // 持仓标识
+  isOpenPosition?: boolean;  // 是否为持仓中的交易
 }
 
 export interface BtcDomResponse {
@@ -112,7 +116,7 @@ export interface KlineData {
 export interface ChartDataPoint {
   date: string;
   openDate?: string;
-  closeDate?: string;
+  closeDate?: string | null; // 支持null值用于持仓中的交易
   strategyReturn: number | null;
   binanceReturn: number | null;
 }

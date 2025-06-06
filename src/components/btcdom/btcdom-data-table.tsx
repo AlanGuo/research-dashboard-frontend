@@ -15,10 +15,18 @@ interface BtcDomDataTableProps {
 export function BtcDomDataTable({ data, loading }: BtcDomDataTableProps) {
   const [showAll, setShowAll] = useState(false);
 
-  // 按结束时间倒序排列
-  const sortedData = [...data].sort((a, b) => 
-    new Date(b.closeDate).getTime() - new Date(a.closeDate).getTime()
-  );
+  // 按结束时间倒序排列，持仓中的交易排在最前面
+  const sortedData = [...data].sort((a, b) => {
+    // 持仓中的交易排在最前面
+    if (a.closeDate === null && b.closeDate !== null) return -1;
+    if (a.closeDate !== null && b.closeDate === null) return 1;
+    if (a.closeDate === null && b.closeDate === null) {
+      // 都是持仓中的交易，按开仓日期倒序
+      return new Date(b.openDate).getTime() - new Date(a.openDate).getTime();
+    }
+    // 都是已平仓的交易，按平仓日期倒序
+    return new Date(b.closeDate!).getTime() - new Date(a.closeDate!).getTime();
+  });
 
   const displayData = showAll ? sortedData : sortedData.slice(0, 10);
 
@@ -111,14 +119,22 @@ export function BtcDomDataTable({ data, loading }: BtcDomDataTableProps) {
                   }`}
                 >
                   <td className="p-3">
-                    <div className="text-sm font-medium">{formatDate(row.openDate)} - {formatDate(row.closeDate)}</div>
+                    <div className="text-sm font-medium">
+                      {formatDate(row.openDate)} - {row.closeDate ? formatDate(row.closeDate) : '持仓中'}
+                      {row.isOpenPosition && (
+                        <Badge className="ml-2 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                          持仓中
+                        </Badge>
+                      )}
+                    </div>
                     <div className="text-xs text-muted-foreground mt-1">
                       {(() => {
+                        const endDate = row.closeDate ? new Date(row.closeDate) : new Date();
                         const days = Math.ceil(
-                          (new Date(row.closeDate).getTime() - new Date(row.openDate).getTime()) 
+                          (endDate.getTime() - new Date(row.openDate).getTime()) 
                           / (1000 * 60 * 60 * 24)
                         );
-                        return `${days} 天`;
+                        return `${days} 天${row.closeDate ? '' : ' (至今)'}`;
                       })()}
                     </div>
                   </td>
@@ -149,6 +165,9 @@ export function BtcDomDataTable({ data, loading }: BtcDomDataTableProps) {
                       {row.binanceClosePrice !== null 
                         ? formatNumber(row.binanceClosePrice, 2) 
                         : 'N/A'}
+                      {row.isOpenPosition && row.binanceClosePrice !== null && (
+                        <div className="text-xs text-muted-foreground">当前价格</div>
+                      )}
                     </div>
                   </td>
                   <td className="p-3 text-right">
@@ -184,6 +203,7 @@ export function BtcDomDataTable({ data, loading }: BtcDomDataTableProps) {
           <p>• 策略收益率计算：(总盈亏 + 初始金额) / 初始金额</p>
           <p>• 币安收益率计算：(平仓价格 - 开仓价格) / 开仓价格</p>
           <p>• 初始金额 = BTC仓位 × BTC初始价格 + ALT初始仓位(U)</p>
+          <p>• <span className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 px-1 rounded">持仓中</span>的交易使用当前实时价格计算收益</p>
         </div>
 
         {/* 统计汇总 */}

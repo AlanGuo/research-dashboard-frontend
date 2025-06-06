@@ -20,10 +20,10 @@ export function processStrategyData(rawData: BtcDomStrategyData[]): ProcessedStr
 
   const validRecords: ProcessedStrategyRecord[] = rawData
     .filter(item => {
-      // 必须有开仓日期、平仓日期、总盈亏、BTC仓位、BTC初始价格、ALT初始仓位
+      // 必须有开仓日期、总盈亏、BTC仓位、BTC初始价格、ALT初始仓位
+      // 平仓日期是可选的（持仓中的交易没有平仓日期）
       const hasRequiredFields = 
         item["开仓日期"] &&
-        item["平仓日期"] &&
         item["总盈亏"] !== null && item["总盈亏"] !== undefined &&
         item["BTC仓位"] !== null && item["BTC仓位"] !== undefined &&
         item["BTC初始价格"] !== null && item["BTC初始价格"] !== undefined &&
@@ -37,11 +37,12 @@ export function processStrategyData(rawData: BtcDomStrategyData[]): ProcessedStr
     })
     .map(item => {
       const openDate = formatDateString(item["开仓日期"]!);
-      const closeDate = formatDateString(item["平仓日期"]!);
+      const closeDate = item["平仓日期"] ? formatDateString(item["平仓日期"]!) : null;
       const totalPnl = Number(item["总盈亏"]);
       const btcPosition = Number(item["BTC仓位"]);
       const btcInitialPrice = Number(item["BTC初始价格"]);
       const altInitialPosition = Number(item["ALT初始仓位(U) "]);
+      const isOpenPosition = !closeDate; // 没有平仓日期表示持仓中
       
       // 计算初始金额 = BTC仓位 * BTC初始价格 + ALT初始仓位(U)
       const initialAmount = btcPosition * btcInitialPrice + altInitialPosition;
@@ -49,7 +50,7 @@ export function processStrategyData(rawData: BtcDomStrategyData[]): ProcessedStr
       // 计算策略收益率 = (总盈亏 + 初始金额) / 初始金额
       const strategyReturn = ((totalPnl + initialAmount) / initialAmount - 1) * 100;
       
-      console.log(`Strategy record: ${openDate} to ${closeDate}, PnL: ${totalPnl}, Initial: ${initialAmount}, Return: ${strategyReturn.toFixed(2)}%`);
+      console.log(`Strategy record: ${openDate} to ${closeDate || 'OPEN'}, PnL: ${totalPnl}, Initial: ${initialAmount}, Return: ${strategyReturn.toFixed(2)}%${isOpenPosition ? ' [OPEN POSITION]' : ''}`);
       
       return {
         openDate,
@@ -59,7 +60,8 @@ export function processStrategyData(rawData: BtcDomStrategyData[]): ProcessedStr
         btcInitialPrice,
         altInitialPosition,
         initialAmount,
-        strategyReturn
+        strategyReturn,
+        isOpenPosition
       };
     })
     .sort((a, b) => new Date(a.openDate).getTime() - new Date(b.openDate).getTime());
@@ -90,7 +92,8 @@ export function extractPricesFromKlineData(klineData: KlineData): Map<string, nu
 // 合并策略数据和币安数据进行对比
 export function mergeComparisonData(
   strategyRecords: ProcessedStrategyRecord[],
-  binancePriceMap: Map<string, number>
+  binancePriceMap: Map<string, number>,
+  latestPrice?: number // 当前价格，用于计算持仓中交易的收益
 ): BtcDomComparisonData[] {
 
   if (strategyRecords.length === 0) {
@@ -101,7 +104,14 @@ export function mergeComparisonData(
   const comparisonData: BtcDomComparisonData[] = strategyRecords.map(record => {
     // 获取币安对应日期的价格
     const binanceOpenPrice = binancePriceMap.get(record.openDate) || null;
-    const binanceClosePrice = binancePriceMap.get(record.closeDate) || null;
+    let binanceClosePrice: number | null = null;
+    
+    // 如果是持仓中的交易，使用当前价格
+    if (record.isOpenPosition && latestPrice) {
+      binanceClosePrice = latestPrice;
+    } else if (record.closeDate) {
+      binanceClosePrice = binancePriceMap.get(record.closeDate) || null;
+    }
     
     // 计算币安收益率
     let binanceReturn: number | null = null;
@@ -121,7 +131,8 @@ export function mergeComparisonData(
       binanceOpenPrice,
       binanceClosePrice,
       binanceReturn,
-      performanceDiff
+      performanceDiff,
+      isOpenPosition: record.isOpenPosition
     };
   });
 
@@ -135,15 +146,20 @@ export function generateChartData(comparisonData: BtcDomComparisonData[]): Chart
     return [];
   }
 
-  // 按照平仓日期排序
-  const sortedData = [...comparisonData].sort((a, b) => 
-    new Date(a.closeDate).getTime() - new Date(b.closeDate).getTime()
+  // 分离已平仓和持仓中的交易
+  const closedPositions = comparisonData.filter(record => record.closeDate !== null);
+  const openPositions = comparisonData.filter(record => record.closeDate === null);
+
+  // 按照平仓日期排序已平仓的交易
+  const sortedClosedData = [...closedPositions].sort((a, b) => 
+    new Date(a.closeDate!).getTime() - new Date(b.closeDate!).getTime()
   );
 
   let strategyCumReturn = 0;
   let binanceCumReturn = 0;
 
-  const chartData: ChartDataPoint[] = sortedData.map((record, index) => {
+  // 处理已平仓的交易
+  const chartData: ChartDataPoint[] = sortedClosedData.map((record, index) => {
     // 累计策略收益率（复利计算）
     strategyCumReturn = index === 0 
       ? record.strategyReturn
@@ -157,13 +173,39 @@ export function generateChartData(comparisonData: BtcDomComparisonData[]): Chart
     }
 
     return {
-      date: record.closeDate,
+      date: record.closeDate!, // 已确保不为null
       openDate: record.openDate,
       closeDate: record.closeDate,
       strategyReturn: strategyCumReturn,
       binanceReturn: record.binanceReturn !== null ? binanceCumReturn : null
     };
   });
+
+  // 添加持仓中的交易（使用当前日期）
+  if (openPositions.length > 0) {
+    const currentDate = new Date().toISOString().split('T')[0];
+    
+    openPositions.forEach(record => {
+      // 对于持仓中的交易，继续累计计算
+      strategyCumReturn = chartData.length === 0 && strategyCumReturn === 0
+        ? record.strategyReturn
+        : (1 + strategyCumReturn / 100) * (1 + record.strategyReturn / 100) * 100 - 100;
+
+      if (record.binanceReturn !== null) {
+        binanceCumReturn = chartData.length === 0 && binanceCumReturn === 0
+          ? record.binanceReturn
+          : (1 + binanceCumReturn / 100) * (1 + record.binanceReturn / 100) * 100 - 100;
+      }
+
+      chartData.push({
+        date: currentDate, // 使用当前日期显示持仓中的交易
+        openDate: record.openDate,
+        closeDate: record.closeDate, // null for open positions
+        strategyReturn: strategyCumReturn,
+        binanceReturn: record.binanceReturn !== null ? binanceCumReturn : null
+      });
+    });
+  }
 
   return chartData;
 }
@@ -222,7 +264,13 @@ export function calculatePerformanceMetrics(
 
   // 计算年化收益率   
   const firstDate = new Date(comparisonData[0].openDate);
-  const lastDate = new Date(comparisonData[comparisonData.length - 1].closeDate);
+  
+  // 对于年化收益率计算，使用最后一个已平仓交易的日期，如果没有则使用当前日期
+  const closedPositions = comparisonData.filter(record => record.closeDate !== null);
+  const lastDate = closedPositions.length > 0 
+    ? new Date(closedPositions[closedPositions.length - 1].closeDate!)
+    : new Date(); // 如果都是持仓中，使用当前日期
+    
   const daysDiff = (lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24);
   const yearsFraction = daysDiff / 365.25;
   const annualizedReturn = yearsFraction > 0 
@@ -309,9 +357,18 @@ export function filterDataByTimeRange(
       return data;
   }
 
-  const filtered = data.filter(record => 
-    new Date(record.closeDate) >= startDate
-  );
+  const filtered = data.filter(record => {
+    // 对于持仓中的交易，总是包含
+    if (record.isOpenPosition) {
+      return true;
+    }
+    // 对于已平仓的交易，检查平仓日期
+    if (record.closeDate) {
+      return new Date(record.closeDate) >= startDate;
+    }
+    // 如果没有平仓日期但不是持仓中（理论上不应该发生），使用开仓日期
+    return new Date(record.openDate) >= startDate;
+  });
 
   console.log(`Filtered ${data.length} records to ${filtered.length} records`);
   return filtered;

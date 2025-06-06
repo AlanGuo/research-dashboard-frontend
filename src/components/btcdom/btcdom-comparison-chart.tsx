@@ -80,17 +80,24 @@ export function BtcDomComparisonChart({
   }) => {
     if (active && payload && payload.length) {
       const firstPayload = payload[0].payload;
+      const isOpenPosition = !firstPayload.closeDate || firstPayload.closeDate === '';
+      
       return (
         <div className="bg-background border border-border rounded-lg shadow-lg p-3">
-          <p className="font-medium text-foreground mb-1">交易周期</p>
+          <p className="font-medium text-foreground mb-1">
+            {isOpenPosition ? '持仓交易' : '交易周期'}
+          </p>
           <p className="text-sm text-muted-foreground mb-2">
             {firstPayload.openDate && firstPayload.closeDate 
               ? `${firstPayload.openDate} 至 ${firstPayload.closeDate}`
-              : label}
+              : firstPayload.openDate 
+                ? `${firstPayload.openDate} 至今 (持仓中)`
+                : label}
           </p>
           {payload.map((entry, index: number) => (
             <p key={index} style={{ color: entry.color }} className="text-sm">
               {`${entry.name}: ${entry.payload[`${entry.dataKey}Formatted`]}`}
+              {isOpenPosition && entry.dataKey === 'binanceReturn' && ' (基于当前价格)'}
             </p>
           ))}
         </div>
@@ -226,7 +233,8 @@ export function BtcDomComparisonChart({
           <p>• 图表展示基于交易记录的累计收益率对比</p>
           <p>• 蓝色线条：自制BTCDOM策略的累计收益率</p>
           <p>• 橙色线条：币安BTCDOM合约在相同时间段的累计收益率</p>
-          <p>• 数据点对应每次交易的平仓日期</p>
+          <p>• 数据点对应每次交易的平仓日期，持仓中的交易显示为当前日期</p>
+          <p>• 持仓中的交易使用当前实时价格计算币安收益率</p>
         </div>
 
         {/* 快速统计 */}

@@ -33,6 +33,7 @@ export default function BtcDomComparisonDashboard() {
   const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [latestPrice, setLatestPrice] = useState<number | null>(null); // 当前BTCDOM价格
 
   // 性能指标
   const [strategyMetrics, setStrategyMetrics] = useState<BtcDomPerformanceMetrics | null>(null);
@@ -42,6 +43,35 @@ export default function BtcDomComparisonDashboard() {
   const [params, setParams] = useState<BtcDomComparisonParams>({
     timeRange: 'ALL',
   });
+
+  // 获取当前BTCDOM价格
+  const fetchLatestPrice = useCallback(async (): Promise<number | null> => {
+    try {
+      // 获取最新的1天K线数据来获取当前价格
+      const response = await fetch(`/api/kline/btcdomusdt.p?interval=1D&bars=1`);
+      
+      if (!response.ok) {
+        console.warn('获取当前价格失败:', response.status);
+        return null;
+      }
+      
+      const result = await response.json();
+      
+      if (result.success && result.data && result.data.candles && result.data.candles.length > 0) {
+        const latestCandle = result.data.candles[result.data.candles.length - 1];
+        const currentPrice = latestCandle.close || latestCandle.open;
+        setLatestPrice(currentPrice);
+        console.log('获取到当前BTCDOM价格:', currentPrice);
+        return currentPrice;
+      } else {
+        console.warn('获取当前价格响应格式不正确');
+        return null;
+      }
+    } catch (err) {
+      console.error('获取当前价格失败:', err);
+      return null;
+    }
+  }, []);
 
   // 获取自制BTCDOM策略数据
   const fetchStrategyData = useCallback(async () => {
@@ -92,7 +122,7 @@ export default function BtcDomComparisonDashboard() {
   }, [params.timeRange]);
 
   // 处理和合并数据
-  const processAndMergeData = useCallback((strategyRawData: BtcDomStrategyData[], binanceRawData: KlineData) => {
+  const processAndMergeData = useCallback((strategyRawData: BtcDomStrategyData[], binanceRawData: KlineData, currentPrice?: number | null) => {
     try {
       // 处理策略数据
       const processedStrategyRecords = processStrategyData(strategyRawData);
@@ -106,11 +136,15 @@ export default function BtcDomComparisonDashboard() {
         return;
       }
       
+      // 检查是否有持仓中的交易
+      const hasOpenPositions = processedStrategyRecords.some(record => record.isOpenPosition);
+      console.log(`处理数据：总共 ${processedStrategyRecords.length} 条记录，其中 ${processedStrategyRecords.filter(r => r.isOpenPosition).length} 条为持仓中交易`);
+      
       // 处理币安数据
       const binancePriceMap = extractPricesFromKlineData(binanceRawData);
       
-      // 合并数据
-      const mergedData = mergeComparisonData(processedStrategyRecords, binancePriceMap);
+      // 合并数据，传入当前价格用于计算持仓中交易的收益
+      const mergedData = mergeComparisonData(processedStrategyRecords, binancePriceMap, currentPrice || undefined);
       
       // 根据参数过滤数据
       const filteredData = filterDataByTimeRange(mergedData, params);
@@ -128,6 +162,12 @@ export default function BtcDomComparisonDashboard() {
         
         setStrategyMetrics(strategyMetrics);
         setBinanceMetrics(binanceMetrics);
+        
+        // 如果有持仓中的交易，在日志中显示
+        const openPositions = filteredData.filter(record => record.isOpenPosition);
+        if (openPositions.length > 0) {
+          console.log(`包含 ${openPositions.length} 个持仓中的交易，当前价格: ${currentPrice || 'N/A'}`);
+        }
       } else {
         console.warn('过滤后数据为空，无法计算性能指标');
         setStrategyMetrics(null);
@@ -149,28 +189,29 @@ export default function BtcDomComparisonDashboard() {
     setError(null);
     
     try {
-      const [strategyResult, binanceResult] = await Promise.all([
+      const [strategyResult, binanceResult, currentPrice] = await Promise.all([
         fetchStrategyData(),
-        fetchBinanceData()
+        fetchBinanceData(),
+        fetchLatestPrice()
       ]);
       
-      processAndMergeData(strategyResult, binanceResult);
+      processAndMergeData(strategyResult, binanceResult, currentPrice);
       
     } catch (err) {
       setError(err instanceof Error ? err.message : '获取数据失败');
     } finally {
       setLoading(false);
     }
-  }, [fetchStrategyData, fetchBinanceData, processAndMergeData]);
+  }, [fetchStrategyData, fetchBinanceData, fetchLatestPrice, processAndMergeData]);
 
   // 处理参数变化
   const handleParamsChange = useCallback((newParams: BtcDomComparisonParams) => {
     setParams(newParams);
     
     if (strategyData.length > 0 && binanceData) {
-      processAndMergeData(strategyData, binanceData);
+      processAndMergeData(strategyData, binanceData, latestPrice);
     }
-  }, [strategyData, binanceData, processAndMergeData]);
+  }, [strategyData, binanceData, latestPrice, processAndMergeData]);
 
   // 处理时间范围变化
   const handleTimeRangeChange = (value: string) => {
@@ -180,11 +221,14 @@ export default function BtcDomComparisonDashboard() {
   // 当 timeRange 变化时重新获取币安数据
   useEffect(() => {
     if (strategyData.length > 0) {
-      // timeRange 变化时需要重新获取币安数据
+      // timeRange 变化时需要重新获取币安数据和当前价格
       const refetchBinanceData = async () => {
         try {
-          const binanceResult = await fetchBinanceData();
-          processAndMergeData(strategyData, binanceResult);
+          const [binanceResult, currentPrice] = await Promise.all([
+            fetchBinanceData(),
+            fetchLatestPrice()
+          ]);
+          processAndMergeData(strategyData, binanceResult, currentPrice);
         } catch (err) {
           setError(err instanceof Error ? err.message : '重新获取币安数据失败');
         }
@@ -192,14 +236,14 @@ export default function BtcDomComparisonDashboard() {
       
       refetchBinanceData();
     }
-  }, [params.timeRange, strategyData, fetchBinanceData, processAndMergeData]);
+  }, [params.timeRange, strategyData, fetchBinanceData, fetchLatestPrice, processAndMergeData]);
 
   // 当其他参数变化时重新处理现有数据
   useEffect(() => {
     if (strategyData.length > 0 && binanceData && (params.startDate || params.endDate)) {
-      processAndMergeData(strategyData, binanceData);
+      processAndMergeData(strategyData, binanceData, latestPrice);
     }
-  }, [params.startDate, params.endDate, strategyData, binanceData, processAndMergeData]);
+  }, [params.startDate, params.endDate, strategyData, binanceData, latestPrice, processAndMergeData]);
 
   // 初始加载数据
   useEffect(() => {
@@ -280,6 +324,7 @@ export default function BtcDomComparisonDashboard() {
                   <li>• 数据类型：实盘交易记录</li>
                   <li>• 计算方式：初始金额 = BTC仓位 × BTC初始价格 + ALT初始仓位(U)</li>
                   <li>• 收益率 = (总盈亏 + 初始金额) / 初始金额</li>
+                  <li>• 持仓交易：无平仓日期的交易视为持仓中</li>
                 </ul>
               </div>
               <div>
@@ -290,6 +335,7 @@ export default function BtcDomComparisonDashboard() {
                   <li>• 数据频率：日线K线数据</li>
                   <li>• 计算方式：根据策略开仓/平仓日期匹配对应价格</li>
                   <li>• 收益率 = (平仓价格 - 开仓价格) / 开仓价格</li>
+                  <li>• 持仓交易：使用当前实时价格计算收益</li>
                 </ul>
               </div>
             </div>
