@@ -136,10 +136,6 @@ export default function BtcDomComparisonDashboard() {
         return;
       }
       
-      // 检查是否有持仓中的交易
-      const hasOpenPositions = processedStrategyRecords.some(record => record.isOpenPosition);
-      console.log(`处理数据：总共 ${processedStrategyRecords.length} 条记录，其中 ${processedStrategyRecords.filter(r => r.isOpenPosition).length} 条为持仓中交易`);
-      
       // 处理币安数据
       const binancePriceMap = extractPricesFromKlineData(binanceRawData);
       
