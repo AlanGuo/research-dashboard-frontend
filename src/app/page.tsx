@@ -17,6 +17,12 @@ export default function Home() {
       href: '/btcdom-comparison',
       icon: '₿'
     },
+    {
+      title: 'BTCDOM2.0',
+      description: '基于成交量排行榜和波动率的动态做空策略',
+      href: '/btcdom2',
+      icon: '🚀'
+    },
     // 可以在这里添加更多仪表盘
   ]
 
