@@ -31,7 +31,8 @@ export default function BTCDOM2Dashboard() {
     btcRatio: 0.5,
     volumeWeight: 0.6,
     volatilityWeight: 0.4,
-    maxShortPositions: 20
+    maxShortPositions: 20,
+    tradingFeeRate: 0.002
   });
 
   // 数据状态
@@ -65,6 +66,10 @@ export default function BTCDOM2Dashboard() {
     
     if (params.maxShortPositions <= 0 || params.maxShortPositions > 50) {
       errors.maxShortPositions = '做空标的数量必须在1-50之间';
+    }
+    
+    if (params.tradingFeeRate < 0 || params.tradingFeeRate > 0.01) {
+      errors.tradingFeeRate = '交易手续费率必须在0-1%之间';
     }
     
     const startDate = new Date(params.startDate);
@@ -609,6 +614,29 @@ export default function BTCDOM2Dashboard() {
                     {parameterErrors.maxShortPositions && (
                       <p className="text-xs text-red-500">{parameterErrors.maxShortPositions}</p>
                     )}
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="tradingFeeRate">交易手续费率</Label>
+                    <div className="flex items-center space-x-2">
+                      <Input
+                        id="tradingFeeRate"
+                        type="number"
+                        step="0.001"
+                        min="0"
+                        max="0.01"
+                        value={params.tradingFeeRate}
+                        onChange={(e) => handleParamChange('tradingFeeRate', parseFloat(e.target.value) || 0)}
+                        className={`flex-1 ${parameterErrors.tradingFeeRate ? 'border-red-500' : ''}`}
+                      />
+                      <span className="text-sm font-medium w-12 text-right">
+                        {(params.tradingFeeRate * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                    {parameterErrors.tradingFeeRate && (
+                      <p className="text-xs text-red-500">{parameterErrors.tradingFeeRate}</p>
+                    )}
+                    <p className="text-xs text-gray-500">按交易金额收取</p>
                   </div>
                 </div>
               </div>

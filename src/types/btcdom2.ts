@@ -9,6 +9,7 @@ export interface BTCDOM2StrategyParams {
   volumeWeight: number;       // 成交量排行榜权重 (0-1)
   volatilityWeight: number;   // 波动率排行榜权重 (0-1)
   maxShortPositions: number;  // 最多做空标的数量
+  tradingFeeRate: number;     // 交易手续费率 (默认0.002 = 0.2%)
   rebalanceMode?: boolean;    // 是否启用重新平衡模式，默认true
 }
 
@@ -81,11 +82,13 @@ export interface PositionInfo {
   currentPrice: number;       // 当前价格
   pnl: number;               // 盈亏
   pnlPercent: number;        // 盈亏百分比
+  tradingFee: number;        // 当期交易手续费
   marketShare?: number;       // 市场份额 (用于计算做空比例)
   reason: string;            // 持仓原因
   isNewPosition?: boolean;    // 是否为新增持仓
+  isSoldOut?: boolean;        // 是否在当期卖出
   quantityChange?: {          // 数量变化信息
-    type: 'new' | 'increase' | 'decrease' | 'same';
+    type: 'new' | 'increase' | 'decrease' | 'same' | 'sold';
     previousQuantity?: number;
     changePercent?: number;
   };
@@ -106,9 +109,12 @@ export interface StrategySnapshot {
   // 持仓信息
   btcPosition: PositionInfo | null;  // BTC现货持仓
   shortPositions: PositionInfo[];    // 做空持仓列表
+  soldPositions?: PositionInfo[];    // 当期卖出的持仓列表
   totalValue: number;                // 总资产价值
   totalPnl: number;                  // 总盈亏
   totalPnlPercent: number;           // 总盈亏百分比
+  totalTradingFee: number;           // 当期总手续费
+  accumulatedTradingFee: number;     // 累计总手续费
   cashPosition: number;              // 现金持仓 (当无符合条件的做空标的时)
   
   // 策略状态

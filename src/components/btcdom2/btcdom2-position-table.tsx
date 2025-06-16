@@ -72,16 +72,17 @@ export function BTCDOM2PositionTable({ snapshot }: BTCDOM2PositionTableProps) {
     return 'text-gray-600';
   };
 
-  // 合并所有持仓
+  // 合并所有持仓（包括卖出的持仓）
   const allPositions = [
     ...(snapshot.btcPosition ? [{ ...snapshot.btcPosition, type: 'BTC' as const }] : []),
-    ...snapshot.shortPositions.map(pos => ({ ...pos, type: 'SHORT' as const }))
+    ...snapshot.shortPositions.map(pos => ({ ...pos, type: 'SHORT' as const })),
+    ...(snapshot.soldPositions || []).map(pos => ({ ...pos, type: 'SOLD' as const }))
   ];
 
   return (
     <div className="space-y-4">
       {/* 基本信息 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-4">
         <div className="text-center">
           <p className="text-sm text-gray-500">总资产</p>
           <p className="text-lg font-semibold">{formatCurrency(snapshot.totalValue)}</p>
@@ -96,6 +97,18 @@ export function BTCDOM2PositionTable({ snapshot }: BTCDOM2PositionTableProps) {
           <p className="text-sm text-gray-500">收益率</p>
           <p className={`text-lg font-semibold ${getPnlColor(snapshot.totalPnl)}`}>
             {formatPercent(snapshot.totalPnlPercent)}
+          </p>
+        </div>
+        <div className="text-center">
+          <p className="text-sm text-gray-500">当期手续费</p>
+          <p className="text-lg font-semibold text-orange-600">
+            {formatCurrency(snapshot.totalTradingFee || 0)}
+          </p>
+        </div>
+        <div className="text-center">
+          <p className="text-sm text-gray-500">累计手续费</p>
+          <p className="text-lg font-semibold text-orange-700">
+            {formatCurrency(snapshot.accumulatedTradingFee || 0)}
           </p>
         </div>
         <div className="text-center">
@@ -114,6 +127,7 @@ export function BTCDOM2PositionTable({ snapshot }: BTCDOM2PositionTableProps) {
                 <TableHead>方向</TableHead>
                 <TableHead className="text-right">金额</TableHead>
                 <TableHead className="text-right">数量</TableHead>
+                <TableHead className="text-right">手续费</TableHead>
                 <TableHead className="text-right">价格</TableHead>
                 <TableHead className="text-right">盈亏</TableHead>
                 <TableHead className="text-right">收益率</TableHead>
@@ -135,7 +149,7 @@ export function BTCDOM2PositionTable({ snapshot }: BTCDOM2PositionTableProps) {
                         </div>
                       )}
                       <span>{position.symbol}</span>
-                      {position.isNewPosition && (
+                      {position.isNewPosition && !position.isSoldOut && (
                         <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700 border-blue-200">
                           <Plus className="w-3 h-3 mr-1" />
                           新增
@@ -145,10 +159,18 @@ export function BTCDOM2PositionTable({ snapshot }: BTCDOM2PositionTableProps) {
                   </TableCell>
                   <TableCell>
                     <Badge 
-                      variant={position.side === 'LONG' ? "default" : "destructive"}
+                      variant={
+                        position.type === 'SOLD' ? "secondary" :
+                        position.side === 'LONG' ? "default" : "destructive"
+                      }
                       className="text-xs"
                     >
-                      {position.side === 'LONG' ? (
+                      {position.type === 'SOLD' ? (
+                        <>
+                          <Minus className="w-3 h-3 mr-1" />
+                          已卖出
+                        </>
+                      ) : position.side === 'LONG' ? (
                         <>
                           <TrendingUp className="w-3 h-3 mr-1" />
                           做多
@@ -174,9 +196,9 @@ export function BTCDOM2PositionTable({ snapshot }: BTCDOM2PositionTableProps) {
                       </span>
                       {position.quantityChange && (
                         <>
-                          {position.quantityChange.type === 'new' && (
+                          {position.quantityChange.type === 'new' && !position.isSoldOut && (
                             <div title="新增持仓">
-                              <ArrowUp className="w-3 h-3 text-green-500" />
+                              <Plus className="w-3 h-3 text-blue-500" />
                             </div>
                           )}
                           {position.quantityChange.type === 'increase' && (
@@ -189,6 +211,11 @@ export function BTCDOM2PositionTable({ snapshot }: BTCDOM2PositionTableProps) {
                               <ArrowDown className="w-3 h-3 text-red-500" />
                             </div>
                           )}
+                          {position.quantityChange.type === 'sold' && (
+                            <div title="已卖出">
+                              <Minus className="w-3 h-3 text-gray-500" />
+                            </div>
+                          )}
                           {position.quantityChange.type === 'same' && (
                             <div title="数量无变化">
                               <Minus className="w-3 h-3 text-gray-400" />
@@ -196,19 +223,40 @@ export function BTCDOM2PositionTable({ snapshot }: BTCDOM2PositionTableProps) {
                           )}
                         </>
                       )}
+                      {position.isNewPosition && !position.quantityChange && !position.isSoldOut && (
+                        <div title="新增持仓">
+                          <Plus className="w-3 h-3 text-blue-500" />
+                        </div>
+                      )}
+                      {position.isSoldOut && !position.quantityChange && (
+                        <div title="已卖出">
+                          <Minus className="w-3 h-3 text-gray-500" />
+                        </div>
+                      )}
                     </div>
                   </TableCell>
+                  <TableCell className="text-right text-orange-600">
+                    {formatCurrency(position.tradingFee || 0)}
+                  </TableCell>
                   <TableCell className="text-right">
-                    <span>
-                      {formatCurrency(position.currentPrice)}
-                      {position.priceChange && position.priceChange.changePercent !== undefined && position.priceChange.changePercent !== 0 && (
-                        <span className={`ml-1 ${
-                          position.priceChange.changePercent > 0 ? 'text-green-600' : 'text-red-600'
-                        }`}>
-                          ({position.priceChange.changePercent > 0 ? '+' : ''}{position.priceChange.changePercent.toFixed(2)}%)
+                    <div className="flex flex-col">
+                      <span>
+                        {formatCurrency(position.currentPrice)}
+                      </span>
+                      {position.type === 'SOLD' ? (
+                        <span className="text-xs text-gray-500">
+                          (卖出价)
                         </span>
+                      ) : (
+                        position.priceChange && position.priceChange.changePercent !== undefined && position.priceChange.changePercent !== 0 && (
+                          <span className={`text-xs ${
+                            position.priceChange.changePercent > 0 ? 'text-green-600' : 'text-red-600'
+                          }`}>
+                            ({position.priceChange.changePercent > 0 ? '+' : ''}{position.priceChange.changePercent.toFixed(2)}%)
+                          </span>
+                        )
                       )}
-                    </span>
+                    </div>
                   </TableCell>
                   <TableCell className={`text-right font-medium ${getPnlColor(position.pnl)}`}>
                     {formatCurrency(position.pnl)}

@@ -23,6 +23,11 @@ class BTCDOM2StrategyEngine {
     this.granularityHours = granularityHours;
   }
 
+  // 计算交易手续费
+  private calculateTradingFee(amount: number): number {
+    return amount * this.params.tradingFeeRate;
+  }
+
   // 筛选做空候选标的
   selectShortCandidates(
     rankings: RankingItem[], 
@@ -123,8 +128,11 @@ class BTCDOM2StrategyEngine {
     
     let btcPosition: PositionInfo | null = null;
     let shortPositions: PositionInfo[] = [];
+    let soldPositions: PositionInfo[] = [];
     let cashPosition = 0;
     let totalValue = previousValue;
+    let totalTradingFee = 0;
+    const accumulatedTradingFee = (previousSnapshot?.accumulatedTradingFee || 0);
     
     if (isActive) {
       // BTC持仓部分
@@ -133,11 +141,26 @@ class BTCDOM2StrategyEngine {
       
       // 计算BTC盈亏（基于价格变化和持仓数量）
       let btcPnl = 0;
+      let btcTradingFee = 0;
+      let btcIsNewPosition = false;
+      
       if (previousSnapshot?.btcPosition) {
         // 使用上一期的BTC数量和价格变化来计算盈亏
         const previousBtcQuantity = previousSnapshot.btcPosition.quantity;
         const previousBtcPrice = previousSnapshot.btcPosition.currentPrice;
         btcPnl = previousBtcQuantity * (btcPrice - previousBtcPrice);
+        
+        // 如果BTC仓位发生变化，计算交易手续费
+        const quantityDiff = Math.abs(btcQuantity - previousBtcQuantity);
+        if (quantityDiff > 0.0001) { // 避免浮点数精度问题
+          btcTradingFee = this.calculateTradingFee(quantityDiff * btcPrice);
+          totalTradingFee += btcTradingFee;
+        }
+      } else {
+        // 第一次开仓，计算手续费
+        btcTradingFee = this.calculateTradingFee(btcAmount);
+        totalTradingFee += btcTradingFee;
+        btcIsNewPosition = true;
       }
       
       btcPosition = {
@@ -149,9 +172,41 @@ class BTCDOM2StrategyEngine {
         currentPrice: btcPrice,
         pnl: btcPnl, // 第一期为0，后续期基于价格变化计算
         pnlPercent: previousSnapshot?.btcPosition ? btcPnl / previousSnapshot.btcPosition.amount : 0,
+        tradingFee: btcTradingFee,
+        isNewPosition: btcIsNewPosition,
         reason: 'BTC基础持仓'
       };
       
+      // 处理卖出的持仓（上期有但本期没有的持仓）
+      if (previousSnapshot?.shortPositions) {
+        for (const prevPosition of previousSnapshot.shortPositions) {
+          const stillHeld = selectedCandidates.find(c => c.symbol === prevPosition.symbol);
+          if (!stillHeld) {
+            // 这个持仓在本期被卖出了
+            const currentPrice = rankings.find(r => r.symbol === prevPosition.symbol)?.priceAtTime || prevPosition.currentPrice;
+            const sellAmount = prevPosition.quantity * currentPrice;
+            const sellFee = this.calculateTradingFee(sellAmount);
+            totalTradingFee += sellFee;
+            
+            // 计算卖出时的最终盈亏
+            const priceChangePercent = (currentPrice - prevPosition.currentPrice) / prevPosition.currentPrice;
+            const finalPnl = -prevPosition.amount * priceChangePercent;
+            
+            soldPositions.push({
+              ...prevPosition,
+              currentPrice,
+              pnl: finalPnl,
+              pnlPercent: -priceChangePercent,
+              tradingFee: sellFee,
+              isSoldOut: true,
+              isNewPosition: false, // 已卖出的持仓不是新增持仓
+              quantityChange: { type: 'sold' },
+              reason: '持仓被卖出'
+            });
+          }
+        }
+      }
+
       // 做空持仓部分
       const shortAmount = totalValue * (1 - this.params.btcRatio);
       const totalMarketShare = selectedCandidates.reduce((sum, c) => sum + c.marketShare, 0);
@@ -161,9 +216,11 @@ class BTCDOM2StrategyEngine {
         const price = candidate.volume24h > 0 ? candidate.quoteVolume24h / candidate.volume24h : 1;
         const quantity = allocation / price;
         
-        // 计算做空盈亏
+        // 计算做空盈亏和手续费
         let pnl = 0;
         let pnlPercent = 0;
+        let tradingFee = 0;
+        let isNewPosition = false;
         
         if (previousSnapshot?.shortPositions) {
           // 从第二期开始，基于价格变化计算盈亏
@@ -173,9 +230,25 @@ class BTCDOM2StrategyEngine {
             const priceChangePercent = (price - previousShortPosition.currentPrice) / previousShortPosition.currentPrice;
             pnl = -previousShortPosition.amount * priceChangePercent;
             pnlPercent = -priceChangePercent;
+            
+            // 如果仓位发生变化，计算交易手续费
+            const quantityDiff = Math.abs(quantity - previousShortPosition.quantity);
+            if (quantityDiff > 0.0001) {
+              tradingFee = this.calculateTradingFee(quantityDiff * price);
+              totalTradingFee += tradingFee;
+            }
+          } else {
+            // 新增持仓
+            tradingFee = this.calculateTradingFee(allocation);
+            totalTradingFee += tradingFee;
+            isNewPosition = true;
           }
+        } else {
+          // 第一期，所有持仓都是新增的
+          tradingFee = this.calculateTradingFee(allocation);
+          totalTradingFee += tradingFee;
+          isNewPosition = true;
         }
-        // 第一期盈亏为0（刚买入）
         
         return {
           symbol: candidate.symbol,
@@ -186,18 +259,66 @@ class BTCDOM2StrategyEngine {
           currentPrice: price,
           pnl,
           pnlPercent,
+          tradingFee,
+          isNewPosition,
           marketShare: candidate.marketShare,
           reason: candidate.reason
         };
       });
       
-      // 更新总价值
+      // 更新总价值（考虑手续费）
       const btcValueChange = btcPnl;
       const shortValueChange = shortPositions.reduce((sum, pos) => sum + pos.pnl, 0);
-      totalValue = previousValue + btcValueChange + shortValueChange;
+      const soldValueChange = soldPositions.reduce((sum, pos) => sum + pos.pnl, 0);
+      totalValue = previousValue + btcValueChange + shortValueChange + soldValueChange - totalTradingFee;
       
     } else {
       // 无符合条件的标的，持有现金
+      // 如果之前有持仓，现在全部卖出，需要计算卖出手续费
+      if (previousSnapshot?.shortPositions && previousSnapshot.shortPositions.length > 0) {
+        for (const prevPosition of previousSnapshot.shortPositions) {
+          const currentPrice = rankings.find(r => r.symbol === prevPosition.symbol)?.priceAtTime || prevPosition.currentPrice;
+          const sellAmount = prevPosition.quantity * currentPrice;
+          const sellFee = this.calculateTradingFee(sellAmount);
+          totalTradingFee += sellFee;
+          
+          // 计算卖出时的最终盈亏
+          const priceChangePercent = (currentPrice - prevPosition.currentPrice) / prevPosition.currentPrice;
+          const finalPnl = -prevPosition.amount * priceChangePercent;
+          
+          soldPositions.push({
+            ...prevPosition,
+            currentPrice,
+            pnl: finalPnl,
+            pnlPercent: -priceChangePercent,
+            tradingFee: sellFee,
+            isSoldOut: true,
+            isNewPosition: false, // 已卖出的持仓不是新增持仓
+            quantityChange: { type: 'sold' },
+            reason: '无符合条件标的，卖出持仓'
+          });
+        }
+      }
+      
+      // 如果之前有BTC持仓，也需要卖出
+      if (previousSnapshot?.btcPosition) {
+        const sellAmount = previousSnapshot.btcPosition.quantity * btcPrice;
+        const sellFee = this.calculateTradingFee(sellAmount);
+        totalTradingFee += sellFee;
+        
+        soldPositions.push({
+          ...previousSnapshot.btcPosition,
+          currentPrice: btcPrice,
+          tradingFee: sellFee,
+          isSoldOut: true,
+          isNewPosition: false, // 已卖出的持仓不是新增持仓
+          quantityChange: { type: 'sold' },
+          reason: '无符合条件标的，卖出BTC'
+        });
+      }
+      
+      const soldValueChange = soldPositions.reduce((sum, pos) => sum + pos.pnl, 0);
+      totalValue = previousValue + soldValueChange - totalTradingFee;
       cashPosition = totalValue;
     }
     
@@ -211,9 +332,12 @@ class BTCDOM2StrategyEngine {
       btcPriceChange24h,
       btcPosition,
       shortPositions,
+      soldPositions,
       totalValue,
       totalPnl,
       totalPnlPercent,
+      totalTradingFee,
+      accumulatedTradingFee: accumulatedTradingFee + totalTradingFee,
       cashPosition,
       isActive,
       rebalanceReason: selectionReason,
@@ -340,6 +464,11 @@ export async function POST(request: NextRequest) {
         success: false,
         error: '参数验证失败'
       }, { status: 400 });
+    }
+    
+    // 设置默认手续费率
+    if (params.tradingFeeRate === undefined) {
+      params.tradingFeeRate = 0.002;
     }
     
     // 调用后端API获取数据
