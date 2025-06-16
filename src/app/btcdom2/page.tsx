@@ -522,37 +522,25 @@ export default function BTCDOM2Dashboard() {
                 <CardHeader>
                   <CardTitle className="flex items-center justify-between">
                     <span>持仓历史分析</span>
-                    <div className="flex items-center gap-2">
-                      <div className="flex bg-gray-100 rounded-lg p-1">
-                        <Button
-                          variant={activeTab === 'current' ? 'default' : 'ghost'}
-                          size="sm"
-                          onClick={() => setActiveTab('current')}
-                          className="text-xs"
-                        >
-                          <Eye className="w-3 h-3 mr-1" />
-                          持仓查看
-                        </Button>
-                        <Button
-                          variant={activeTab === 'comparison' ? 'default' : 'ghost'}
-                          size="sm"
-                          onClick={() => setActiveTab('comparison')}
-                          className="text-xs"
-                        >
-                          <GitCompare className="w-3 h-3 mr-1" />
-                          持仓对比
-                        </Button>
-                      </div>
-                      {activeTab === 'current' && (
-                        <>
-                          <Badge variant={currentSnapshot?.isActive ? "default" : "secondary"}>
-                            {currentSnapshot?.isActive ? '策略持仓' : '空仓'}
-                          </Badge>
-                          <span className="text-sm text-gray-500">
-                            {selectedSnapshotIndex === -1 ? '最新' : `第${selectedSnapshotIndex + 1}期`}
-                          </span>
-                        </>
-                      )}
+                    <div className="flex bg-gray-100 rounded-lg p-1">
+                      <Button
+                        variant={activeTab === 'current' ? 'default' : 'ghost'}
+                        size="sm"
+                        onClick={() => setActiveTab('current')}
+                        className="text-xs"
+                      >
+                        <Eye className="w-3 h-3 mr-1" />
+                        持仓查看
+                      </Button>
+                      <Button
+                        variant={activeTab === 'comparison' ? 'default' : 'ghost'}
+                        size="sm"
+                        onClick={() => setActiveTab('comparison')}
+                        className="text-xs"
+                      >
+                        <GitCompare className="w-3 h-3 mr-1" />
+                        持仓对比
+                      </Button>
                     </div>
                   </CardTitle>
                 </CardHeader>
