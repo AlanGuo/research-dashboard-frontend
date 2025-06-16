@@ -290,8 +290,23 @@ function calculatePerformanceMetrics(
 function generateChartData(snapshots: StrategySnapshot[], params: BTCDOM2StrategyParams): BTCDOM2ChartData[] {
   return snapshots.map(snapshot => {
     const totalReturn = (snapshot.totalValue - params.initialCapital) / params.initialCapital;
-    const btcValue = snapshot.btcPosition?.amount || 0;
-    const shortValue = snapshot.shortPositions.reduce((sum, pos) => sum + pos.amount, 0);
+    
+    // 计算实际市值，包括盈亏
+    let btcValue = 0;
+    let shortValue = 0;
+    
+    if (snapshot.btcPosition) {
+      // BTC实际市值 = 数量 × 当前价格
+      btcValue = snapshot.btcPosition.quantity * snapshot.btcPosition.currentPrice;
+    }
+    
+    if (snapshot.shortPositions && snapshot.shortPositions.length > 0) {
+      // 做空部分实际市值 = 初始金额 + 盈亏
+      shortValue = snapshot.shortPositions.reduce((sum, pos) => {
+        return sum + pos.amount + pos.pnl;
+      }, 0);
+    }
+    
     const cashValue = snapshot.cashPosition;
     
     // 计算回撤

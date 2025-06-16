@@ -9,6 +9,7 @@ export interface BTCDOM2StrategyParams {
   volumeWeight: number;       // 成交量排行榜权重 (0-1)
   volatilityWeight: number;   // 波动率排行榜权重 (0-1)
   maxShortPositions: number;  // 最多做空标的数量
+  rebalanceMode?: boolean;    // 是否启用重新平衡模式，默认true
 }
 
 // 新API返回的排行榜数据项
