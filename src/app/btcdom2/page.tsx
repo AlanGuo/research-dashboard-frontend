@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import { Badge } from '@/components/ui/badge';
 import { DatePicker } from '@/components/ui/date-picker';
 
 import { 
@@ -26,7 +25,7 @@ export default function BTCDOM2Dashboard() {
   // 策略参数状态
   const [params, setParams] = useState<BTCDOM2StrategyParams>({
     startDate: '2024-12-01',
-    endDate: '2024-12-31',
+    endDate: '2025-06-17',
     initialCapital: 10000,
     btcRatio: 0.5,
     volumeWeight: 0.6,

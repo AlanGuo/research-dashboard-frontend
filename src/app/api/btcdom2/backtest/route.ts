@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import config from '@/config';
 import { 
   BTCDOM2StrategyParams, 
   BTCDOM2BacktestResult, 
@@ -16,11 +17,9 @@ import {
 // 策略引擎类
 class BTCDOM2StrategyEngine {
   private params: BTCDOM2StrategyParams;
-  private granularityHours: number;
 
-  constructor(params: BTCDOM2StrategyParams, granularityHours: number) {
+  constructor(params: BTCDOM2StrategyParams) {
     this.params = params;
-    this.granularityHours = granularityHours;
   }
 
   // 计算交易手续费
@@ -126,9 +125,9 @@ class BTCDOM2StrategyEngine {
     // 计算当前总价值（如果是第一个快照，则使用初始本金）
     const previousValue = previousSnapshot?.totalValue || this.params.initialCapital;
     
+    const soldPositions: PositionInfo[] = [];
     let btcPosition: PositionInfo | null = null;
     let shortPositions: PositionInfo[] = [];
-    let soldPositions: PositionInfo[] = [];
     let cashPosition = 0;
     let totalValue = previousValue;
     let totalTradingFee = 0;
@@ -474,9 +473,8 @@ export async function POST(request: NextRequest) {
     // 调用后端API获取数据
     const startTime = new Date(params.startDate).toISOString();
     const endTime = new Date(params.endDate).toISOString();
-    const apiUrl = `http://localhost:4001/v1/binance/volume-backtest?startTime=${startTime}&endTime=${endTime}`;
-    
-    console.log('调用后端API:', apiUrl);
+    const apiBaseUrl = config.api?.baseUrl;
+    const apiUrl = `${apiBaseUrl}/v1/binance/volume-backtest?startTime=${startTime}&endTime=${endTime}`;
     
     const response = await fetch(apiUrl);
     if (!response.ok) {
@@ -492,7 +490,7 @@ export async function POST(request: NextRequest) {
     const { granularityHours, data } = apiResult;
     
     // 创建策略引擎
-    const strategyEngine = new BTCDOM2StrategyEngine(params, granularityHours);
+    const strategyEngine = new BTCDOM2StrategyEngine(params);
     
     // 生成策略快照
     const snapshots: StrategySnapshot[] = [];
