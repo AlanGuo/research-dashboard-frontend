@@ -885,7 +885,7 @@ export default function BTCDOM2Dashboard() {
                       {/* 当前选中时间点的详细信息 */}
                       {currentSnapshot && (
                         <div className="p-3 bg-gray-50 rounded-lg">
-                          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                             <div>
                               <span className="text-gray-500">时间: </span>
                               <span className="font-medium">{formatTimestamp(currentSnapshot.timestamp)}</span>
@@ -895,11 +895,6 @@ export default function BTCDOM2Dashboard() {
                               <span className="font-medium">
                                 第 {selectedSnapshotIndex === -1 ? backtestResult.snapshots.length : selectedSnapshotIndex + 1} 期
                               </span>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">第 </span>
-                              <span className="font-medium">{currentSnapshot.hour}</span>
-                              <span className="text-gray-500"> 小时</span>
                             </div>
                             <div>
                               <span className="text-gray-500">BTC 24h涨跌: </span>
