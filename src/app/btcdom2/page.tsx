@@ -207,7 +207,8 @@ export default function BTCDOM2Dashboard() {
         btcPosition: currentSnapshot.btcPosition ? { 
           ...currentSnapshot.btcPosition, 
           isNewPosition: true,
-          quantityChange: { type: 'new' }
+          quantityChange: { type: 'new' },
+          priceChange: { type: 'new' }
         } : null,
         shortPositions: currentSnapshot.shortPositions.map(pos => ({ 
           ...pos, 
@@ -264,18 +265,55 @@ export default function BTCDOM2Dashboard() {
       }
     };
 
+    // 计算价格变化的辅助函数
+    const getPriceChange = (currentPos: PositionInfo) => {
+      const previousPos = previousPositions.get(currentPos.symbol);
+      
+      if (!previousPos) {
+        return { type: 'new' as const };
+      }
+      
+      const currentPrice = currentPos.currentPrice;
+      const previousPrice = previousPos.currentPrice;
+      
+      // 使用相对变化百分比来判断
+      const changePercent = Math.abs((currentPrice - previousPrice) / previousPrice) * 100;
+      const threshold = 0.01; // 0.01% 的变化阈值
+      
+      if (changePercent < threshold) {
+        return { 
+          type: 'same' as const, 
+          previousPrice: previousPrice 
+        };
+      } else if (currentPrice > previousPrice) {
+        return { 
+          type: 'increase' as const, 
+          previousPrice: previousPrice,
+          changePercent: ((currentPrice - previousPrice) / previousPrice) * 100
+        };
+      } else {
+        return { 
+          type: 'decrease' as const, 
+          previousPrice: previousPrice,
+          changePercent: ((currentPrice - previousPrice) / previousPrice) * 100
+        };
+      }
+    };
+
     // 标记新增的持仓和数量变化
     const updatedSnapshot = {
       ...currentSnapshot,
       btcPosition: currentSnapshot.btcPosition ? {
         ...currentSnapshot.btcPosition,
         isNewPosition: !previousPositions.has(currentSnapshot.btcPosition.symbol),
-        quantityChange: getQuantityChange(currentSnapshot.btcPosition)
+        quantityChange: getQuantityChange(currentSnapshot.btcPosition),
+        priceChange: getPriceChange(currentSnapshot.btcPosition)
       } : null,
       shortPositions: currentSnapshot.shortPositions.map(pos => ({
         ...pos,
         isNewPosition: !previousPositions.has(pos.symbol),
-        quantityChange: getQuantityChange(pos)
+        quantityChange: getQuantityChange(pos),
+        priceChange: getPriceChange(pos)
       }))
     };
 
@@ -297,12 +335,14 @@ export default function BTCDOM2Dashboard() {
         btcPosition: currentSnapshot.btcPosition ? { 
           ...currentSnapshot.btcPosition, 
           isNewPosition: true,
-          quantityChange: { type: 'new' }
+          quantityChange: { type: 'new' },
+          priceChange: { type: 'new' }
         } : null,
         shortPositions: currentSnapshot.shortPositions.map(pos => ({ 
           ...pos, 
           isNewPosition: true,
-          quantityChange: { type: 'new' }
+          quantityChange: { type: 'new' },
+          priceChange: { type: 'new' }
         }))
       };
     }
@@ -354,18 +394,55 @@ export default function BTCDOM2Dashboard() {
       }
     };
 
+    // 计算价格变化的辅助函数
+    const getPriceChange = (currentPos: PositionInfo) => {
+      const previousPos = previousPositions.get(currentPos.symbol);
+      
+      if (!previousPos) {
+        return { type: 'new' as const };
+      }
+      
+      const currentPrice = currentPos.currentPrice;
+      const previousPrice = previousPos.currentPrice;
+      
+      // 使用相对变化百分比来判断
+      const changePercent = Math.abs((currentPrice - previousPrice) / previousPrice) * 100;
+      const threshold = 0.01; // 0.01% 的变化阈值
+      
+      if (changePercent < threshold) {
+        return { 
+          type: 'same' as const, 
+          previousPrice: previousPrice 
+        };
+      } else if (currentPrice > previousPrice) {
+        return { 
+          type: 'increase' as const, 
+          previousPrice: previousPrice,
+          changePercent: ((currentPrice - previousPrice) / previousPrice) * 100
+        };
+      } else {
+        return { 
+          type: 'decrease' as const, 
+          previousPrice: previousPrice,
+          changePercent: ((currentPrice - previousPrice) / previousPrice) * 100
+        };
+      }
+    };
+
     // 标记新增的持仓和数量变化
     const updatedSnapshot = {
       ...currentSnapshot,
       btcPosition: currentSnapshot.btcPosition ? {
         ...currentSnapshot.btcPosition,
         isNewPosition: !previousPositions.has(currentSnapshot.btcPosition.symbol),
-        quantityChange: getQuantityChange(currentSnapshot.btcPosition)
+        quantityChange: getQuantityChange(currentSnapshot.btcPosition),
+        priceChange: getPriceChange(currentSnapshot.btcPosition)
       } : null,
       shortPositions: currentSnapshot.shortPositions.map(pos => ({
         ...pos,
         isNewPosition: !previousPositions.has(pos.symbol),
-        quantityChange: getQuantityChange(pos)
+        quantityChange: getQuantityChange(pos),
+        priceChange: getPriceChange(pos)
       }))
     };
 
@@ -781,10 +858,16 @@ export default function BTCDOM2Dashboard() {
                       {/* 当前选中时间点的详细信息 */}
                       {currentSnapshot && (
                         <div className="p-3 bg-gray-50 rounded-lg">
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
                             <div>
                               <span className="text-gray-500">时间: </span>
                               <span className="font-medium">{formatTimestamp(currentSnapshot.timestamp)}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500">期数: </span>
+                              <span className="font-medium">
+                                第 {selectedSnapshotIndex === -1 ? backtestResult.snapshots.length : selectedSnapshotIndex + 1} 期
+                              </span>
                             </div>
                             <div>
                               <span className="text-gray-500">第 </span>

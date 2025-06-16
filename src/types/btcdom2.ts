@@ -88,6 +88,11 @@ export interface PositionInfo {
     previousQuantity?: number;
     changePercent?: number;
   };
+  priceChange?: {             // 价格变化信息
+    type: 'new' | 'increase' | 'decrease' | 'same';
+    previousPrice?: number;
+    changePercent?: number;
+  };
 }
 
 // 策略快照 (每个时间点的状态)

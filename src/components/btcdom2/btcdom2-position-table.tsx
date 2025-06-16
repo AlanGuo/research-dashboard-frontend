@@ -183,7 +183,16 @@ export function BTCDOM2PositionTable({ snapshot }: BTCDOM2PositionTableProps) {
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
-                    {formatCurrency(position.currentPrice)}
+                    <span>
+                      {formatCurrency(position.currentPrice)}
+                      {position.priceChange && position.priceChange.changePercent !== undefined && position.priceChange.changePercent !== 0 && (
+                        <span className={`ml-1 ${
+                          position.priceChange.changePercent > 0 ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          ({position.priceChange.changePercent > 0 ? '+' : ''}{position.priceChange.changePercent.toFixed(2)}%)
+                        </span>
+                      )}
+                    </span>
                   </TableCell>
                   <TableCell className={`text-right font-medium ${getPnlColor(position.pnl)}`}>
                     {formatCurrency(position.pnl)}
