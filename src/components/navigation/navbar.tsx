@@ -15,6 +15,7 @@ export function Navbar() {
     { name: '主页', href: '/' },
     { name: '全球流动性', href: '/gli' },
     { name: 'BTCDOM', href: '/btcdom-comparison' },
+    { name: 'BTCDOM2', href: '/btcdom2' }
   ];
 
   const toggleMobileMenu = () => {

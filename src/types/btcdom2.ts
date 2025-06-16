@@ -101,8 +101,8 @@ export interface StrategySnapshot {
   cashPosition: number;              // 现金持仓 (当无符合条件的做空标的时)
   
   // 策略状态
-  isActive: boolean;                 // 策略是否激活
-  rebalanceReason: string;           // 重平衡原因
+  isActive: boolean;                 // 策略是否持仓
+  rebalanceReason: string;           // 再平衡原因
   shortCandidates: ShortCandidate[]; // 做空候选标的详情
 }
 
@@ -113,9 +113,9 @@ export interface BTCDOM2BacktestResult {
   performance: BTCDOM2PerformanceMetrics;
   chartData: BTCDOM2ChartData[];
   summary: {
-    totalRebalances: number;    // 总重平衡次数
-    activeRebalances: number;   // 激活状态的重平衡次数
-    inactiveRebalances: number; // 非激活状态的重平衡次数
+    totalRebalances: number;    // 总再平衡次数
+    activeRebalances: number;   // 持仓状态的再平衡次数
+    inactiveRebalances: number; // 空仓状态的再平衡次数
     avgShortPositions: number;  // 平均做空标的数量
     granularityHours: number;   // 时间间隔
   };
@@ -145,7 +145,7 @@ export interface BTCDOM2ChartData {
   shortValue: number;       // 做空部分价值
   cashValue: number;        // 现金部分价值
   drawdown: number;         // 回撤
-  isActive: boolean;        // 策略是否激活
+  isActive: boolean;        // 策略是否持仓
   btcPrice: number;         // BTC价格
 }
 

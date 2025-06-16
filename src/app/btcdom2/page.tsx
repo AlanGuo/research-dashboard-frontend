@@ -187,14 +187,15 @@ export default function BTCDOM2Dashboard() {
     }
   };
 
-  // 格式化时间显示
+  // 格式化时间显示（使用UTC时区）
   const formatTimestamp = (timestamp: string) => {
     const date = new Date(timestamp);
     return date.toLocaleString('zh-CN', {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      timeZone: 'UTC'
     });
   };
 
@@ -212,6 +213,7 @@ export default function BTCDOM2Dashboard() {
                 {granularityHours}小时再平衡
               </span>
             )}
+            <span className="ml-2 text-xs text-gray-500">(时间：UTC+0)</span>
           </p>
         </div>
 
@@ -458,11 +460,11 @@ export default function BTCDOM2Dashboard() {
                       <span className="font-medium">{backtestResult.summary.totalRebalances}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">激活状态次数</span>
+                      <span className="text-gray-600">持仓状态次数</span>
                       <span className="font-medium text-green-600">{backtestResult.summary.activeRebalances}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">非激活状态次数</span>
+                      <span className="text-gray-600">空仓状态次数</span>
                       <span className="font-medium text-gray-500">{backtestResult.summary.inactiveRebalances}</span>
                     </div>
                     <div className="flex justify-between">
@@ -470,7 +472,7 @@ export default function BTCDOM2Dashboard() {
                       <span className="font-medium">{backtestResult.summary.avgShortPositions.toFixed(1)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">策略激活率</span>
+                      <span className="text-gray-600">策略持仓率</span>
                       <span className="font-medium">
                         {((backtestResult.summary.activeRebalances / backtestResult.summary.totalRebalances) * 100).toFixed(1)}%
                       </span>
@@ -544,7 +546,7 @@ export default function BTCDOM2Dashboard() {
                       {activeTab === 'current' && (
                         <>
                           <Badge variant={currentSnapshot?.isActive ? "default" : "secondary"}>
-                            {currentSnapshot?.isActive ? '策略激活' : '策略未激活'}
+                            {currentSnapshot?.isActive ? '策略持仓' : '空仓'}
                           </Badge>
                           <span className="text-sm text-gray-500">
                             {selectedSnapshotIndex === -1 ? '最新' : `第${selectedSnapshotIndex + 1}期`}

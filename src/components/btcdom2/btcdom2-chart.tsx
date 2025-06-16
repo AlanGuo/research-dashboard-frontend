@@ -39,7 +39,8 @@ export function BTCDOM2Chart({ data }: BTCDOM2ChartProps) {
       date: new Date(point.timestamp).toLocaleDateString('zh-CN', {
         month: '2-digit',
         day: '2-digit',
-        hour: '2-digit'
+        hour: '2-digit',
+        timeZone: 'UTC'
       }),
       totalReturnPercent: (point.totalReturn * 100),
       drawdownPercent: (point.drawdown * 100),
@@ -72,7 +73,7 @@ export function BTCDOM2Chart({ data }: BTCDOM2ChartProps) {
             <div className="flex justify-between gap-4">
               <span>策略状态:</span>
               <span className={`font-medium ${data.isActive ? 'text-green-600' : 'text-gray-500'}`}>
-                {data.isActive ? '激活' : '未激活'}
+                {data.isActive ? '持仓' : '空仓'}
               </span>
             </div>
           </div>
