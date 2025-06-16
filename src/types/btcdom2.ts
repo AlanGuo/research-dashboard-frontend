@@ -8,7 +8,6 @@ export interface BTCDOM2StrategyParams {
   btcRatio: number;           // BTC占比 (0-1)
   volumeWeight: number;       // 成交量排行榜权重 (0-1)
   volatilityWeight: number;   // 波动率排行榜权重 (0-1)
-  priceChangeThreshold: number; // 涨跌幅阈值 (%)
   maxShortPositions: number;  // 最多做空标的数量
 }
 
@@ -83,6 +82,12 @@ export interface PositionInfo {
   pnlPercent: number;        // 盈亏百分比
   marketShare?: number;       // 市场份额 (用于计算做空比例)
   reason: string;            // 持仓原因
+  isNewPosition?: boolean;    // 是否为新增持仓
+  quantityChange?: {          // 数量变化信息
+    type: 'new' | 'increase' | 'decrease' | 'same';
+    previousQuantity?: number;
+    changePercent?: number;
+  };
 }
 
 // 策略快照 (每个时间点的状态)

@@ -18,7 +18,11 @@ import {
   TrendingDown, 
   Wallet, 
   DollarSign,
-  AlertTriangle
+  AlertTriangle,
+  Plus,
+  ArrowUp,
+  ArrowDown,
+  Minus
 } from 'lucide-react';
 
 interface BTCDOM2PositionTableProps {
@@ -114,7 +118,13 @@ export function BTCDOM2PositionTable({ snapshot }: BTCDOM2PositionTableProps) {
                           {position.symbol.slice(0, 2)}
                         </div>
                       )}
-                      {position.symbol}
+                      <span>{position.symbol}</span>
+                      {position.isNewPosition && (
+                        <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700 border-blue-200">
+                          <Plus className="w-3 h-3 mr-1" />
+                          新增
+                        </Badge>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>
@@ -139,10 +149,38 @@ export function BTCDOM2PositionTable({ snapshot }: BTCDOM2PositionTableProps) {
                     {formatCurrency(position.amount)}
                   </TableCell>
                   <TableCell className="text-right">
-                    {position.quantity.toLocaleString(undefined, { 
-                      minimumFractionDigits: 4, 
-                      maximumFractionDigits: 4 
-                    })}
+                    <div className="flex items-center justify-end gap-1">
+                      <span>
+                        {position.quantity.toLocaleString(undefined, { 
+                          minimumFractionDigits: 4, 
+                          maximumFractionDigits: 4 
+                        })}
+                      </span>
+                      {position.quantityChange && (
+                        <>
+                          {position.quantityChange.type === 'new' && (
+                            <div title="新增持仓">
+                              <ArrowUp className="w-3 h-3 text-green-500" />
+                            </div>
+                          )}
+                          {position.quantityChange.type === 'increase' && (
+                            <div title={`增加 ${position.quantityChange.changePercent?.toFixed(2)}%`}>
+                              <ArrowUp className="w-3 h-3 text-green-500" />
+                            </div>
+                          )}
+                          {position.quantityChange.type === 'decrease' && (
+                            <div title={`减少 ${Math.abs(position.quantityChange.changePercent || 0).toFixed(2)}%`}>
+                              <ArrowDown className="w-3 h-3 text-red-500" />
+                            </div>
+                          )}
+                          {position.quantityChange.type === 'same' && (
+                            <div title="数量无变化">
+                              <Minus className="w-3 h-3 text-gray-400" />
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
                     {formatCurrency(position.currentPrice)}

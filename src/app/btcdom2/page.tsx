@@ -8,18 +8,19 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
+import { DatePicker } from '@/components/ui/date-picker';
 
 import { 
   BTCDOM2StrategyParams, 
   BTCDOM2BacktestResult, 
   BTCDOM2ChartData,
-  StrategySnapshot
+  StrategySnapshot,
+  PositionInfo
 } from '@/types/btcdom2';
 import { BTCDOM2Chart } from '@/components/btcdom2/btcdom2-chart';
 import { BTCDOM2PerformanceCard } from '@/components/btcdom2/btcdom2-performance-card';
 import { BTCDOM2PositionTable } from '@/components/btcdom2/btcdom2-position-table';
-import { BTCDOM2PositionComparison } from '@/components/btcdom2/btcdom2-position-comparison';
-import { AlertCircle, Play, Settings, TrendingUp, TrendingDown, Clock, Loader2, Eye, GitCompare } from 'lucide-react';
+import { AlertCircle, Play, Settings, TrendingUp, TrendingDown, Clock, Loader2, Eye } from 'lucide-react';
 
 export default function BTCDOM2Dashboard() {
   // 策略参数状态
@@ -30,7 +31,6 @@ export default function BTCDOM2Dashboard() {
     btcRatio: 0.5,
     volumeWeight: 0.6,
     volatilityWeight: 0.4,
-    priceChangeThreshold: 5,
     maxShortPositions: 20
   });
 
@@ -46,7 +46,6 @@ export default function BTCDOM2Dashboard() {
   // UI状态
   const [showAdvancedSettings, setShowAdvancedSettings] = useState<boolean>(false);
   const [parameterErrors, setParameterErrors] = useState<Record<string, string>>({});
-  const [activeTab, setActiveTab] = useState<'current' | 'comparison'>('current');
 
   // 验证参数
   const validateParameters = useCallback((params: BTCDOM2StrategyParams): Record<string, string> => {
@@ -62,10 +61,6 @@ export default function BTCDOM2Dashboard() {
     
     if (Math.abs(params.volumeWeight + params.volatilityWeight - 1) > 0.001) {
       errors.weights = '成交量权重和波动率权重之和必须等于1';
-    }
-    
-    if (params.priceChangeThreshold <= 0) {
-      errors.priceChangeThreshold = '涨跌幅阈值必须大于0';
     }
     
     if (params.maxShortPositions <= 0 || params.maxShortPositions > 50) {
@@ -111,7 +106,11 @@ export default function BTCDOM2Dashboard() {
       if (result.success) {
         setBacktestResult(result.data);
         setChartData(result.data.chartData);
-        setCurrentSnapshot(result.data.snapshots[result.data.snapshots.length - 1]);
+        
+        // 设置最新快照并标记新增持仓
+        const latestIndex = result.data.snapshots.length - 1;
+        const latestSnapshot = markNewPositionsWithData(result.data.snapshots[latestIndex], latestIndex, result.data);
+        setCurrentSnapshot(latestSnapshot);
         setSelectedSnapshotIndex(-1); // 重置为最新
         setGranularityHours(result.data.summary.granularityHours);
       } else {
@@ -178,13 +177,199 @@ export default function BTCDOM2Dashboard() {
   const handleSnapshotSelection = (index: number) => {
     if (backtestResult && backtestResult.snapshots) {
       setSelectedSnapshotIndex(index);
+      
+      let selectedSnapshot: StrategySnapshot;
       if (index === -1) {
         // 选择最新
-        setCurrentSnapshot(backtestResult.snapshots[backtestResult.snapshots.length - 1]);
+        selectedSnapshot = backtestResult.snapshots[backtestResult.snapshots.length - 1];
       } else {
-        setCurrentSnapshot(backtestResult.snapshots[index]);
+        selectedSnapshot = backtestResult.snapshots[index];
       }
+
+      // 标记新增持仓
+      const snapshotWithNewPositions = markNewPositions(selectedSnapshot, index);
+      setCurrentSnapshot(snapshotWithNewPositions);
     }
+  };
+
+  // 标记新增持仓的函数（带数据参数）
+  const markNewPositionsWithData = (currentSnapshot: StrategySnapshot, currentIndex: number, data: BTCDOM2BacktestResult): StrategySnapshot => {
+    if (!data) {
+      return currentSnapshot;
+    }
+
+    const actualIndex = currentIndex === -1 ? data.snapshots.length - 1 : currentIndex;
+    
+    // 第1期（index = 0）时，所有持仓都是新增的
+    if (actualIndex === 0) {
+      return {
+        ...currentSnapshot,
+        btcPosition: currentSnapshot.btcPosition ? { 
+          ...currentSnapshot.btcPosition, 
+          isNewPosition: true,
+          quantityChange: { type: 'new' }
+        } : null,
+        shortPositions: currentSnapshot.shortPositions.map(pos => ({ 
+          ...pos, 
+          isNewPosition: true,
+          quantityChange: { type: 'new' }
+        }))
+      };
+    }
+
+    // 获取前一期的快照
+    const previousSnapshot = data.snapshots[actualIndex - 1];
+    
+    // 获取前一期的持仓信息
+    const previousPositions = new Map<string, PositionInfo>();
+    if (previousSnapshot.btcPosition) {
+      previousPositions.set(previousSnapshot.btcPosition.symbol, previousSnapshot.btcPosition);
+    }
+    previousSnapshot.shortPositions.forEach(pos => {
+      previousPositions.set(pos.symbol, pos);
+    });
+
+    // 计算数量变化的辅助函数
+    const getQuantityChange = (currentPos: PositionInfo) => {
+      const previousPos = previousPositions.get(currentPos.symbol);
+      
+      if (!previousPos) {
+        return { type: 'new' as const };
+      }
+      
+      const currentQty = currentPos.quantity;
+      const previousQty = previousPos.quantity;
+      
+      // 使用相对变化百分比来判断，更精确
+      const changePercent = Math.abs((currentQty - previousQty) / previousQty) * 100;
+      const threshold = 0.01; // 0.01% 的变化阈值
+      
+      if (changePercent < threshold) {
+        return { 
+          type: 'same' as const, 
+          previousQuantity: previousQty 
+        };
+      } else if (currentQty > previousQty) {
+        return { 
+          type: 'increase' as const, 
+          previousQuantity: previousQty,
+          changePercent: ((currentQty - previousQty) / previousQty) * 100
+        };
+      } else {
+        return { 
+          type: 'decrease' as const, 
+          previousQuantity: previousQty,
+          changePercent: ((currentQty - previousQty) / previousQty) * 100
+        };
+      }
+    };
+
+    // 标记新增的持仓和数量变化
+    const updatedSnapshot = {
+      ...currentSnapshot,
+      btcPosition: currentSnapshot.btcPosition ? {
+        ...currentSnapshot.btcPosition,
+        isNewPosition: !previousPositions.has(currentSnapshot.btcPosition.symbol),
+        quantityChange: getQuantityChange(currentSnapshot.btcPosition)
+      } : null,
+      shortPositions: currentSnapshot.shortPositions.map(pos => ({
+        ...pos,
+        isNewPosition: !previousPositions.has(pos.symbol),
+        quantityChange: getQuantityChange(pos)
+      }))
+    };
+
+    return updatedSnapshot;
+  };
+
+  // 标记新增持仓的函数
+  const markNewPositions = (currentSnapshot: StrategySnapshot, currentIndex: number): StrategySnapshot => {
+    if (!backtestResult) {
+      return currentSnapshot;
+    }
+
+    const actualIndex = currentIndex === -1 ? backtestResult.snapshots.length - 1 : currentIndex;
+    
+    // 第1期（index = 0）时，所有持仓都是新增的
+    if (actualIndex === 0) {
+      return {
+        ...currentSnapshot,
+        btcPosition: currentSnapshot.btcPosition ? { 
+          ...currentSnapshot.btcPosition, 
+          isNewPosition: true,
+          quantityChange: { type: 'new' }
+        } : null,
+        shortPositions: currentSnapshot.shortPositions.map(pos => ({ 
+          ...pos, 
+          isNewPosition: true,
+          quantityChange: { type: 'new' }
+        }))
+      };
+    }
+
+    // 获取前一期的快照
+    const previousSnapshot = backtestResult.snapshots[actualIndex - 1];
+    
+    // 获取前一期的持仓信息
+    const previousPositions = new Map<string, PositionInfo>();
+    if (previousSnapshot.btcPosition) {
+      previousPositions.set(previousSnapshot.btcPosition.symbol, previousSnapshot.btcPosition);
+    }
+    previousSnapshot.shortPositions.forEach(pos => {
+      previousPositions.set(pos.symbol, pos);
+    });
+
+    // 计算数量变化的辅助函数
+    const getQuantityChange = (currentPos: PositionInfo) => {
+      const previousPos = previousPositions.get(currentPos.symbol);
+      
+      if (!previousPos) {
+        return { type: 'new' as const };
+      }
+      
+      const currentQty = currentPos.quantity;
+      const previousQty = previousPos.quantity;
+      
+      // 使用相对变化百分比来判断，更精确
+      const changePercent = Math.abs((currentQty - previousQty) / previousQty) * 100;
+      const threshold = 0.01; // 0.01% 的变化阈值
+      
+      if (changePercent < threshold) {
+        return { 
+          type: 'same' as const, 
+          previousQuantity: previousQty 
+        };
+      } else if (currentQty > previousQty) {
+        return { 
+          type: 'increase' as const, 
+          previousQuantity: previousQty,
+          changePercent: ((currentQty - previousQty) / previousQty) * 100
+        };
+      } else {
+        return { 
+          type: 'decrease' as const, 
+          previousQuantity: previousQty,
+          changePercent: ((currentQty - previousQty) / previousQty) * 100
+        };
+      }
+    };
+
+    // 标记新增的持仓和数量变化
+    const updatedSnapshot = {
+      ...currentSnapshot,
+      btcPosition: currentSnapshot.btcPosition ? {
+        ...currentSnapshot.btcPosition,
+        isNewPosition: !previousPositions.has(currentSnapshot.btcPosition.symbol),
+        quantityChange: getQuantityChange(currentSnapshot.btcPosition)
+      } : null,
+      shortPositions: currentSnapshot.shortPositions.map(pos => ({
+        ...pos,
+        isNewPosition: !previousPositions.has(pos.symbol),
+        quantityChange: getQuantityChange(pos)
+      }))
+    };
+
+    return updatedSnapshot;
   };
 
   // 格式化时间显示（使用UTC时区）
@@ -239,22 +424,20 @@ export default function BTCDOM2Dashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="startDate">开始日期</Label>
-                <Input
-                  id="startDate"
-                  type="date"
-                  value={params.startDate}
-                  onChange={(e) => handleParamChange('startDate', e.target.value)}
+                <DatePicker
+                  date={params.startDate ? new Date(params.startDate) : undefined}
+                  onDateChange={(date) => handleParamChange('startDate', date ? date.toISOString().split('T')[0] : '')}
+                  placeholder="选择开始日期"
                   className={parameterErrors.dateRange ? 'border-red-500' : ''}
                 />
               </div>
               
               <div className="space-y-2">
                 <Label htmlFor="endDate">结束日期</Label>
-                <Input
-                  id="endDate"
-                  type="date"
-                  value={params.endDate}
-                  onChange={(e) => handleParamChange('endDate', e.target.value)}
+                <DatePicker
+                  date={params.endDate ? new Date(params.endDate) : undefined}
+                  onDateChange={(date) => handleParamChange('endDate', date ? date.toISOString().split('T')[0] : '')}
+                  placeholder="选择结束日期"
                   className={parameterErrors.dateRange ? 'border-red-500' : ''}
                 />
                 {parameterErrors.dateRange && (
@@ -334,21 +517,6 @@ export default function BTCDOM2Dashboard() {
                     </div>
                     {parameterErrors.weights && (
                       <p className="text-xs text-red-500">{parameterErrors.weights}</p>
-                    )}
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="priceChangeThreshold">涨跌幅阈值 (%)</Label>
-                    <Input
-                      id="priceChangeThreshold"
-                      type="number"
-                      step="0.1"
-                      value={params.priceChangeThreshold}
-                      onChange={(e) => handleParamChange('priceChangeThreshold', parseFloat(e.target.value) || 0)}
-                      className={parameterErrors.priceChangeThreshold ? 'border-red-500' : ''}
-                    />
-                    {parameterErrors.priceChangeThreshold && (
-                      <p className="text-xs text-red-500">{parameterErrors.priceChangeThreshold}</p>
                     )}
                   </div>
                   
@@ -520,34 +688,13 @@ export default function BTCDOM2Dashboard() {
             {backtestResult && backtestResult.snapshots && backtestResult.snapshots.length > 0 && (
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
-                    <span>持仓历史分析</span>
-                    <div className="flex bg-gray-100 rounded-lg p-1">
-                      <Button
-                        variant={activeTab === 'current' ? 'default' : 'ghost'}
-                        size="sm"
-                        onClick={() => setActiveTab('current')}
-                        className="text-xs"
-                      >
-                        <Eye className="w-3 h-3 mr-1" />
-                        持仓查看
-                      </Button>
-                      <Button
-                        variant={activeTab === 'comparison' ? 'default' : 'ghost'}
-                        size="sm"
-                        onClick={() => setActiveTab('comparison')}
-                        className="text-xs"
-                      >
-                        <GitCompare className="w-3 h-3 mr-1" />
-                        持仓对比
-                      </Button>
-                    </div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Eye className="w-4 h-4" />
+                    持仓历史分析
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {activeTab === 'current' ? (
-                    <>
-                      {/* 时间轴选择器 */}
+                  {/* 时间轴选择器 */}
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
                           <Label className="text-sm font-medium">选择时间点</Label>
@@ -597,26 +744,28 @@ export default function BTCDOM2Dashboard() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleSnapshotSelection(Math.floor(backtestResult.snapshots.length / 4))}
+                            onClick={() => {
+                              const currentIndex = selectedSnapshotIndex === -1 ? backtestResult.snapshots.length - 1 : selectedSnapshotIndex;
+                              const prevIndex = Math.max(0, currentIndex - 1);
+                              handleSnapshotSelection(prevIndex);
+                            }}
                             className="text-xs"
+                            disabled={selectedSnapshotIndex === 0}
                           >
-                            25%
+                            上一期
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleSnapshotSelection(Math.floor(backtestResult.snapshots.length / 2))}
+                            onClick={() => {
+                              const currentIndex = selectedSnapshotIndex === -1 ? backtestResult.snapshots.length - 1 : selectedSnapshotIndex;
+                              const nextIndex = Math.min(backtestResult.snapshots.length - 1, currentIndex + 1);
+                              handleSnapshotSelection(nextIndex);
+                            }}
                             className="text-xs"
+                            disabled={selectedSnapshotIndex === backtestResult.snapshots.length - 1 || selectedSnapshotIndex === -1}
                           >
-                            50%
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleSnapshotSelection(Math.floor(backtestResult.snapshots.length * 3 / 4))}
-                            className="text-xs"
-                          >
-                            75%
+                            下一期
                           </Button>
                           <Button
                             variant="outline"
@@ -624,7 +773,7 @@ export default function BTCDOM2Dashboard() {
                             onClick={() => handleSnapshotSelection(backtestResult.snapshots.length - 1)}
                             className="text-xs"
                           >
-                            最后一期
+                            最后1期
                           </Button>
                         </div>
                       </div>
@@ -660,11 +809,6 @@ export default function BTCDOM2Dashboard() {
                       {currentSnapshot && (
                         <BTCDOM2PositionTable snapshot={currentSnapshot} />
                       )}
-                    </>
-                  ) : (
-                    /* 持仓对比功能 */
-                    <BTCDOM2PositionComparison snapshots={backtestResult.snapshots} />
-                  )}
                 </CardContent>
               </Card>
             )}

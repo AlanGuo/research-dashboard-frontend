@@ -63,9 +63,6 @@ class BTCDOM2StrategyEngine {
       if (priceChange >= btcPriceChange) {
         eligible = false;
         reason = `涨跌幅(${priceChange.toFixed(2)}%)不低于BTC(${btcPriceChange.toFixed(2)}%)`;
-      } else if (Math.abs(priceChange) < this.params.priceChangeThreshold) {
-        eligible = false;
-        reason = `涨跌幅绝对值(${Math.abs(priceChange).toFixed(2)}%)小于阈值(${this.params.priceChangeThreshold}%)`;
       } else {
         reason = `综合评分: ${totalScore.toFixed(3)} (成交量: ${volumeScore.toFixed(3)}, 涨跌幅: ${priceChangeScore.toFixed(3)})`;
       }
@@ -150,8 +147,8 @@ class BTCDOM2StrategyEngine {
         quantity: btcQuantity,
         entryPrice: previousSnapshot?.btcPosition?.entryPrice || btcPrice,
         currentPrice: btcPrice,
-        pnl: btcPnl,
-        pnlPercent: btcPnl / (previousSnapshot?.btcPosition?.amount || btcAmount),
+        pnl: btcPnl, // 第一期为0，后续期基于价格变化计算
+        pnlPercent: previousSnapshot?.btcPosition ? btcPnl / previousSnapshot.btcPosition.amount : 0,
         reason: 'BTC基础持仓'
       };
       
@@ -164,18 +161,31 @@ class BTCDOM2StrategyEngine {
         const price = candidate.volume24h > 0 ? candidate.quoteVolume24h / candidate.volume24h : 1;
         const quantity = allocation / price;
         
-        // 做空盈亏：价格下跌时盈利
-        const pnl = -allocation * (candidate.priceChange24h / 100);
+        // 计算做空盈亏
+        let pnl = 0;
+        let pnlPercent = 0;
+        
+        if (previousSnapshot?.shortPositions) {
+          // 从第二期开始，基于价格变化计算盈亏
+          const previousShortPosition = previousSnapshot.shortPositions.find(pos => pos.symbol === candidate.symbol);
+          if (previousShortPosition) {
+            // 做空盈亏：价格下跌时盈利，价格上涨时亏损
+            const priceChangePercent = (price - previousShortPosition.currentPrice) / previousShortPosition.currentPrice;
+            pnl = -previousShortPosition.amount * priceChangePercent;
+            pnlPercent = -priceChangePercent;
+          }
+        }
+        // 第一期盈亏为0（刚买入）
         
         return {
           symbol: candidate.symbol,
           side: 'SHORT',
           amount: allocation,
           quantity,
-          entryPrice: price,
+          entryPrice: previousSnapshot?.shortPositions?.find(pos => pos.symbol === candidate.symbol)?.entryPrice || price,
           currentPrice: price,
           pnl,
-          pnlPercent: -candidate.priceChange24h / 100,
+          pnlPercent,
           marketShare: candidate.marketShare,
           reason: candidate.reason
         };
