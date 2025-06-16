@@ -41,6 +41,22 @@ export function BTCDOM2PositionTable({ snapshot }: BTCDOM2PositionTableProps) {
 
   // 格式化金额
   const formatCurrency = (amount: number) => {
+    if (amount === 0) return '$0.00';
+    
+    // 对于小于 1 美元的价格，使用更多小数位
+    if (Math.abs(amount) < 1) {
+      // 找到第一个非零小数位，然后显示4位有效数字
+      const str = amount.toString();
+      if (str.includes('e')) {
+        // 处理科学计数法
+        return `$${amount.toFixed(8).replace(/\.?0+$/, '')}`;
+      } else {
+        // 显示最多8位小数，但去除尾随的0
+        return `$${amount.toFixed(8).replace(/\.?0+$/, '')}`;
+      }
+    }
+    
+    // 对于大于等于 1 美元的价格，使用标准格式
     return `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
