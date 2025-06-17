@@ -55,10 +55,10 @@ export default function BTCDOM2Dashboard() {
   // UI状态
   const [showAdvancedSettings, setShowAdvancedSettings] = useState<boolean>(false);
 
-  // 工具函数：格式化时间
+  // 工具函数：格式化时间（使用UTC+0时区）
   const formatPeriodTime = (timestamp: string): string => {
     const date = new Date(timestamp);
-    return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+    return `${date.getUTCFullYear()}-${(date.getUTCMonth() + 1).toString().padStart(2, '0')}-${date.getUTCDate().toString().padStart(2, '0')} ${date.getUTCHours().toString().padStart(2, '0')}:${date.getUTCMinutes().toString().padStart(2, '0')}`;
   };
   const [parameterErrors, setParameterErrors] = useState<Record<string, string>>({});
 
@@ -549,18 +549,6 @@ export default function BTCDOM2Dashboard() {
     };
 
     return updatedSnapshot;
-  };
-
-  // 格式化时间显示（使用UTC时区）
-  const formatTimestamp = (timestamp: string) => {
-    const date = new Date(timestamp);
-    return date.toLocaleString('zh-CN', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZone: 'UTC'
-    });
   };
 
   return (
@@ -1155,11 +1143,11 @@ export default function BTCDOM2Dashboard() {
                             className="w-full"
                           />
                           <div className="flex justify-between text-xs text-gray-500">
-                            <span>{formatTimestamp(backtestResult.snapshots[0].timestamp)}</span>
+                            <span>{formatPeriodTime(backtestResult.snapshots[0].timestamp)}</span>
                             <span>
-                              {currentSnapshot && formatTimestamp(currentSnapshot.timestamp)}
+                              {currentSnapshot && formatPeriodTime(currentSnapshot.timestamp)}
                             </span>
-                            <span>{formatTimestamp(backtestResult.snapshots[backtestResult.snapshots.length - 1].timestamp)}</span>
+                            <span>{formatPeriodTime(backtestResult.snapshots[backtestResult.snapshots.length - 1].timestamp)}</span>
                           </div>
                         </div>
 
@@ -1216,7 +1204,7 @@ export default function BTCDOM2Dashboard() {
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                             <div>
                               <span className="text-gray-500">时间: </span>
-                              <span className="font-medium">{formatTimestamp(currentSnapshot.timestamp)}</span>
+                              <span className="font-medium">{formatPeriodTime(currentSnapshot.timestamp)}</span>
                             </div>
                             <div>
                               <span className="text-gray-500">期数: </span>
@@ -1225,11 +1213,13 @@ export default function BTCDOM2Dashboard() {
                               </span>
                             </div>
                             <div>
-                              <span className="text-gray-500">BTC 24h涨跌: </span>
+                              <span className="text-gray-500">BTC价格: </span>
+                              <span className="font-medium">${currentSnapshot.btcPrice.toLocaleString()}</span>
                               <span className={`font-medium ${currentSnapshot.btcPriceChange24h >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {currentSnapshot.btcPriceChange24h.toFixed(2)}%
+                                ({currentSnapshot.btcPriceChange24h >= 0 ? "+" : ""}{currentSnapshot.btcPriceChange24h.toFixed(2)}%)
                               </span>
                             </div>
+
                             <div>
                               <span className="text-gray-500">做空标的数: </span>
                               <span className="font-medium">{currentSnapshot.shortPositions.length}</span>

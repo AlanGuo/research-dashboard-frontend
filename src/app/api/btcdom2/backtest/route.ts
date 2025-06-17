@@ -719,7 +719,10 @@ class BTCDOM2StrategyEngine {
     const totalPnl = totalValue - this.params.initialCapital;
     const totalPnlPercent = totalPnl / this.params.initialCapital;
     
-
+    // 计算本期盈亏和本期收益率
+    const prevValue = previousSnapshot?.totalValue || this.params.initialCapital;
+    const periodPnl = totalValue - prevValue;
+    const periodPnlPercent = prevValue > 0 ? periodPnl / prevValue : 0;
 
     return {
       timestamp,
@@ -732,6 +735,8 @@ class BTCDOM2StrategyEngine {
       totalValue,
       totalPnl,
       totalPnlPercent,
+      periodPnl,
+      periodPnlPercent,
       totalTradingFee,
       accumulatedTradingFee: accumulatedTradingFee + totalTradingFee,
       cashPosition,

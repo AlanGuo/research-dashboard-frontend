@@ -128,6 +128,8 @@ export interface StrategySnapshot {
   totalValue: number;                // 总资产价值
   totalPnl: number;                  // 总盈亏
   totalPnlPercent: number;           // 总盈亏百分比
+  periodPnl: number;                 // 本期盈亏 (相对于上期)
+  periodPnlPercent: number;          // 本期收益率 (相对于上期)
   totalTradingFee: number;           // 当期总手续费
   accumulatedTradingFee: number;     // 累计总手续费
   cashPosition: number;              // 现金持仓 (当无符合条件的做空标的时)

@@ -39,7 +39,7 @@ export function BTCDOM2Chart({ data, params }: BTCDOM2ChartProps) {
     const processedData = data.map(point => ({
       ...point,
       date: new Date(point.timestamp).toLocaleDateString('zh-CN', {
-        year: '2-digit',
+        year: 'numeric',
         month: '2-digit',
         day: '2-digit',
         hour: '2-digit',

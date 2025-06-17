@@ -109,7 +109,7 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
   return (
     <div className="space-y-4">
       {/* 基本信息 */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
         <div className="text-center">
           <p className="text-sm text-gray-500">总资产</p>
           <p className="text-lg font-semibold">{formatCurrency(snapshot.totalValue)}</p>
@@ -121,9 +121,21 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
           </p>
         </div>
         <div className="text-center">
-          <p className="text-sm text-gray-500">收益率</p>
+          <p className="text-sm text-gray-500">总收益率</p>
           <p className={`text-lg font-semibold ${getPnlColor(snapshot.totalPnl)}`}>
             {formatPercent(snapshot.totalPnlPercent)}
+          </p>
+        </div>
+        <div className="text-center">
+          <p className="text-sm text-gray-500">当期盈亏</p>
+          <p className={`text-lg font-semibold ${getPnlColor(snapshot.periodPnl || 0)}`}>
+            {formatCurrency(snapshot.periodPnl || 0)}
+          </p>
+        </div>
+        <div className="text-center">
+          <p className="text-sm text-gray-500">当期收益率</p>
+          <p className={`text-lg font-semibold ${getPnlColor(snapshot.periodPnlPercent || 0)}`}>
+            {formatPercent(snapshot.periodPnlPercent || 0)}
           </p>
         </div>
         <div className="text-center">
@@ -137,10 +149,6 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
           <p className="text-lg font-semibold text-orange-700">
             {formatCurrency(snapshot.accumulatedTradingFee || 0)}
           </p>
-        </div>
-        <div className="text-center">
-          <p className="text-sm text-gray-500">BTC价格</p>
-          <p className="text-lg font-semibold">${snapshot.btcPrice.toLocaleString()}</p>
         </div>
       </div>
 
