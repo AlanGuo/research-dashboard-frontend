@@ -487,8 +487,13 @@ function calculatePerformanceMetrics(
 
 // 生成图表数据
 function generateChartData(snapshots: StrategySnapshot[], params: BTCDOM2StrategyParams): BTCDOM2ChartData[] {
+  const initialBtcPrice = snapshots.length > 0 ? snapshots[0].btcPrice : 0;
+  
   return snapshots.map(snapshot => {
     const totalReturn = (snapshot.totalValue - params.initialCapital) / params.initialCapital;
+    
+    // 计算BTC收益率 (相对于初始价格)
+    const btcReturn = initialBtcPrice > 0 ? (snapshot.btcPrice - initialBtcPrice) / initialBtcPrice : 0;
     
     // 计算实际市值，包括盈亏
     let btcValue = 0;
@@ -519,6 +524,7 @@ function generateChartData(snapshots: StrategySnapshot[], params: BTCDOM2Strateg
       hour: snapshot.hour,
       totalValue: snapshot.totalValue,
       totalReturn,
+      btcReturn, // 新增BTC收益率
       btcValue,
       shortValue,
       cashValue,

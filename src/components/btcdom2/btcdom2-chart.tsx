@@ -20,6 +20,7 @@ interface TooltipPayload {
     date: string;
     totalValue: number;
     totalReturnPercent: number;
+    btcReturnPercent: number; // 新增BTC收益率
     btcPrice: number;
     isActive: boolean;
   };
@@ -35,7 +36,7 @@ export function BTCDOM2Chart({ data, params }: BTCDOM2ChartProps) {
   const chartData = useMemo(() => {
     if (!data || data.length === 0) return [];
     
-    return data.map(point => ({
+    const processedData = data.map(point => ({
       ...point,
       date: new Date(point.timestamp).toLocaleDateString('zh-CN', {
         month: '2-digit',
@@ -44,9 +45,12 @@ export function BTCDOM2Chart({ data, params }: BTCDOM2ChartProps) {
         timeZone: 'UTC'
       }),
       totalReturnPercent: (point.totalReturn * 100),
+      btcReturnPercent: ((point.btcReturn || 0) * 100), // 新增BTC收益率百分比，处理undefined情况
       drawdownPercent: (point.drawdown * 100),
       totalValueK: point.totalValue / 1000, // 转换为千为单位
     }));
+    
+    return processedData;
   }, [data]);
 
   // 自定义Tooltip
@@ -62,9 +66,15 @@ export function BTCDOM2Chart({ data, params }: BTCDOM2ChartProps) {
               <span className="font-medium">${data.totalValue.toLocaleString()}</span>
             </div>
             <div className="flex justify-between gap-4">
-              <span>收益率:</span>
+              <span>策略收益率:</span>
               <span className={`font-medium ${data.totalReturnPercent >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 {data.totalReturnPercent.toFixed(2)}%
+              </span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span>BTC收益率:</span>
+              <span className={`font-medium ${(data.btcReturnPercent || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {(data.btcReturnPercent || 0).toFixed(2)}%
               </span>
             </div>
             <div className="flex justify-between gap-4">
@@ -99,7 +109,7 @@ export function BTCDOM2Chart({ data, params }: BTCDOM2ChartProps) {
     <div className="space-y-6">
       {/* BTC价格与策略收益对比 */}
       <div>
-        <h4 className="text-lg font-medium mb-4">BTC价格与策略收益对比</h4>
+        <h4 className="text-lg font-medium mb-4">BTC价格与收益率对比</h4>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={chartData}>
@@ -120,7 +130,7 @@ export function BTCDOM2Chart({ data, params }: BTCDOM2ChartProps) {
                 orientation="right"
                 tick={{ fontSize: 12 }}
                 stroke="#2563eb"
-                label={{ value: '策略收益率 (%)', angle: 90, position: 'insideRight' }}
+                label={{ value: '收益率 (%)', angle: 90, position: 'insideRight' }}
               />
               <Tooltip content={<CustomTooltip />} />
               <Legend />
@@ -142,6 +152,15 @@ export function BTCDOM2Chart({ data, params }: BTCDOM2ChartProps) {
                 strokeWidth={2}
                 dot={false}
                 name="策略收益率 (%)"
+              />
+              <Line
+                yAxisId="right"
+                type="monotone"
+                dataKey="btcReturnPercent"
+                stroke="#16a34a"
+                strokeWidth={2}
+                dot={false}
+                name="BTC收益率 (%)"
               />
             </ComposedChart>
           </ResponsiveContainer>

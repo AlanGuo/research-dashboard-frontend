@@ -160,6 +160,7 @@ export interface BTCDOM2ChartData {
   hour: number;              // 小时数
   totalValue: number;        // 总资产价值
   totalReturn: number;       // 累计收益率
+  btcReturn: number;         // BTC收益率 (新增)
   btcValue: number;         // BTC部分价值
   shortValue: number;       // 做空部分价值
   cashValue: number;        // 现金部分价值
