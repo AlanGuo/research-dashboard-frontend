@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 import {
   BTCDOM2StrategyParams,
@@ -20,12 +21,12 @@ import {
 import { BTCDOM2Chart } from '@/components/btcdom2/btcdom2-chart';
 import { BTCDOM2PerformanceCard } from '@/components/btcdom2/btcdom2-performance-card';
 import { BTCDOM2PositionTable } from '@/components/btcdom2/btcdom2-position-table';
-import { AlertCircle, Play, Settings, TrendingUp, TrendingDown, Clock, Loader2, Eye } from 'lucide-react';
+import { AlertCircle, Play, Settings, TrendingUp, TrendingDown, Clock, Loader2, Eye, Info } from 'lucide-react';
 
 export default function BTCDOM2Dashboard() {
   // 策略参数状态
   const [params, setParams] = useState<BTCDOM2StrategyParams>({
-    startDate: '2024-09-01',
+    startDate: '2024-08-01',
     endDate: '2025-06-17',
     initialCapital: 10000,
     btcRatio: 0.5,
@@ -48,6 +49,12 @@ export default function BTCDOM2Dashboard() {
 
   // UI状态
   const [showAdvancedSettings, setShowAdvancedSettings] = useState<boolean>(false);
+
+  // 工具函数：格式化时间
+  const formatPeriodTime = (timestamp: string): string => {
+    const date = new Date(timestamp);
+    return `${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+  };
   const [parameterErrors, setParameterErrors] = useState<Record<string, string>>({});
 
   // 验证参数
@@ -863,7 +870,28 @@ export default function BTCDOM2Dashboard() {
                 <CardContent>
                   <div className="space-y-3">
                     <div className="flex justify-between">
-                      <span className="text-gray-600">波动率</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-gray-600">波动率</span>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button className="text-gray-400 hover:text-gray-600">
+                              <Info className="w-3 h-3" />
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-72 text-sm" side="top">
+                            <div className="space-y-2">
+                              <div className="font-medium">年化波动率</div>
+                              <div className="text-gray-600">
+                                衡量策略收益率的变动程度，反映投资风险的大小。
+                              </div>
+                              <div className="text-xs text-gray-500 border-t pt-2">
+                                • 波动率越高，风险越大<br/>
+                                • 波动率越低，收益越稳定
+                              </div>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
                       <span className="font-medium">{(backtestResult.performance.volatility * 100).toFixed(2)}%</span>
                     </div>
                     <div className="flex justify-between">
@@ -872,18 +900,57 @@ export default function BTCDOM2Dashboard() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">最佳收益期</span>
-                      <span className="font-medium text-green-600">
-                        {(backtestResult.performance.bestPeriod * 100).toFixed(2)}%
-                      </span>
+                      <div className="text-right">
+                        <span className="font-medium text-green-600">
+                          {backtestResult.performance.bestPeriodInfo && (
+                            <span className="text-xs text-gray-500 mr-2">
+                              第{backtestResult.performance.bestPeriodInfo.period}期 • {formatPeriodTime(backtestResult.performance.bestPeriodInfo.timestamp)}
+                            </span>
+                          )}
+                          {(backtestResult.performance.bestPeriod * 100).toFixed(2)}%
+                        </span>
+                      </div>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">最差收益期</span>
-                      <span className="font-medium text-red-600">
-                        {(backtestResult.performance.worstPeriod * 100).toFixed(2)}%
-                      </span>
+                      <div className="text-right">
+                        <span className="font-medium text-red-600">
+                          {backtestResult.performance.worstPeriodInfo && (
+                            <span className="text-xs text-gray-500 mr-2">
+                              第{backtestResult.performance.worstPeriodInfo.period}期 • {formatPeriodTime(backtestResult.performance.worstPeriodInfo.timestamp)}
+                            </span>
+                          )}
+                          {(backtestResult.performance.worstPeriod * 100).toFixed(2)}%
+                        </span>
+                      </div>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">卡玛比率</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-gray-600">卡玛比率</span>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button className="text-gray-400 hover:text-gray-600">
+                              <Info className="w-3 h-3" />
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-80 text-sm" side="top">
+                            <div className="space-y-2">
+                              <div className="font-medium">卡玛比率 (Calmar Ratio)</div>
+                              <div className="text-gray-600">
+                                卡玛比率 = 年化收益率 ÷ 最大回撤
+                              </div>
+                              <div className="text-gray-600">
+                                用于衡量风险调整后的收益表现。比率越高，说明在承担相同回撤风险下获得了更高的收益。
+                              </div>
+                              <div className="text-xs text-gray-500 border-t pt-2">
+                                • &gt; 1.0：优秀表现<br/>
+                                • 0.5-1.0：良好表现<br/>
+                                • &lt; 0.5：需要改进
+                              </div>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
                       <span className="font-medium">{backtestResult.performance.calmarRatio.toFixed(2)}</span>
                     </div>
                   </div>

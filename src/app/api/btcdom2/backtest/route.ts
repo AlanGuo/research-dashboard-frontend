@@ -434,20 +434,55 @@ function calculatePerformanceMetrics(
     };
   }
   
-  const returns = snapshots.map(s => s.totalPnlPercent);
-  const totalReturn = returns[returns.length - 1] || 0;
+  // 计算期间收益率变化（不是累计收益率）
+  const periodReturns: number[] = [];
+  const periodInfo: Array<{ return: number; timestamp: string; period: number }> = [];
+  
+  for (let i = 1; i < snapshots.length; i++) {
+    const prevValue = snapshots[i - 1].totalValue;
+    const currentValue = snapshots[i].totalValue;
+    const periodReturn = (currentValue - prevValue) / prevValue;
+    periodReturns.push(periodReturn);
+    periodInfo.push({
+      return: periodReturn,
+      timestamp: snapshots[i].timestamp,
+      period: i
+    });
+  }
+  
+  // 如果只有一个快照，使用总收益率
+  if (periodReturns.length === 0) {
+    const totalReturn = snapshots[0].totalPnlPercent;
+    return {
+      totalReturn, annualizedReturn: totalReturn, volatility: 0, sharpeRatio: 0,
+      maxDrawdown: 0, winRate: totalReturn > 0 ? 1 : 0, avgReturn: totalReturn, 
+      bestPeriod: totalReturn, worstPeriod: totalReturn, calmarRatio: 0,
+      bestPeriodInfo: {
+        return: totalReturn,
+        timestamp: snapshots[0].timestamp,
+        period: 0
+      },
+      worstPeriodInfo: {
+        return: totalReturn,
+        timestamp: snapshots[0].timestamp,
+        period: 0
+      }
+    };
+  }
+  
+  const totalReturn = snapshots[snapshots.length - 1].totalPnlPercent;
   
   // 年化收益率
   const totalHours = snapshots.length * granularityHours;
   const years = totalHours / (365 * 24);
   const annualizedReturn = years > 0 ? Math.pow(1 + totalReturn, 1 / years) - 1 : 0;
   
-  // 波动率
-  const avgReturn = returns.reduce((sum, r) => sum + r, 0) / returns.length;
-  const variance = returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length;
+  // 波动率 - 使用期间收益率的标准差
+  const avgPeriodReturn = periodReturns.reduce((sum, r) => sum + r, 0) / periodReturns.length;
+  const variance = periodReturns.reduce((sum, r) => sum + Math.pow(r - avgPeriodReturn, 2), 0) / periodReturns.length;
   const volatility = Math.sqrt(variance) * Math.sqrt(365 * 24 / granularityHours);
   
-  // 夏普比率
+  // 夏普比率 - 假设无风险利率为0
   const sharpeRatio = volatility > 0 ? annualizedReturn / volatility : 0;
   
   // 最大回撤
@@ -463,12 +498,18 @@ function calculatePerformanceMetrics(
     }
   }
   
-  // 胜率
-  const positiveReturns = returns.filter(r => r > 0).length;
-  const winRate = returns.length > 0 ? positiveReturns / returns.length : 0;
+  // 胜率 - 使用期间收益率
+  const positiveReturns = periodReturns.filter((r: number) => r > 0).length;
+  const winRate = periodReturns.length > 0 ? positiveReturns / periodReturns.length : 0;
   
-  const bestPeriod = Math.max(...returns);
-  const worstPeriod = Math.min(...returns);
+  // 最佳和最差期间收益率
+  const bestPeriod = periodReturns.length > 0 ? Math.max(...periodReturns) : 0;
+  const worstPeriod = periodReturns.length > 0 ? Math.min(...periodReturns) : 0;
+  
+  // 找到最佳和最差收益期的详细信息
+  const bestPeriodInfo = periodInfo.find(p => p.return === bestPeriod);
+  const worstPeriodInfo = periodInfo.find(p => p.return === worstPeriod);
+  
   const calmarRatio = maxDrawdown > 0 ? annualizedReturn / maxDrawdown : 0;
   
   return {
@@ -478,10 +519,12 @@ function calculatePerformanceMetrics(
     sharpeRatio,
     maxDrawdown: -maxDrawdown,
     winRate,
-    avgReturn,
+    avgReturn: avgPeriodReturn, // 使用期间平均收益率
     bestPeriod,
     worstPeriod,
-    calmarRatio
+    calmarRatio,
+    bestPeriodInfo,
+    worstPeriodInfo
   };
 }
 

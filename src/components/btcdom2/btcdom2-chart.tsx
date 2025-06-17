@@ -50,6 +50,18 @@ export function BTCDOM2Chart({ data, params }: BTCDOM2ChartProps) {
       totalValueK: point.totalValue / 1000, // 转换为千为单位
     }));
     
+    // 添加调试信息
+    console.log('Chart Data Debug:', {
+      dataLength: data.length,
+      firstPoint: data[0],
+      lastPoint: data[data.length - 1],
+      sampleProcessedData: processedData.slice(0, 3),
+      btcReturnRange: {
+        min: Math.min(...processedData.map(p => p.btcReturnPercent)),
+        max: Math.max(...processedData.map(p => p.btcReturnPercent))
+      }
+    });
+    
     return processedData;
   }, [data]);
 

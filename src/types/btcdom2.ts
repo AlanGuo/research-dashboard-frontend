@@ -152,6 +152,16 @@ export interface BTCDOM2PerformanceMetrics {
   bestPeriod: number;        // 最佳收益期
   worstPeriod: number;       // 最差收益期
   calmarRatio: number;       // 卡玛比率
+  bestPeriodInfo?: {         // 最佳收益期详情
+    return: number;
+    timestamp: string;
+    period: number;
+  };
+  worstPeriodInfo?: {        // 最差收益期详情
+    return: number;
+    timestamp: string;
+    period: number;
+  };
 }
 
 // 图表数据点
