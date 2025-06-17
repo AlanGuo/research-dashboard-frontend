@@ -156,6 +156,7 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
                 <TableHead className="text-right">数量</TableHead>
                 <TableHead className="text-right">手续费</TableHead>
                 <TableHead className="text-right">价格</TableHead>
+                <TableHead className="text-right">24H涨跌</TableHead>
                 <TableHead className="text-right">盈亏</TableHead>
                 <TableHead className="text-right">收益率</TableHead>
                 <TableHead>备注</TableHead>
@@ -277,20 +278,36 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
                       <span>
                         {formatCurrency(position.currentPrice)}
                       </span>
-                      {position.type === 'SOLD' ? (
+                      {position.type === 'SOLD' && (
                         <span className="text-xs text-gray-500">
                           (卖出价)
                         </span>
-                      ) : (
-                        position.priceChange && position.priceChange.changePercent !== undefined && position.priceChange.changePercent !== 0 && (
-                          <span className={`text-xs ${
-                            (position.priceChange.changePercent ?? 0) > 0 ? 'text-green-600' : 'text-red-600'
-                          }`}>
-                            ({(position.priceChange.changePercent ?? 0) > 0 ? '+' : ''}{(position.priceChange.changePercent ?? 0).toFixed(2)}%)
-                          </span>
-                        )
                       )}
                     </div>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {/* 优先使用专门的24H价格变化数据 */}
+                    {position.priceChange24h !== undefined ? (
+                      <span className={`font-medium ${
+                        position.priceChange24h > 0 ? 'text-green-600' : 
+                        position.priceChange24h < 0 ? 'text-red-600' : 
+                        'text-gray-600'
+                      }`}>
+                        {position.priceChange24h > 0 ? '+' : ''}
+                        {position.priceChange24h.toFixed(2)}%
+                      </span>
+                    ) : position.type === 'BTC' && snapshot.btcPriceChange24h !== undefined ? (
+                      <span className={`font-medium ${
+                        snapshot.btcPriceChange24h > 0 ? 'text-green-600' : 
+                        snapshot.btcPriceChange24h < 0 ? 'text-red-600' : 
+                        'text-gray-600'
+                      }`}>
+                        {snapshot.btcPriceChange24h > 0 ? '+' : ''}
+                        {snapshot.btcPriceChange24h.toFixed(2)}%
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">--</span>
+                    )}
                   </TableCell>
                   <TableCell className={`text-right font-medium ${getPnlColor(position.pnl)}`}>
                     {formatCurrency(position.pnl)}

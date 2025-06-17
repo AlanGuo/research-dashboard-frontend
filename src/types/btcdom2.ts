@@ -96,6 +96,7 @@ export interface PositionInfo {
   pnl: number;               // 盈亏
   pnlPercent: number;        // 盈亏百分比
   tradingFee: number;        // 当期交易手续费
+  priceChange24h?: number;   // 24小时价格变化百分比
   marketShare?: number;       // 市场份额 (用于计算做空比例)
   reason: string;            // 持仓原因
   isNewPosition?: boolean;    // 是否为新增持仓
