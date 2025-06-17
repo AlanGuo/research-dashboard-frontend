@@ -811,14 +811,11 @@ function calculatePerformanceMetrics(
   if (params.shortAlt) {
     // 计算所有做空相关的累计收益（包括当前持仓和已卖出持仓）
     let totalShortPnl = 0;
-    let shortInvestmentEstimate = 0;
     
     // 当前做空持仓的盈亏
     const currentShortPnl = lastSnapshot.shortPositions.reduce((sum, pos) => sum + pos.pnl, 0);
-    const currentShortInvestment = lastSnapshot.shortPositions.reduce((sum, pos) => sum + pos.amount, 0);
     
     totalShortPnl += currentShortPnl;
-    shortInvestmentEstimate = currentShortInvestment;
     
     // 历史卖出做空持仓的累计盈亏（遍历所有快照）
     for (const snapshot of snapshots) {

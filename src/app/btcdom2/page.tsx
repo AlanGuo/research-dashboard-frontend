@@ -21,9 +21,8 @@ import {
   PositionAllocationStrategy
 } from '@/types/btcdom2';
 import { BTCDOM2Chart } from '@/components/btcdom2/btcdom2-chart';
-import { BTCDOM2PerformanceCard } from '@/components/btcdom2/btcdom2-performance-card';
 import { BTCDOM2PositionTable } from '@/components/btcdom2/btcdom2-position-table';
-import { AlertCircle, Play, Settings, TrendingUp, TrendingDown, Clock, Loader2, Eye, Info, Bitcoin, ArrowDown, ArrowUp } from 'lucide-react';
+import { AlertCircle, Play, Settings, TrendingUp, TrendingDown, Clock, Loader2, Eye, Info, Bitcoin, ArrowDown } from 'lucide-react';
 
 export default function BTCDOM2Dashboard() {
   // 策略参数状态
@@ -198,7 +197,7 @@ export default function BTCDOM2Dashboard() {
     };
 
     initialBacktest();
-  }, []); // 空依赖数组，只在组件挂载时执行一次
+  }, [params, validateParameters]); // 添加缺失的依赖项
 
   // 参数更新处理
   const handleParamChange = (key: keyof BTCDOM2StrategyParams, value: string | number | boolean) => {
