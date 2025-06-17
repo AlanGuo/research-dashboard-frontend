@@ -874,11 +874,11 @@ export default function BTCDOM2Dashboard() {
         {/* 结果展示 */}
         {backtestResult && (
           <>
-            {/* 性能指标卡片 */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* 性能指标卡片 - 紧凑布局 */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* 收益率分解卡片 */}
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                   <CardTitle className="text-sm font-medium text-gray-600">
                     收益率分解
                   </CardTitle>
@@ -886,63 +886,115 @@ export default function BTCDOM2Dashboard() {
                     backtestResult.performance.totalReturn >= 0 ? 'text-green-500' : 'text-red-500'
                   }`} />
                 </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {/* 总收益率 - 突出显示 */}
-                    <div className="flex justify-between items-center p-2 bg-gray-50">
-                      <span className="text-sm font-medium text-gray-700">总收益率</span>
-                      <span className={`text-xl font-bold ${
+                <CardContent className="space-y-3">
+                  {/* 总盈亏 - 突出显示 */}
+                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
+                    <span className="text-sm font-medium text-gray-700">总盈亏</span>
+                    <div className="text-right">
+                      <div className={`text-xl font-bold ${
                         backtestResult.performance.totalReturn >= 0 ? 'text-green-600' : 'text-red-600'
                       }`}>
-                        {(backtestResult.performance.totalReturn * 100).toFixed(2)}%
+                        {backtestResult.performance.totalReturn >= 0 ? '+' : ''}${(params.initialCapital * backtestResult.performance.totalReturn).toFixed(2)}
+                      </div>
+                      <div className={`text-sm font-medium ${
+                        backtestResult.performance.totalReturn >= 0 ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        ({backtestResult.performance.totalReturn >= 0 ? '+' : ''}{(backtestResult.performance.totalReturn * 100).toFixed(2)}%)
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* 年化收益率 */}
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-xs text-gray-500">年化收益率</span>
+                    <span className={`text-sm font-semibold ${
+                      backtestResult.performance.annualizedReturn >= 0 ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      {(backtestResult.performance.annualizedReturn * 100).toFixed(2)}%
+                    </span>
+                  </div>
+                  
+                  {/* 只在选择做多BTC时显示BTC收益率 */}
+                  {params.longBtc && (
+                    <div className="flex justify-between items-center py-1">
+                      <span className="text-xs text-orange-500 flex items-center gap-1">
+                        <Bitcoin className="w-3 h-3" />
+                        BTC做多
+                      </span>
+                      <span className={`text-sm font-semibold ${
+                        backtestResult.performance.btcReturn >= 0 ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {(backtestResult.performance.btcReturn * 100).toFixed(2)}%
                       </span>
                     </div>
-                    
-                    {/* 只在选择做多BTC时显示BTC收益率 */}
-                    {params.longBtc && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-orange-500">BTC做多</span>
-                        <span className={`text-sm font-bold ${
-                          backtestResult.performance.btcReturn >= 0 ? 'text-green-600' : 'text-red-600'
-                        }`}>
-                          {(backtestResult.performance.btcReturn * 100).toFixed(2)}%
-                        </span>
+                  )}
+                  
+                  {/* 只在选择做空ALT时显示ALT收益率 */}
+                  {params.shortAlt && (
+                    <div className="flex justify-between items-center py-1">
+                      <span className="text-xs text-blue-500 flex items-center gap-1">
+                        <ArrowDown className="w-3 h-3" />
+                        ALT做空
+                      </span>
+                      <span className={`text-sm font-semibold ${
+                        backtestResult.performance.altReturn >= 0 ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {(backtestResult.performance.altReturn * 100).toFixed(2)}%
+                      </span>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* 风险指标卡片 */}
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                  <CardTitle className="text-sm font-medium text-gray-600">
+                    风险指标
+                  </CardTitle>
+                  <TrendingDown className="h-4 w-4 text-red-500" />
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {/* 最大回撤 - 突出显示 */}
+                  <div className="flex justify-between items-center p-3 bg-red-50 rounded-md">
+                    <span className="text-sm font-medium text-gray-700">最大回撤</span>
+                    <div className="text-right">
+                      <div className="text-xl font-bold text-red-600">
+                        -${(params.initialCapital * backtestResult.performance.maxDrawdown).toFixed(2)}
                       </div>
-                    )}
-                    
-                    {/* 只在选择做空ALT时显示ALT收益率 */}
-                    {params.shortAlt && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-blue-500">ALT做空</span>
-                        <span className={`text-sm font-bold ${
-                          backtestResult.performance.altReturn >= 0 ? 'text-green-600' : 'text-red-600'
-                        }`}>
-                          {(backtestResult.performance.altReturn * 100).toFixed(2)}%
-                        </span>
+                      <div className="text-sm font-medium text-red-600">
+                        ({(backtestResult.performance.maxDrawdown * 100).toFixed(2)}%)
                       </div>
-                    )}
+                    </div>
+                  </div>
+                  
+                  {/* 夏普比率 */}
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-xs text-gray-500">夏普比率</span>
+                    <span className={`text-sm font-semibold ${
+                      backtestResult.performance.sharpeRatio >= 0 ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      {backtestResult.performance.sharpeRatio.toFixed(2)}
+                    </span>
+                  </div>
+                  
+                  {/* 波动率 */}
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-xs text-gray-500">波动率</span>
+                    <span className="text-sm font-semibold text-gray-700">
+                      {(backtestResult.performance.volatility * 100).toFixed(2)}%
+                    </span>
+                  </div>
+                  
+                  {/* 胜率 */}
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-xs text-gray-500">胜率</span>
+                    <span className="text-sm font-semibold text-blue-600">
+                      {(backtestResult.performance.winRate * 100).toFixed(1)}%
+                    </span>
                   </div>
                 </CardContent>
               </Card>
-              
-              <BTCDOM2PerformanceCard
-                title="年化收益率"
-                value={`${(backtestResult.performance.annualizedReturn * 100).toFixed(2)}%`}
-                icon={TrendingUp}
-                trend={backtestResult.performance.annualizedReturn >= 0 ? 'positive' : 'negative'}
-              />
-              <BTCDOM2PerformanceCard
-                title="最大回撤"
-                value={`${(backtestResult.performance.maxDrawdown * 100).toFixed(2)}%`}
-                icon={TrendingDown}
-                trend="negative"
-              />
-              <BTCDOM2PerformanceCard
-                title="夏普比率"
-                value={backtestResult.performance.sharpeRatio.toFixed(2)}
-                icon={TrendingUp}
-                trend={backtestResult.performance.sharpeRatio >= 0 ? 'positive' : 'negative'}
-              />
             </div>
 
             {/* BTC价格与策略收益对比 */}
