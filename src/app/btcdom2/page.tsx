@@ -149,55 +149,8 @@ export default function BTCDOM2Dashboard() {
   // 页面加载时自动执行一次回测
   useEffect(() => {
     // 只在页面首次加载时执行回测
-    const initialBacktest = async () => {
-      const errors = validateParameters(params);
-      setParameterErrors(errors);
-
-      if (Object.keys(errors).length > 0) {
-        return;
-      }
-
-      setLoading(true);
-      setError(null);
-
-      try {
-        const response = await fetch('/api/btcdom2/backtest', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(params),
-        });
-
-        if (!response.ok) {
-          throw new Error(`回测请求失败: ${response.status}`);
-        }
-
-        const result = await response.json();
-
-        if (result.success) {
-          setBacktestResult(result.data);
-          setChartData(result.data.chartData);
-
-          // 设置最新快照并标记新增持仓
-          const latestIndex = result.data.snapshots.length - 1;
-          const latestSnapshot = markNewPositionsWithData(result.data.snapshots[latestIndex], latestIndex, result.data);
-          setCurrentSnapshot(latestSnapshot);
-          setSelectedSnapshotIndex(-1); // 重置为最新
-          setGranularityHours(result.data.summary.granularityHours);
-        } else {
-          throw new Error(result.error || '回测失败');
-        }
-      } catch (err) {
-        console.error('回测错误:', err);
-        setError(err instanceof Error ? err.message : '未知错误');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initialBacktest();
-  }, [params, validateParameters]); // 添加缺失的依赖项
+    runBacktest();
+  }, [runBacktest]); // 依赖于 runBacktest 函数
 
   // 参数更新处理
   const handleParamChange = (key: keyof BTCDOM2StrategyParams, value: string | number | boolean) => {
