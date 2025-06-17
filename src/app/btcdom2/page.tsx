@@ -568,8 +568,18 @@ export default function BTCDOM2Dashboard() {
               <div className="space-y-2">
                 <Label htmlFor="startDate">开始日期</Label>
                 <DatePicker
-                  date={params.startDate ? new Date(params.startDate) : undefined}
-                  onDateChange={(date) => handleParamChange('startDate', date ? date.toISOString().split('T')[0] : '')}
+                  date={params.startDate ? new Date(params.startDate + 'T00:00:00') : undefined}
+                  onDateChange={(date) => {
+                    if (date) {
+                      // 使用本地时区格式化日期，避免时区转换问题
+                      const year = date.getFullYear();
+                      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                      const day = date.getDate().toString().padStart(2, '0');
+                      handleParamChange('startDate', `${year}-${month}-${day}`);
+                    } else {
+                      handleParamChange('startDate', '');
+                    }
+                  }}
                   placeholder="选择开始日期"
                   className={parameterErrors.dateRange ? 'border-red-500' : ''}
                 />
@@ -578,8 +588,18 @@ export default function BTCDOM2Dashboard() {
               <div className="space-y-2">
                 <Label htmlFor="endDate">结束日期</Label>
                 <DatePicker
-                  date={params.endDate ? new Date(params.endDate) : undefined}
-                  onDateChange={(date) => handleParamChange('endDate', date ? date.toISOString().split('T')[0] : '')}
+                  date={params.endDate ? new Date(params.endDate + 'T00:00:00') : undefined}
+                  onDateChange={(date) => {
+                    if (date) {
+                      // 使用本地时区格式化日期，避免时区转换问题
+                      const year = date.getFullYear();
+                      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                      const day = date.getDate().toString().padStart(2, '0');
+                      handleParamChange('endDate', `${year}-${month}-${day}`);
+                    } else {
+                      handleParamChange('endDate', '');
+                    }
+                  }}
                   placeholder="选择结束日期"
                   className={parameterErrors.dateRange ? 'border-red-500' : ''}
                 />
