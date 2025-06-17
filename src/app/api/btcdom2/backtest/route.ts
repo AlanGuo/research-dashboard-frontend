@@ -312,7 +312,7 @@ class BTCDOM2StrategyEngine {
     dataPoint: VolumeBacktestDataPoint,
     previousSnapshot: StrategySnapshot | null
   ): StrategySnapshot {
-    const { timestamp, hour, btcPrice, btcPriceChange24h, rankings } = dataPoint;
+    const { timestamp, hour, btcPrice, btcPriceChange24h, rankings, removedSymbols } = dataPoint;
     
     // 筛选做空候选标的
     const selectionResult = this.selectShortCandidates(rankings, btcPriceChange24h);
@@ -374,6 +374,7 @@ class BTCDOM2StrategyEngine {
         const validBtcPnl = isNaN(btcPnl) ? 0 : btcPnl;
         const validBtcTradingFee = isNaN(btcTradingFee) ? 0 : btcTradingFee;
         const prevAmount = previousSnapshot?.btcPosition?.amount ?? validBtcAmount;
+        const previousBtcPrice = previousSnapshot?.btcPosition?.currentPrice;
         
         btcPosition = {
           symbol: 'BTCUSDT',
@@ -387,6 +388,11 @@ class BTCDOM2StrategyEngine {
           tradingFee: validBtcTradingFee,
           priceChange24h: btcPriceChange24h, // 添加24H价格变化
           isNewPosition: btcIsNewPosition,
+          priceChange: previousBtcPrice ? {
+            type: btcPrice > previousBtcPrice ? 'increase' : btcPrice < previousBtcPrice ? 'decrease' : 'same',
+            previousPrice: previousBtcPrice,
+            changePercent: previousBtcPrice > 0 ? (btcPrice - previousBtcPrice) / previousBtcPrice : 0
+          } : undefined,
           reason: 'BTC基础持仓'
         };
       } else if (previousSnapshot?.btcPosition) {
@@ -414,6 +420,11 @@ class BTCDOM2StrategyEngine {
           priceChange24h: btcPriceChange24h, // 添加BTC的24H价格变化
           isSoldOut: true,
           isNewPosition: false,
+          priceChange: {
+            type: btcPrice > validPrevPrice ? 'increase' : btcPrice < validPrevPrice ? 'decrease' : 'same',
+            previousPrice: validPrevPrice,
+            changePercent: validPrevPrice > 0 ? (btcPrice - validPrevPrice) / validPrevPrice : 0
+          },
           quantityChange: { type: 'sold' },
           reason: '策略调整：不再做多BTC'
         });
@@ -425,8 +436,14 @@ class BTCDOM2StrategyEngine {
           const stillHeld = selectedCandidates.find(c => c.symbol === prevPosition.symbol);
           if (!stillHeld) {
             // 这个持仓在本期被卖出了
-            const rankingItem = rankings.find(r => r.symbol === prevPosition.symbol);
+            // 优先从removedSymbols中获取数据，如果没有则从rankings中查找
+            let rankingItem = removedSymbols?.find(r => r.symbol === prevPosition.symbol);
+            if (!rankingItem) {
+              rankingItem = rankings.find(r => r.symbol === prevPosition.symbol);
+            }
+            
             const currentPrice = rankingItem?.priceAtTime || prevPosition.currentPrice;
+            const priceChange24h = rankingItem?.priceChange24h || 0;
             const sellAmount = prevPosition.quantity * currentPrice;
             const sellFee = this.calculateTradingFee(sellAmount);
             totalTradingFee += sellFee;
@@ -449,11 +466,16 @@ class BTCDOM2StrategyEngine {
               pnl: validPnl,
               pnlPercent: -priceChangePercent,
               tradingFee: validTradingFee,
-              priceChange24h: rankingItem?.priceChange24h, // 添加24H价格变化
+              priceChange24h: priceChange24h, // 使用从removedSymbols或rankings获取的24H价格变化
               isSoldOut: true,
               isNewPosition: false, // 卖出的持仓不是新增持仓
+              priceChange: {
+                type: currentPrice > prevPosition.currentPrice ? 'increase' : currentPrice < prevPosition.currentPrice ? 'decrease' : 'same',
+                previousPrice: prevPosition.currentPrice,
+                changePercent: priceChangePercent
+              },
               quantityChange: { type: 'sold' },
-              reason: '持仓被卖出'
+              reason: '持仓卖出'
             });
           }
         }
@@ -520,18 +542,27 @@ class BTCDOM2StrategyEngine {
           isNewPosition = true;
         }
         
+        // 获取之前的持仓信息用于价格变化计算
+        const previousShortPosition = previousSnapshot?.shortPositions?.find(pos => pos.symbol === candidate.symbol);
+        const previousPrice = previousShortPosition?.currentPrice;
+        
           return {
             symbol: candidate.symbol,
             side: 'SHORT',
             amount: allocation,
             quantity,
-            entryPrice: previousSnapshot?.shortPositions?.find(pos => pos.symbol === candidate.symbol)?.entryPrice || price,
+            entryPrice: previousShortPosition?.entryPrice || price,
             currentPrice: price,
             pnl: isNaN(pnl) ? 0 : pnl,
             pnlPercent: isNaN(pnlPercent) ? 0 : pnlPercent,
             tradingFee: isNaN(tradingFee) ? 0 : tradingFee,
             priceChange24h: candidate.priceChange24h, // 添加24H价格变化
             isNewPosition,
+            priceChange: previousPrice ? {
+              type: price > previousPrice ? 'increase' : price < previousPrice ? 'decrease' : 'same',
+              previousPrice: previousPrice,
+              changePercent: previousPrice > 0 ? (price - previousPrice) / previousPrice : 0
+            } : undefined,
             marketShare: candidate.marketShare,
             reason: candidate.reason
           };
@@ -550,8 +581,14 @@ class BTCDOM2StrategyEngine {
       // 如果之前有做空持仓，现在全部卖出
       if (previousSnapshot?.shortPositions && previousSnapshot.shortPositions.length > 0) {
         for (const prevPosition of previousSnapshot.shortPositions) {
-          const rankingItem = rankings.find(r => r.symbol === prevPosition.symbol);
+          // 优先从removedSymbols中获取数据，如果没有则从rankings中查找
+          let rankingItem = removedSymbols?.find(r => r.symbol === prevPosition.symbol);
+          if (!rankingItem) {
+            rankingItem = rankings.find(r => r.symbol === prevPosition.symbol);
+          }
+          
           const currentPrice = rankingItem?.priceAtTime || prevPosition.currentPrice;
+          const priceChange24h = rankingItem?.priceChange24h || 0;
           const sellAmount = prevPosition.quantity * currentPrice;
           const sellFee = this.calculateTradingFee(sellAmount);
           totalTradingFee += sellFee;
@@ -574,9 +611,14 @@ class BTCDOM2StrategyEngine {
             pnl: validPnl,
             pnlPercent: -priceChangePercent,
             tradingFee: validTradingFee,
-            priceChange24h: rankingItem?.priceChange24h, // 添加24H价格变化
+            priceChange24h: priceChange24h, // 使用从removedSymbols或rankings获取的24H价格变化
             isSoldOut: true,
             isNewPosition: false, // 卖出的持仓不是新增持仓
+            priceChange: {
+              type: currentPrice > prevPosition.currentPrice ? 'increase' : currentPrice < prevPosition.currentPrice ? 'decrease' : 'same',
+              previousPrice: prevPosition.currentPrice,
+              changePercent: priceChangePercent
+            },
             quantityChange: { type: 'sold' },
             reason: canShortAlt ? '无符合条件标的，卖出持仓' : '策略调整：不再做空ALT'
           });
@@ -608,6 +650,11 @@ class BTCDOM2StrategyEngine {
           priceChange24h: btcPriceChange24h, // 添加BTC的24H价格变化
           isSoldOut: true,
           isNewPosition: false,
+          priceChange: {
+            type: btcPrice > validPrevPrice ? 'increase' : btcPrice < validPrevPrice ? 'decrease' : 'same',
+            previousPrice: validPrevPrice,
+            changePercent: validPrevPrice > 0 ? (btcPrice - validPrevPrice) / validPrevPrice : 0
+          },
           quantityChange: { type: 'sold' },
           reason: '策略调整：不再做多BTC'
         });
@@ -643,6 +690,11 @@ class BTCDOM2StrategyEngine {
           tradingFee: isNaN(btcTradingFee) ? 0 : btcTradingFee,
           priceChange24h: btcPriceChange24h, // 添加24H价格变化
           isNewPosition: false,
+          priceChange: {
+            type: btcPrice > validPrevBtcPrice ? 'increase' : btcPrice < validPrevBtcPrice ? 'decrease' : 'same',
+            previousPrice: validPrevBtcPrice,
+            changePercent: validPrevBtcPrice > 0 ? (btcPrice - validPrevBtcPrice) / validPrevBtcPrice : 0
+          },
           reason: 'BTC基础持仓'
         };
       }

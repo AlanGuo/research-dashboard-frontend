@@ -155,10 +155,10 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
                 <TableHead className="text-right">金额</TableHead>
                 <TableHead className="text-right">数量</TableHead>
                 <TableHead className="text-right">手续费</TableHead>
-                <TableHead className="text-right">价格</TableHead>
                 <TableHead className="text-right">24H涨跌</TableHead>
-                <TableHead className="text-right">盈亏</TableHead>
-                <TableHead className="text-right">收益率</TableHead>
+                <TableHead className="text-right">价格</TableHead>
+                <TableHead className="text-right">本期盈亏</TableHead>
+                <TableHead className="text-right">本期收益率</TableHead>
                 <TableHead>备注</TableHead>
               </TableRow>
             </TableHeader>
@@ -274,18 +274,6 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
                     {formatCurrency(position.tradingFee || 0)}
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex flex-col">
-                      <span>
-                        {formatCurrency(position.currentPrice)}
-                      </span>
-                      {position.type === 'SOLD' && (
-                        <span className="text-xs text-gray-500">
-                          (卖出价)
-                        </span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
                     {/* 优先使用专门的24H价格变化数据 */}
                     {position.priceChange24h !== undefined ? (
                       <span className={`font-medium ${
@@ -308,6 +296,37 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
                     ) : (
                       <span className="text-gray-400">--</span>
                     )}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex flex-col">
+                      <span>
+                        {formatCurrency(position.currentPrice)}
+                      </span>
+                      {/* 显示相对于上一期价格的变化率 */}
+                      {position.priceChange?.previousPrice && position.priceChange.previousPrice > 0 && position.currentPrice !== position.priceChange.previousPrice ? (
+                        <span className={`text-xs ${
+                          position.currentPrice > position.priceChange.previousPrice 
+                            ? 'text-green-600' 
+                            : position.currentPrice < position.priceChange.previousPrice 
+                            ? 'text-red-600' 
+                            : 'text-gray-500'
+                        }`}>
+                          ({position.currentPrice > position.priceChange.previousPrice ? '+' : ''}
+                          {(((position.currentPrice - position.priceChange.previousPrice) / position.priceChange.previousPrice) * 100).toFixed(2)}%)
+                        </span>
+                      ) : position.entryPrice && position.entryPrice > 0 && position.currentPrice !== position.entryPrice && !position.isNewPosition ? (
+                        <span className={`text-xs ${
+                          position.currentPrice > position.entryPrice 
+                            ? 'text-green-600' 
+                            : position.currentPrice < position.entryPrice 
+                            ? 'text-red-600' 
+                            : 'text-gray-500'
+                        }`}>
+                          ({position.currentPrice > position.entryPrice ? '+' : ''}
+                          {(((position.currentPrice - position.entryPrice) / position.entryPrice) * 100).toFixed(2)}%)
+                        </span>
+                      ) : null}
+                    </div>
                   </TableCell>
                   <TableCell className={`text-right font-medium ${getPnlColor(position.pnl)}`}>
                     {formatCurrency(position.pnl)}

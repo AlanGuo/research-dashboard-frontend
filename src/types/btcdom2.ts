@@ -55,6 +55,7 @@ export interface VolumeBacktestDataPoint {
   btcPrice: number;           // BTC价格
   btcPriceChange24h: number;  // BTC 24小时价格变化
   rankings: RankingItem[];    // 按跌幅排序的排行榜
+  removedSymbols?: RankingItem[]; // 上一期有但本期没有的币种
   marketStats: MarketStats;   // 市场统计
 }
 
