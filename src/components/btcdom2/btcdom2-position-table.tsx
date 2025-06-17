@@ -168,7 +168,7 @@ export function BTCDOM2PositionTable({ snapshot }: BTCDOM2PositionTableProps) {
                       {position.type === 'SOLD' ? (
                         <>
                           <Minus className="w-3 h-3 mr-1" />
-                          已卖出
+                          卖出
                         </>
                       ) : position.side === 'LONG' ? (
                         <>
@@ -212,7 +212,7 @@ export function BTCDOM2PositionTable({ snapshot }: BTCDOM2PositionTableProps) {
                             </div>
                           )}
                           {position.quantityChange.type === 'sold' && (
-                            <div title="已卖出">
+                            <div title="卖出">
                               <Minus className="w-3 h-3 text-gray-500" />
                             </div>
                           )}
@@ -229,7 +229,7 @@ export function BTCDOM2PositionTable({ snapshot }: BTCDOM2PositionTableProps) {
                         </div>
                       )}
                       {position.isSoldOut && !position.quantityChange && (
-                        <div title="已卖出">
+                        <div title="卖出">
                           <Minus className="w-3 h-3 text-gray-500" />
                         </div>
                       )}

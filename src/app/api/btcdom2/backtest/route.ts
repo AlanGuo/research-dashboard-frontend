@@ -198,7 +198,7 @@ class BTCDOM2StrategyEngine {
               pnlPercent: -priceChangePercent,
               tradingFee: sellFee,
               isSoldOut: true,
-              isNewPosition: false, // 已卖出的持仓不是新增持仓
+              isNewPosition: false, // 卖出的持仓不是新增持仓
               quantityChange: { type: 'sold' },
               reason: '持仓被卖出'
             });
@@ -292,7 +292,7 @@ class BTCDOM2StrategyEngine {
             pnlPercent: -priceChangePercent,
             tradingFee: sellFee,
             isSoldOut: true,
-            isNewPosition: false, // 已卖出的持仓不是新增持仓
+            isNewPosition: false, // 卖出的持仓不是新增持仓
             quantityChange: { type: 'sold' },
             reason: '无符合条件标的，卖出持仓'
           });
@@ -310,7 +310,7 @@ class BTCDOM2StrategyEngine {
           currentPrice: btcPrice,
           tradingFee: sellFee,
           isSoldOut: true,
-          isNewPosition: false, // 已卖出的持仓不是新增持仓
+          isNewPosition: false, // 卖出的持仓不是新增持仓
           quantityChange: { type: 'sold' },
           reason: '无符合条件标的，卖出BTC'
         });
