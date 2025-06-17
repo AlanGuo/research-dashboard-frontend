@@ -99,8 +99,9 @@ export default function BTCDOM2Dashboard() {
   }, []);
 
   // 执行回测
-  const runBacktest = useCallback(async () => {
-    const errors = validateParameters(params);
+  const runBacktest = useCallback(async (currentParams?: BTCDOM2StrategyParams) => {
+    const paramsToUse = currentParams || params;
+    const errors = validateParameters(paramsToUse);
     setParameterErrors(errors);
 
     if (Object.keys(errors).length > 0) {
@@ -116,7 +117,7 @@ export default function BTCDOM2Dashboard() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(params),
+        body: JSON.stringify(paramsToUse),
       });
 
       if (!response.ok) {
@@ -145,6 +146,11 @@ export default function BTCDOM2Dashboard() {
       setLoading(false);
     }
   }, [validateParameters]);
+
+  // 按钮点击处理
+  const handleRunBacktest = () => {
+    runBacktest(params);
+  };
 
   // 页面加载时自动执行一次回测
   useEffect(() => {
@@ -789,7 +795,7 @@ export default function BTCDOM2Dashboard() {
             {/* 执行按钮 */}
             <div className="flex justify-center pt-4">
               <Button
-                onClick={runBacktest}
+                onClick={handleRunBacktest}
                 disabled={loading}
                 className="px-8 py-2"
                 size="lg"
