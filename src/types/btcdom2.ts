@@ -11,6 +11,8 @@ export interface BTCDOM2StrategyParams {
   maxShortPositions: number;  // 最多做空标的数量
   tradingFeeRate: number;     // 交易手续费率 (默认0.002 = 0.2%)
   rebalanceMode?: boolean;    // 是否启用重新平衡模式，默认true
+  longBtc: boolean;           // 是否做多BTC (默认true)
+  shortAlt: boolean;          // 是否做空ALT (默认true)
 }
 
 // 新API返回的排行榜数据项

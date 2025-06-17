@@ -11,7 +11,8 @@ import {
   TableRow 
 } from '@/components/ui/table';
 import { 
-  StrategySnapshot
+  StrategySnapshot,
+  BTCDOM2StrategyParams
 } from '@/types/btcdom2';
 import { 
   TrendingUp, 
@@ -27,9 +28,10 @@ import {
 
 interface BTCDOM2PositionTableProps {
   snapshot: StrategySnapshot;
+  params?: BTCDOM2StrategyParams;
 }
 
-export function BTCDOM2PositionTable({ snapshot }: BTCDOM2PositionTableProps) {
+export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableProps) {
   if (!snapshot) {
     return (
       <div className="text-center py-8">
@@ -72,11 +74,24 @@ export function BTCDOM2PositionTable({ snapshot }: BTCDOM2PositionTableProps) {
     return 'text-gray-600';
   };
 
-  // 合并所有持仓（包括卖出的持仓）
+  // 合并所有持仓（包括卖出的持仓），根据策略选择过滤
   const allPositions = [
-    ...(snapshot.btcPosition ? [{ ...snapshot.btcPosition, type: 'BTC' as const }] : []),
-    ...snapshot.shortPositions.map(pos => ({ ...pos, type: 'SHORT' as const })),
-    ...(snapshot.soldPositions || []).map(pos => ({ ...pos, type: 'SOLD' as const }))
+    // 只在选择做多BTC时显示BTC持仓
+    ...(!params || params.longBtc ? (snapshot.btcPosition ? [{ ...snapshot.btcPosition, type: 'BTC' as const }] : []) : []),
+    // 只在选择做空ALT时显示做空持仓
+    ...(!params || params.shortAlt ? snapshot.shortPositions.map(pos => ({ ...pos, type: 'SHORT' as const })) : []),
+    // 卖出的持仓需要根据其原始类型来决定是否显示
+    ...(snapshot.soldPositions || [])
+      .filter(pos => {
+        if (!params) return true;
+        // 如果是BTC相关的卖出持仓，只在选择做多BTC时显示
+        if (pos.symbol === 'BTC' || pos.side === 'LONG') {
+          return params.longBtc;
+        }
+        // 如果是做空相关的卖出持仓，只在选择做空ALT时显示
+        return params.shortAlt;
+      })
+      .map(pos => ({ ...pos, type: 'SOLD' as const }))
   ];
 
   return (

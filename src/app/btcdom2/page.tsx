@@ -8,10 +8,11 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { DatePicker } from '@/components/ui/date-picker';
+import { Checkbox } from '@/components/ui/checkbox';
 
-import { 
-  BTCDOM2StrategyParams, 
-  BTCDOM2BacktestResult, 
+import {
+  BTCDOM2StrategyParams,
+  BTCDOM2BacktestResult,
   BTCDOM2ChartData,
   StrategySnapshot,
   PositionInfo
@@ -24,14 +25,16 @@ import { AlertCircle, Play, Settings, TrendingUp, TrendingDown, Clock, Loader2, 
 export default function BTCDOM2Dashboard() {
   // 策略参数状态
   const [params, setParams] = useState<BTCDOM2StrategyParams>({
-    startDate: '2024-12-01',
+    startDate: '2024-09-01',
     endDate: '2025-06-17',
     initialCapital: 10000,
     btcRatio: 0.5,
     volumeWeight: 0.6,
     volatilityWeight: 0.4,
     maxShortPositions: 20,
-    tradingFeeRate: 0.002
+    tradingFeeRate: 0.002,
+    longBtc: true,
+    shortAlt: true
   });
 
   // 数据状态
@@ -50,33 +53,37 @@ export default function BTCDOM2Dashboard() {
   // 验证参数
   const validateParameters = useCallback((params: BTCDOM2StrategyParams): Record<string, string> => {
     const errors: Record<string, string> = {};
-    
+
     if (params.initialCapital <= 0) {
       errors.initialCapital = '初始本金必须大于0';
     }
-    
+
     if (params.btcRatio < 0 || params.btcRatio > 1) {
       errors.btcRatio = 'BTC占比必须在0-1之间';
     }
-    
+
     if (Math.abs(params.volumeWeight + params.volatilityWeight - 1) > 0.001) {
       errors.weights = '成交量权重和波动率权重之和必须等于1';
     }
-    
+
     if (params.maxShortPositions <= 0 || params.maxShortPositions > 50) {
       errors.maxShortPositions = '做空标的数量必须在1-50之间';
     }
-    
+
     if (params.tradingFeeRate < 0 || params.tradingFeeRate > 0.01) {
       errors.tradingFeeRate = '交易手续费率必须在0-1%之间';
     }
-    
+
     const startDate = new Date(params.startDate);
     const endDate = new Date(params.endDate);
     if (startDate >= endDate) {
       errors.dateRange = '开始日期必须早于结束日期';
     }
-    
+
+    if (!params.longBtc && !params.shortAlt) {
+      errors.strategySelection = '至少需要选择一种策略：做多BTC或做空ALT';
+    }
+
     return errors;
   }, []);
 
@@ -84,14 +91,14 @@ export default function BTCDOM2Dashboard() {
   const runBacktest = useCallback(async () => {
     const errors = validateParameters(params);
     setParameterErrors(errors);
-    
+
     if (Object.keys(errors).length > 0) {
       return;
     }
 
     setLoading(true);
     setError(null);
-    
+
     try {
       const response = await fetch('/api/btcdom2/backtest', {
         method: 'POST',
@@ -106,11 +113,11 @@ export default function BTCDOM2Dashboard() {
       }
 
       const result = await response.json();
-      
+
       if (result.success) {
         setBacktestResult(result.data);
         setChartData(result.data.chartData);
-        
+
         // 设置最新快照并标记新增持仓
         const latestIndex = result.data.snapshots.length - 1;
         const latestSnapshot = markNewPositionsWithData(result.data.snapshots[latestIndex], latestIndex, result.data);
@@ -130,16 +137,64 @@ export default function BTCDOM2Dashboard() {
 
   // 页面加载时自动执行一次回测
   useEffect(() => {
-    runBacktest();
-  }, [runBacktest]); // 添加 runBacktest 依赖
+    // 只在页面首次加载时执行回测
+    const initialBacktest = async () => {
+      const errors = validateParameters(params);
+      setParameterErrors(errors);
+
+      if (Object.keys(errors).length > 0) {
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const response = await fetch('/api/btcdom2/backtest', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(params),
+        });
+
+        if (!response.ok) {
+          throw new Error(`回测请求失败: ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (result.success) {
+          setBacktestResult(result.data);
+          setChartData(result.data.chartData);
+
+          // 设置最新快照并标记新增持仓
+          const latestIndex = result.data.snapshots.length - 1;
+          const latestSnapshot = markNewPositionsWithData(result.data.snapshots[latestIndex], latestIndex, result.data);
+          setCurrentSnapshot(latestSnapshot);
+          setSelectedSnapshotIndex(-1); // 重置为最新
+          setGranularityHours(result.data.summary.granularityHours);
+        } else {
+          throw new Error(result.error || '回测失败');
+        }
+      } catch (err) {
+        console.error('回测错误:', err);
+        setError(err instanceof Error ? err.message : '未知错误');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initialBacktest();
+  }, []); // 空依赖数组，只在组件挂载时执行一次
 
   // 参数更新处理
-  const handleParamChange = (key: keyof BTCDOM2StrategyParams, value: string | number) => {
+  const handleParamChange = (key: keyof BTCDOM2StrategyParams, value: string | number | boolean) => {
     setParams(prev => ({
       ...prev,
       [key]: value
     }));
-    
+
     // 清除相关参数错误
     if (parameterErrors[key]) {
       setParameterErrors(prev => {
@@ -166,7 +221,7 @@ export default function BTCDOM2Dashboard() {
         volumeWeight: 1 - weight
       }));
     }
-    
+
     // 清除权重错误
     if (parameterErrors.weights) {
       setParameterErrors(prev => {
@@ -181,7 +236,7 @@ export default function BTCDOM2Dashboard() {
   const handleSnapshotSelection = (index: number) => {
     if (backtestResult && backtestResult.snapshots) {
       setSelectedSnapshotIndex(index);
-      
+
       let selectedSnapshot: StrategySnapshot;
       if (index === -1) {
         // 选择最新
@@ -203,19 +258,19 @@ export default function BTCDOM2Dashboard() {
     }
 
     const actualIndex = currentIndex === -1 ? data.snapshots.length - 1 : currentIndex;
-    
+
     // 第1期（index = 0）时，所有持仓都是新增的
     if (actualIndex === 0) {
       return {
         ...currentSnapshot,
-        btcPosition: currentSnapshot.btcPosition ? { 
-          ...currentSnapshot.btcPosition, 
+        btcPosition: currentSnapshot.btcPosition ? {
+          ...currentSnapshot.btcPosition,
           isNewPosition: true,
           quantityChange: { type: 'new' },
           priceChange: { type: 'new' }
         } : null,
-        shortPositions: currentSnapshot.shortPositions.map(pos => ({ 
-          ...pos, 
+        shortPositions: currentSnapshot.shortPositions.map(pos => ({
+          ...pos,
           isNewPosition: true,
           quantityChange: { type: 'new' }
         }))
@@ -224,7 +279,7 @@ export default function BTCDOM2Dashboard() {
 
     // 获取前一期的快照
     const previousSnapshot = data.snapshots[actualIndex - 1];
-    
+
     // 获取前一期的持仓信息
     const previousPositions = new Map<string, PositionInfo>();
     if (previousSnapshot.btcPosition) {
@@ -237,32 +292,32 @@ export default function BTCDOM2Dashboard() {
     // 计算数量变化的辅助函数
     const getQuantityChange = (currentPos: PositionInfo) => {
       const previousPos = previousPositions.get(currentPos.symbol);
-      
+
       if (!previousPos) {
         return { type: 'new' as const };
       }
-      
+
       const currentQty = currentPos.quantity;
       const previousQty = previousPos.quantity;
-      
+
       // 使用相对变化百分比来判断，更精确
       const changePercent = Math.abs((currentQty - previousQty) / previousQty) * 100;
       const threshold = 0.01; // 0.01% 的变化阈值
-      
+
       if (changePercent < threshold) {
-        return { 
-          type: 'same' as const, 
-          previousQuantity: previousQty 
+        return {
+          type: 'same' as const,
+          previousQuantity: previousQty
         };
       } else if (currentQty > previousQty) {
-        return { 
-          type: 'increase' as const, 
+        return {
+          type: 'increase' as const,
           previousQuantity: previousQty,
           changePercent: ((currentQty - previousQty) / previousQty) * 100
         };
       } else {
-        return { 
-          type: 'decrease' as const, 
+        return {
+          type: 'decrease' as const,
           previousQuantity: previousQty,
           changePercent: ((currentQty - previousQty) / previousQty) * 100
         };
@@ -272,32 +327,32 @@ export default function BTCDOM2Dashboard() {
     // 计算价格变化的辅助函数
     const getPriceChange = (currentPos: PositionInfo) => {
       const previousPos = previousPositions.get(currentPos.symbol);
-      
+
       if (!previousPos) {
         return { type: 'new' as const };
       }
-      
+
       const currentPrice = currentPos.currentPrice;
       const previousPrice = previousPos.currentPrice;
-      
+
       // 使用相对变化百分比来判断
       const changePercent = Math.abs((currentPrice - previousPrice) / previousPrice) * 100;
       const threshold = 0.01; // 0.01% 的变化阈值
-      
+
       if (changePercent < threshold) {
-        return { 
-          type: 'same' as const, 
-          previousPrice: previousPrice 
+        return {
+          type: 'same' as const,
+          previousPrice: previousPrice
         };
       } else if (currentPrice > previousPrice) {
-        return { 
-          type: 'increase' as const, 
+        return {
+          type: 'increase' as const,
           previousPrice: previousPrice,
           changePercent: ((currentPrice - previousPrice) / previousPrice) * 100
         };
       } else {
-        return { 
-          type: 'decrease' as const, 
+        return {
+          type: 'decrease' as const,
           previousPrice: previousPrice,
           changePercent: ((currentPrice - previousPrice) / previousPrice) * 100
         };
@@ -331,19 +386,19 @@ export default function BTCDOM2Dashboard() {
     }
 
     const actualIndex = currentIndex === -1 ? backtestResult.snapshots.length - 1 : currentIndex;
-    
+
     // 第1期（index = 0）时，所有持仓都是新增的
     if (actualIndex === 0) {
       return {
         ...currentSnapshot,
-        btcPosition: currentSnapshot.btcPosition ? { 
-          ...currentSnapshot.btcPosition, 
+        btcPosition: currentSnapshot.btcPosition ? {
+          ...currentSnapshot.btcPosition,
           isNewPosition: true,
           quantityChange: { type: 'new' },
           priceChange: { type: 'new' }
         } : null,
-        shortPositions: currentSnapshot.shortPositions.map(pos => ({ 
-          ...pos, 
+        shortPositions: currentSnapshot.shortPositions.map(pos => ({
+          ...pos,
           isNewPosition: true,
           quantityChange: { type: 'new' },
           priceChange: { type: 'new' }
@@ -353,7 +408,7 @@ export default function BTCDOM2Dashboard() {
 
     // 获取前一期的快照
     const previousSnapshot = backtestResult.snapshots[actualIndex - 1];
-    
+
     // 获取前一期的持仓信息
     const previousPositions = new Map<string, PositionInfo>();
     if (previousSnapshot.btcPosition) {
@@ -366,32 +421,32 @@ export default function BTCDOM2Dashboard() {
     // 计算数量变化的辅助函数
     const getQuantityChange = (currentPos: PositionInfo) => {
       const previousPos = previousPositions.get(currentPos.symbol);
-      
+
       if (!previousPos) {
         return { type: 'new' as const };
       }
-      
+
       const currentQty = currentPos.quantity;
       const previousQty = previousPos.quantity;
-      
+
       // 使用相对变化百分比来判断，更精确
       const changePercent = Math.abs((currentQty - previousQty) / previousQty) * 100;
       const threshold = 0.01; // 0.01% 的变化阈值
-      
+
       if (changePercent < threshold) {
-        return { 
-          type: 'same' as const, 
-          previousQuantity: previousQty 
+        return {
+          type: 'same' as const,
+          previousQuantity: previousQty
         };
       } else if (currentQty > previousQty) {
-        return { 
-          type: 'increase' as const, 
+        return {
+          type: 'increase' as const,
           previousQuantity: previousQty,
           changePercent: ((currentQty - previousQty) / previousQty) * 100
         };
       } else {
-        return { 
-          type: 'decrease' as const, 
+        return {
+          type: 'decrease' as const,
           previousQuantity: previousQty,
           changePercent: ((currentQty - previousQty) / previousQty) * 100
         };
@@ -401,32 +456,32 @@ export default function BTCDOM2Dashboard() {
     // 计算价格变化的辅助函数
     const getPriceChange = (currentPos: PositionInfo) => {
       const previousPos = previousPositions.get(currentPos.symbol);
-      
+
       if (!previousPos) {
         return { type: 'new' as const };
       }
-      
+
       const currentPrice = currentPos.currentPrice;
       const previousPrice = previousPos.currentPrice;
-      
+
       // 使用相对变化百分比来判断
       const changePercent = Math.abs((currentPrice - previousPrice) / previousPrice) * 100;
       const threshold = 0.01; // 0.01% 的变化阈值
-      
+
       if (changePercent < threshold) {
-        return { 
-          type: 'same' as const, 
-          previousPrice: previousPrice 
+        return {
+          type: 'same' as const,
+          previousPrice: previousPrice
         };
       } else if (currentPrice > previousPrice) {
-        return { 
-          type: 'increase' as const, 
+        return {
+          type: 'increase' as const,
           previousPrice: previousPrice,
           changePercent: ((currentPrice - previousPrice) / previousPrice) * 100
         };
       } else {
-        return { 
-          type: 'decrease' as const, 
+        return {
+          type: 'decrease' as const,
           previousPrice: previousPrice,
           changePercent: ((currentPrice - previousPrice) / previousPrice) * 100
         };
@@ -512,7 +567,7 @@ export default function BTCDOM2Dashboard() {
                   className={parameterErrors.dateRange ? 'border-red-500' : ''}
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="endDate">结束日期</Label>
                 <DatePicker
@@ -525,7 +580,7 @@ export default function BTCDOM2Dashboard() {
                   <p className="text-xs text-red-500">{parameterErrors.dateRange}</p>
                 )}
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="initialCapital">初始本金 (USDT)</Label>
                 <Input
@@ -539,7 +594,7 @@ export default function BTCDOM2Dashboard() {
                   <p className="text-xs text-red-500">{parameterErrors.initialCapital}</p>
                 )}
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="btcRatio">BTC占比</Label>
                 <div className="flex items-center space-x-2">
@@ -563,9 +618,9 @@ export default function BTCDOM2Dashboard() {
             {/* 高级设置 */}
             {showAdvancedSettings && (
               <div className="space-y-4 border-t pt-4">
-                <h4 className="font-medium text-gray-900">高级参数</h4>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <h4 className="font-medium text-gray-900">高级设置</h4>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div className="space-y-2">
                     <Label>成交量权重</Label>
                     <div className="flex items-center space-x-2">
@@ -581,7 +636,7 @@ export default function BTCDOM2Dashboard() {
                       </span>
                     </div>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label>波动率权重</Label>
                     <div className="flex items-center space-x-2">
@@ -600,7 +655,7 @@ export default function BTCDOM2Dashboard() {
                       <p className="text-xs text-red-500">{parameterErrors.weights}</p>
                     )}
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="maxShortPositions">最多做空标的数量</Label>
                     <Input
@@ -614,7 +669,7 @@ export default function BTCDOM2Dashboard() {
                       <p className="text-xs text-red-500">{parameterErrors.maxShortPositions}</p>
                     )}
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="tradingFeeRate">交易手续费率</Label>
                     <div className="flex items-center space-x-2">
@@ -637,6 +692,39 @@ export default function BTCDOM2Dashboard() {
                     )}
                     <p className="text-xs text-gray-500">按交易金额收取</p>
                   </div>
+                </div>
+
+                {/* 策略选择 */}
+                <div className="border-t pt-4">
+                  <h5 className="font-medium text-gray-900 mb-3">策略选择</h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="longBtc"
+                        checked={params.longBtc}
+                        onCheckedChange={(checked) => handleParamChange('longBtc', checked as boolean)}
+                      />
+                      <Label htmlFor="longBtc" className="text-sm font-medium leading-none">
+                        做多BTC
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="shortAlt"
+                        checked={params.shortAlt}
+                        onCheckedChange={(checked) => handleParamChange('shortAlt', checked as boolean)}
+                      />
+                      <Label htmlFor="shortAlt" className="text-sm font-medium leading-none">
+                        做空ALT
+                      </Label>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    根据BTC占比分配资金，可单独选择做多BTC或做空ALT，或两者同时进行
+                  </p>
+                  {parameterErrors.strategySelection && (
+                    <p className="text-xs text-red-500 mt-1">{parameterErrors.strategySelection}</p>
+                  )}
                 </div>
               </div>
             )}
@@ -712,10 +800,17 @@ export default function BTCDOM2Dashboard() {
             {/* BTC价格与策略收益对比 */}
             <Card>
               <CardHeader>
-                <CardTitle>BTC价格与策略收益对比</CardTitle>
+                <CardTitle>
+                  BTC价格与策略收益对比
+                  <span className="text-sm font-normal text-gray-500 ml-2">
+                    ({params.longBtc && params.shortAlt ? '做多BTC + 做空ALT' : 
+                      params.longBtc ? '做多BTC' : 
+                      params.shortAlt ? '做空ALT' : '无策略'})
+                  </span>
+                </CardTitle>
               </CardHeader>
               <CardContent>
-                <BTCDOM2Chart data={chartData} />
+                <BTCDOM2Chart data={chartData} params={params} />
               </CardContent>
             </Card>
 
@@ -723,7 +818,12 @@ export default function BTCDOM2Dashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>策略统计</CardTitle>
+                  <CardTitle>
+                    策略统计
+                    <span className="text-sm font-normal text-gray-500 ml-2">
+                      (BTC占比: {(params.btcRatio * 100).toFixed(0)}%)
+                    </span>
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
@@ -739,10 +839,13 @@ export default function BTCDOM2Dashboard() {
                       <span className="text-gray-600">空仓状态次数</span>
                       <span className="font-medium text-gray-500">{backtestResult.summary.inactiveRebalances}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">平均做空标的数量</span>
-                      <span className="font-medium">{backtestResult.summary.avgShortPositions.toFixed(1)}</span>
-                    </div>
+                    {/* 只在选择做空ALT时显示平均做空标的数量 */}
+                    {params.shortAlt && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">平均做空标的数量</span>
+                        <span className="font-medium">{backtestResult.summary.avgShortPositions.toFixed(1)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span className="text-gray-600">策略持仓率</span>
                       <span className="font-medium">
@@ -795,6 +898,11 @@ export default function BTCDOM2Dashboard() {
                   <CardTitle className="flex items-center gap-2">
                     <Eye className="w-4 h-4" />
                     持仓历史分析
+                    <span className="text-sm font-normal text-gray-500 ml-2">
+                      ({params.longBtc && params.shortAlt ? '做多BTC + 做空ALT' : 
+                        params.longBtc ? '做多BTC' : 
+                        params.shortAlt ? '做空ALT' : '无策略'})
+                    </span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -816,7 +924,7 @@ export default function BTCDOM2Dashboard() {
                             </span>
                           </div>
                         </div>
-                        
+
                         {/* 时间点滑动条 */}
                         <div className="space-y-2">
                           <Slider
@@ -912,7 +1020,7 @@ export default function BTCDOM2Dashboard() {
 
                       {/* 持仓表格 */}
                       {currentSnapshot && (
-                        <BTCDOM2PositionTable snapshot={currentSnapshot} />
+                        <BTCDOM2PositionTable snapshot={currentSnapshot} params={params} />
                       )}
                 </CardContent>
               </Card>

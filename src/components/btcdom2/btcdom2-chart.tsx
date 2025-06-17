@@ -13,7 +13,7 @@ import {
   AreaChart,
   ComposedChart
 } from 'recharts';
-import { BTCDOM2ChartData } from '@/types/btcdom2';
+import { BTCDOM2ChartData, BTCDOM2StrategyParams } from '@/types/btcdom2';
 
 interface TooltipPayload {
   payload: {
@@ -27,9 +27,10 @@ interface TooltipPayload {
 
 interface BTCDOM2ChartProps {
   data: BTCDOM2ChartData[];
+  params?: BTCDOM2StrategyParams;
 }
 
-export function BTCDOM2Chart({ data }: BTCDOM2ChartProps) {
+export function BTCDOM2Chart({ data, params }: BTCDOM2ChartProps) {
   // 处理图表数据
   const chartData = useMemo(() => {
     if (!data || data.length === 0) return [];
@@ -181,24 +182,30 @@ export function BTCDOM2Chart({ data }: BTCDOM2ChartProps) {
                 fillOpacity={0.6}
                 name="现金"
               />
-              <Area
-                type="monotone"
-                dataKey="btcValue"
-                stackId="1"
-                stroke="#f59e0b"
-                fill="#f59e0b"
-                fillOpacity={0.6}
-                name="BTC持仓"
-              />
-              <Area
-                type="monotone"
-                dataKey="shortValue"
-                stackId="1"
-                stroke="#ef4444"
-                fill="#ef4444"
-                fillOpacity={0.6}
-                name="做空持仓"
-              />
+              {/* 只在选择做多BTC时显示BTC持仓 */}
+              {(!params || params.longBtc) && (
+                <Area
+                  type="monotone"
+                  dataKey="btcValue"
+                  stackId="1"
+                  stroke="#f59e0b"
+                  fill="#f59e0b"
+                  fillOpacity={0.6}
+                  name="BTC持仓"
+                />
+              )}
+              {/* 只在选择做空ALT时显示做空持仓 */}
+              {(!params || params.shortAlt) && (
+                <Area
+                  type="monotone"
+                  dataKey="shortValue"
+                  stackId="1"
+                  stroke="#ef4444"
+                  fill="#ef4444"
+                  fillOpacity={0.6}
+                  name="做空持仓"
+                />
+              )}
             </AreaChart>
           </ResponsiveContainer>
         </div>
