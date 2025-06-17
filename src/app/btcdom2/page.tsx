@@ -144,13 +144,13 @@ export default function BTCDOM2Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, [params, validateParameters]);
+  }, [validateParameters]);
 
   // 页面加载时自动执行一次回测
   useEffect(() => {
     // 只在页面首次加载时执行回测
     runBacktest();
-  }, [runBacktest]); // 依赖于 runBacktest 函数
+  }, []); // 空依赖数组，只在组件挂载时执行一次
 
   // 参数更新处理
   const handleParamChange = (key: keyof BTCDOM2StrategyParams, value: string | number | boolean) => {
@@ -922,7 +922,30 @@ export default function BTCDOM2Dashboard() {
                   
                   {/* 夏普比率 */}
                   <div className="flex justify-between items-center py-1">
-                    <span className="text-xs text-gray-500">夏普比率</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-gray-500">夏普比率</span>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-4 w-4 p-0 hover:bg-gray-100">
+                            <Info className="h-3 w-3 text-gray-400" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-80 text-sm">
+                          <div className="space-y-2">
+                            <p className="font-medium">夏普比率说明</p>
+                            <p className="text-gray-600">
+                              衡量风险调整后收益的指标，计算公式为：(年化收益率 - 无风险利率) / 年化波动率
+                            </p>
+                            <div className="text-xs text-gray-500 space-y-1">
+                              <p>• {'>'}1.0: 优秀表现</p>
+                              <p>• 0.5-1.0: 良好表现</p>
+                              <p>• {'<'}0.5: 表现一般</p>
+                              <p>• {'<'}0: 承担风险但收益不佳</p>
+                            </div>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
                     <span className={`text-sm font-semibold ${
                       backtestResult.performance.sharpeRatio >= 0 ? 'text-green-600' : 'text-red-600'
                     }`}>
