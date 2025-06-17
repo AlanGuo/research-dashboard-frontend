@@ -38,27 +38,47 @@ class BTCDOM2StrategyEngine {
     const filteredRankings = rankings.filter(item => item.symbol !== 'BTCUSDT');
     const totalCandidates = filteredRankings.length;
     
+    // 添加权重调试日志
+    console.log('权重参数:', {
+      volumeWeight: this.params.volumeWeight,
+      volatilityWeight: this.params.volatilityWeight,
+      sum: this.params.volumeWeight + this.params.volatilityWeight
+    });
+    
+    // 分析波动率范围
+    const volatilities = filteredRankings.map(r => r.volatility24h);
+    const minVolatility = Math.min(...volatilities);
+    const maxVolatility = Math.max(...volatilities);
+    
+    console.log('波动率分析:', {
+      btcPriceChange,
+      minVolatility: minVolatility.toFixed(4),
+      maxVolatility: maxVolatility.toFixed(4),
+      range: (maxVolatility - minVolatility).toFixed(4),
+      eligibleCount: filteredRankings.filter(r => r.priceChange24h < btcPriceChange).length,
+      totalCount: filteredRankings.length
+    });
+    
+    // 按波动率排序，用于计算波动率排名分数
+    const sortedByVolatility = [...filteredRankings].sort((a, b) => b.volatility24h - a.volatility24h);
+    const volatilityRankMap = new Map<string, number>();
+    sortedByVolatility.forEach((item, index) => {
+      volatilityRankMap.set(item.symbol, index + 1); // 排名从1开始
+    });
+    
     filteredRankings.forEach((item) => {
       const priceChange = item.priceChange24h;
       
-      // 计算成交量分数：排名越靠前（数字越小），分数越高
+      // 计算成交量分数：成交量排名越靠前（数字越小），分数越高
       const volumeScore = (totalCandidates - item.rank + 1) / totalCandidates;
       
-      // 计算涨跌幅分数：涨跌幅越小（越负），分数越高
-      // 将涨跌幅映射到0-1分数，跌幅最大的得1分，涨幅最大的得0分
-      const sortedPriceChanges = filteredRankings
-        .map(r => r.priceChange24h)
-        .sort((a, b) => a - b); // 从小到大排序
-      
-      const minPriceChange = sortedPriceChanges[0];
-      const maxPriceChange = sortedPriceChanges[sortedPriceChanges.length - 1];
-      const priceChangeScore = maxPriceChange > minPriceChange 
-        ? (maxPriceChange - priceChange) / (maxPriceChange - minPriceChange)
-        : 0.5;
+      // 计算波动率分数：波动率排名越靠前（波动率越大），分数越高
+      const volatilityRank = volatilityRankMap.get(item.symbol) || totalCandidates;
+      const volatilityScore = (totalCandidates - volatilityRank + 1) / totalCandidates;
       
       // 计算综合分数
       const totalScore = volumeScore * this.params.volumeWeight + 
-                        priceChangeScore * this.params.volatilityWeight;
+                        volatilityScore * this.params.volatilityWeight;
       
       // 判断是否符合做空条件
       let eligible = true;
@@ -68,7 +88,7 @@ class BTCDOM2StrategyEngine {
         eligible = false;
         reason = `涨跌幅(${priceChange.toFixed(2)}%)不低于BTC(${btcPriceChange.toFixed(2)}%)`;
       } else {
-        reason = `综合评分: ${totalScore.toFixed(3)} (成交量: ${volumeScore.toFixed(3)}, 涨跌幅: ${priceChangeScore.toFixed(3)})`;
+        reason = `综合评分: ${totalScore.toFixed(3)} (成交量: ${volumeScore.toFixed(3)}, 波动率: ${volatilityScore.toFixed(3)})`;
       }
       
       allCandidates.push({
@@ -80,7 +100,7 @@ class BTCDOM2StrategyEngine {
         volatility24h: item.volatility24h,
         marketShare: item.marketShare,
         volumeScore,
-        priceChangeScore,
+        priceChangeScore: volatilityScore, // 这里改为波动率分数
         totalScore,
         eligible,
         reason
@@ -89,6 +109,30 @@ class BTCDOM2StrategyEngine {
     
     // 按综合分数排序
     allCandidates.sort((a, b) => b.totalScore - a.totalScore);
+    
+    // 添加排序结果调试日志（只显示前3个和权重影响明显的对比）
+    const topCandidates = allCandidates.slice(0, 3);
+    if (topCandidates.length > 0) {
+      console.log('权重影响分析 - 前3个候选标的:', topCandidates.map(c => ({
+        symbol: c.symbol,
+        rank: c.rank,
+        priceChange: c.priceChange24h.toFixed(2) + '%',
+        volScore: c.volumeScore.toFixed(3),
+        volatilityScore: c.priceChangeScore.toFixed(3), // 实际存储的是波动率分数
+        totalScore: c.totalScore.toFixed(3),
+        eligible: c.eligible
+      })));
+      
+      // 显示纯成交量排序 vs 加权排序的差异
+      const volumeOnlyRanking = [...allCandidates].sort((a, b) => b.volumeScore - a.volumeScore);
+      const volatilityOnlyRanking = [...allCandidates].sort((a, b) => b.priceChangeScore - a.priceChangeScore);
+      
+      console.log('排序对比:', {
+        '当前加权排序前3': topCandidates.map(c => c.symbol),
+        '纯成交量排序前3': volumeOnlyRanking.slice(0, 3).map(c => c.symbol),
+        '纯波动率排序前3': volatilityOnlyRanking.slice(0, 3).map(c => c.symbol)
+      });
+    }
     
     // 分离符合条件和不符合条件的候选标的
     const eligibleCandidates = allCandidates.filter(c => c.eligible);

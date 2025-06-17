@@ -280,8 +280,8 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
                     {formatPercent(position.pnlPercent)}
                   </TableCell>
                   <TableCell className="max-w-32">
-                    <div className="text-sm text-muted-foreground truncate" title={position.reason}>
-                      {position.reason}
+                    <div className="text-sm text-muted-foreground whitespace-pre-wrap break-words" title={position.reason}>
+                      {position.reason?.replace(/\(/g, '\n(')}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -332,7 +332,7 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
                     <TableHead className="text-right">排名</TableHead>
                     <TableHead className="text-right">24h涨跌</TableHead>
                     <TableHead className="text-right">成交量分数</TableHead>
-                    <TableHead className="text-right">涨跌幅分数</TableHead>
+                    <TableHead className="text-right">波动率分数</TableHead>
                     <TableHead className="text-right">综合分数</TableHead>
                     <TableHead>状态</TableHead>
                     <TableHead>原因</TableHead>
@@ -355,8 +355,8 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
                         </Badge>
                       </TableCell>
                       <TableCell className="max-w-48">
-                        <div className="text-xs text-muted-foreground truncate" title={candidate.reason}>
-                          {candidate.reason}
+                        <div className="text-xs text-muted-foreground whitespace-pre-wrap break-words" title={candidate.reason}>
+                          {candidate.reason?.replace(/\(/g, '\n(')}
                         </div>
                       </TableCell>
                     </TableRow>

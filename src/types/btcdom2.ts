@@ -67,7 +67,7 @@ export interface ShortCandidate {
   
   // 评分相关
   volumeScore: number;        // 成交量分数
-  priceChangeScore: number;   // 涨跌幅分数
+  priceChangeScore: number;   // 波动率分数（保留字段名兼容性，实际存储波动率分数）
   totalScore: number;         // 综合分数
   
   eligible: boolean;          // 是否符合做空条件

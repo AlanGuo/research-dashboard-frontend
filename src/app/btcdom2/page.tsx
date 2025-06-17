@@ -215,19 +215,31 @@ export default function BTCDOM2Dashboard() {
   // 权重调整处理
   const handleWeightChange = (type: 'volume' | 'volatility', value: number) => {
     const weight = value / 100;
+    let newParams;
     if (type === 'volume') {
-      setParams(prev => ({
-        ...prev,
+      newParams = {
+        ...params,
         volumeWeight: weight,
         volatilityWeight: 1 - weight
-      }));
+      };
     } else {
-      setParams(prev => ({
-        ...prev,
+      newParams = {
+        ...params,
         volatilityWeight: weight,
         volumeWeight: 1 - weight
-      }));
+      };
     }
+    
+    // 添加调试日志
+    console.log('权重调整:', {
+      type,
+      inputValue: value,
+      newVolumeWeight: newParams.volumeWeight,
+      newVolatilityWeight: newParams.volatilityWeight,
+      sum: newParams.volumeWeight + newParams.volatilityWeight
+    });
+    
+    setParams(newParams);
 
     // 清除权重错误
     if (parameterErrors.weights) {
