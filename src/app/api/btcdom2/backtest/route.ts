@@ -32,42 +32,65 @@ class BTCDOM2StrategyEngine {
   private calculatePositionAllocations(candidates: ShortCandidate[], totalAmount: number): number[] {
     const allocations: number[] = [];
     
+    // 确保输入参数有效
+    const validTotalAmount = isNaN(totalAmount) || totalAmount <= 0 ? 0 : totalAmount;
+    
     switch (this.params.allocationStrategy) {
       case PositionAllocationStrategy.BY_VOLUME:
         // 按成交量比例分配（现有逻辑）
-        const totalMarketShare = candidates.reduce((sum, c) => sum + c.marketShare, 0);
-        candidates.forEach(candidate => {
-          allocations.push(totalAmount * (candidate.marketShare / totalMarketShare));
-        });
+        const totalMarketShare = candidates.reduce((sum, c) => sum + (c.marketShare || 0), 0);
+        if (totalMarketShare > 0) {
+          candidates.forEach(candidate => {
+            const validMarketShare = candidate.marketShare || 0;
+            const allocation = validTotalAmount * (validMarketShare / totalMarketShare);
+            allocations.push(isNaN(allocation) ? 0 : allocation);
+          });
+        } else {
+          // 如果总市场份额为0，平均分配
+          const equalAmount = validTotalAmount / Math.max(candidates.length, 1);
+          candidates.forEach(() => {
+            allocations.push(equalAmount);
+          });
+        }
         break;
         
       case PositionAllocationStrategy.BY_COMPOSITE_SCORE:
         // 按综合分数分配权重
-        const totalScore = candidates.reduce((sum, c) => sum + c.totalScore, 0);
-        const maxSingleAllocation = totalAmount * this.params.maxSinglePositionRatio;
+        const totalScore = candidates.reduce((sum, c) => sum + (c.totalScore || 0), 0);
+        const maxSingleAllocation = validTotalAmount * this.params.maxSinglePositionRatio;
         
-        candidates.forEach(candidate => {
-          let allocation = totalAmount * (candidate.totalScore / totalScore);
-          // 限制单个币种最大持仓
-          allocation = Math.min(allocation, maxSingleAllocation);
-          allocations.push(allocation);
-        });
+        if (totalScore > 0) {
+          candidates.forEach(candidate => {
+            const validScore = candidate.totalScore || 0;
+            let allocation = validTotalAmount * (validScore / totalScore);
+            // 限制单个币种最大持仓
+            allocation = Math.min(allocation, maxSingleAllocation);
+            allocations.push(isNaN(allocation) ? 0 : allocation);
+          });
+        } else {
+          // 如果总分数为0，平均分配
+          const equalAmount = validTotalAmount / Math.max(candidates.length, 1);
+          candidates.forEach(() => {
+            allocations.push(equalAmount);
+          });
+        }
         
         // 如果有剩余资金（由于单币种限制），按比例重新分配给未达到上限的币种
         const totalAllocated = allocations.reduce((sum, a) => sum + a, 0);
-        const remaining = totalAmount - totalAllocated;
+        const remaining = validTotalAmount - totalAllocated;
         if (remaining > 0) {
           const availableForReallocation = candidates.map((candidate, index) => {
-            const currentAllocation = allocations[index];
+            const currentAllocation = allocations[index] || 0;
             const maxPossible = maxSingleAllocation;
-            return maxPossible - currentAllocation;
+            return Math.max(0, maxPossible - currentAllocation);
           });
           const totalAvailable = availableForReallocation.reduce((sum, a) => sum + a, 0);
           
           if (totalAvailable > 0) {
             availableForReallocation.forEach((available, index) => {
               if (available > 0) {
-                allocations[index] += remaining * (available / totalAvailable);
+                const additionalAllocation = remaining * (available / totalAvailable);
+                allocations[index] = (allocations[index] || 0) + (isNaN(additionalAllocation) ? 0 : additionalAllocation);
               }
             });
           }
@@ -76,21 +99,32 @@ class BTCDOM2StrategyEngine {
         
       case PositionAllocationStrategy.EQUAL_ALLOCATION:
         // 平均分配
-        const equalAmount = totalAmount / candidates.length;
+        const equalAmount = validTotalAmount / Math.max(candidates.length, 1);
         candidates.forEach(() => {
-          allocations.push(equalAmount);
+          allocations.push(isNaN(equalAmount) ? 0 : equalAmount);
         });
         break;
         
       default:
         // 默认按成交量比例分配
-        const defaultTotalMarketShare = candidates.reduce((sum, c) => sum + c.marketShare, 0);
-        candidates.forEach(candidate => {
-          allocations.push(totalAmount * (candidate.marketShare / defaultTotalMarketShare));
-        });
+        const defaultTotalMarketShare = candidates.reduce((sum, c) => sum + (c.marketShare || 0), 0);
+        if (defaultTotalMarketShare > 0) {
+          candidates.forEach(candidate => {
+            const validMarketShare = candidate.marketShare || 0;
+            const allocation = validTotalAmount * (validMarketShare / defaultTotalMarketShare);
+            allocations.push(isNaN(allocation) ? 0 : allocation);
+          });
+        } else {
+          // 如果总市场份额为0，平均分配
+          const equalAmount = validTotalAmount / Math.max(candidates.length, 1);
+          candidates.forEach(() => {
+            allocations.push(equalAmount);
+          });
+        }
     }
     
-    return allocations;
+    // 最终确保所有分配值都是有效的数字
+    return allocations.map(allocation => isNaN(allocation) || allocation < 0 ? 0 : allocation);
   }
 
   // 筛选做空候选标的
@@ -114,10 +148,10 @@ class BTCDOM2StrategyEngine {
     
     // 分析波动率范围
     // 获取所有波动率数据用于正态分布计算
-    const allVolatilities = filteredRankings.map(item => item.volatility24h);
-    const minVolatility = Math.min(...allVolatilities);
-    const maxVolatility = Math.max(...allVolatilities);
-    const avgVolatility = allVolatilities.reduce((sum, vol) => sum + vol, 0) / allVolatilities.length;
+    const allVolatilities = filteredRankings.map(item => item.volatility24h).filter(vol => !isNaN(vol) && isFinite(vol));
+    const minVolatility = allVolatilities.length > 0 ? Math.min(...allVolatilities) : 0;
+    const maxVolatility = allVolatilities.length > 0 ? Math.max(...allVolatilities) : 0;
+    const avgVolatility = allVolatilities.length > 0 ? allVolatilities.reduce((sum, vol) => sum + vol, 0) / allVolatilities.length : 0;
     
     console.log('波动率统计:', {
       btcPriceChange,
@@ -127,29 +161,56 @@ class BTCDOM2StrategyEngine {
       range: (maxVolatility - minVolatility).toFixed(4),
       count: allVolatilities.length,
       eligibleCount: filteredRankings.filter(r => r.priceChange24h < btcPriceChange).length,
-      samples: allVolatilities.slice(0, 5).map(v => v.toFixed(4)) // 显示前5个样本
+      samples: allVolatilities.slice(0, 5).map(v => v.toFixed(4)), // 显示前5个样本
+      invalidVolatilities: filteredRankings.filter(r => isNaN(r.volatility24h) || !isFinite(r.volatility24h)).map(r => ({ symbol: r.symbol, volatility: r.volatility24h }))
     });
     
     // 动态设置理想波动率中心值为平均值，标准差为范围的1/4
     const idealVolatility = avgVolatility;
     const volatilitySpread = Math.max((maxVolatility - minVolatility) / 4, 0.01); // 至少0.01防止除零
     
+    // 预先计算跌幅分数的最大值，避免除零问题
+    const maxAbsoluteDecline = Math.max(...filteredRankings.map(r => Math.abs(Math.min(r.priceChange24h, 0))));
+    const hasDeclines = maxAbsoluteDecline > 0;
+    
     filteredRankings.forEach((item) => {
-      const priceChange = item.priceChange24h;
+      const priceChange = isNaN(item.priceChange24h) ? 0 : item.priceChange24h;
       
       // 计算跌幅分数：跌幅越大分数越高（负值变正值，绝对值越大分数越高）
-      const priceChangeScore = Math.abs(Math.min(priceChange, 0)) / Math.max(...filteredRankings.map(r => Math.abs(Math.min(r.priceChange24h, 0))));
+      let priceChangeScore = 0;
+      if (hasDeclines) {
+        priceChangeScore = Math.abs(Math.min(priceChange, 0)) / maxAbsoluteDecline;
+      } else {
+        // 如果没有下跌的币种，按照跌幅相对大小排序（越接近0分数越高）
+        const minChange = Math.min(...filteredRankings.map(r => r.priceChange24h));
+        const maxChange = Math.max(...filteredRankings.map(r => r.priceChange24h));
+        if (maxChange > minChange) {
+          priceChangeScore = 1 - (priceChange - minChange) / (maxChange - minChange);
+        } else {
+          priceChangeScore = 1; // 所有币种涨跌幅相同，给相同分数
+        }
+      }
       
       // 计算成交量分数：成交量排名越靠前（数字越小），分数越高
       const volumeScore = (totalCandidates - item.rank + 1) / totalCandidates;
       
       // 计算波动率分数：使用正态分布，适中得分最高
-      const volatilityScore = Math.exp(-Math.pow(item.volatility24h - idealVolatility, 2) / (2 * Math.pow(volatilitySpread, 2)));
+      let volatilityScore = 0;
+      const validVolatility = isNaN(item.volatility24h) || !isFinite(item.volatility24h) ? avgVolatility : item.volatility24h;
+      if (volatilitySpread > 0) {
+        volatilityScore = Math.exp(-Math.pow(validVolatility - idealVolatility, 2) / (2 * Math.pow(volatilitySpread, 2)));
+      } else {
+        volatilityScore = 1; // 如果波动率标准差为0，给所有币种相同分数
+      }
       
-      // 计算综合分数
-      const totalScore = priceChangeScore * this.params.priceChangeWeight + 
-                        volumeScore * this.params.volumeWeight + 
-                        volatilityScore * this.params.volatilityWeight;
+      // 计算综合分数，确保所有分数都是有效数字
+      const validPriceChangeScore = isNaN(priceChangeScore) ? 0 : priceChangeScore;
+      const validVolumeScore = isNaN(volumeScore) ? 0 : volumeScore;
+      const validVolatilityScore = isNaN(volatilityScore) ? 0 : volatilityScore;
+      
+      const totalScore = validPriceChangeScore * this.params.priceChangeWeight + 
+                        validVolumeScore * this.params.volumeWeight + 
+                        validVolatilityScore * this.params.volatilityWeight;
       
       // 判断是否符合做空条件
       let eligible = true;
@@ -159,7 +220,25 @@ class BTCDOM2StrategyEngine {
         eligible = false;
         reason = `涨跌幅 ${priceChange.toFixed(2)}% 不低于BTC ${btcPriceChange.toFixed(2)}%`;
       } else {
-        reason = `综合评分: ${totalScore.toFixed(3)} (跌幅: ${priceChangeScore.toFixed(3)}, 成交量: ${volumeScore.toFixed(3)}, 波动率: ${volatilityScore.toFixed(3)})`;
+        const finalTotalScore = isNaN(totalScore) ? 0 : totalScore;
+        reason = `综合评分: ${finalTotalScore.toFixed(3)} (跌幅: ${validPriceChangeScore.toFixed(3)}, 成交量: ${validVolumeScore.toFixed(3)}, 波动率: ${validVolatilityScore.toFixed(3)})`;
+        
+        // 调试信息：记录分数异常的情况
+        if (isNaN(totalScore) || isNaN(validPriceChangeScore) || isNaN(validVolumeScore) || isNaN(validVolatilityScore)) {
+          console.warn(`[DEBUG] 分数异常 ${item.symbol}:`, {
+            priceChange: item.priceChange24h,
+            volatility: item.volatility24h,
+            rank: item.rank,
+            priceChangeScore: validPriceChangeScore,
+            volumeScore: validVolumeScore,
+            volatilityScore: validVolatilityScore,
+            totalScore: finalTotalScore,
+            maxAbsoluteDecline,
+            hasDeclines,
+            idealVolatility,
+            volatilitySpread
+          });
+        }
       }
       
       allCandidates.push({
@@ -170,10 +249,10 @@ class BTCDOM2StrategyEngine {
         quoteVolume24h: item.quoteVolume24h,
         volatility24h: item.volatility24h,
         marketShare: item.marketShare,
-        priceChangeScore,
-        volumeScore,
-        volatilityScore,
-        totalScore,
+        priceChangeScore: validPriceChangeScore,
+        volumeScore: validVolumeScore,
+        volatilityScore: validVolatilityScore,
+        totalScore: isNaN(totalScore) ? 0 : totalScore,
         eligible,
         reason
       });
@@ -272,8 +351,8 @@ class BTCDOM2StrategyEngine {
         
         if (previousSnapshot?.btcPosition) {
           // 使用上一期的BTC数量和价格变化来计算盈亏
-          const previousBtcQuantity = previousSnapshot.btcPosition.quantity;
-          const previousBtcPrice = previousSnapshot.btcPosition.currentPrice;
+          const previousBtcQuantity = previousSnapshot.btcPosition.quantity ?? 0;
+          const previousBtcPrice = previousSnapshot.btcPosition.currentPrice ?? btcPrice;
           btcPnl = previousBtcQuantity * (btcPrice - previousBtcPrice);
           
           // 如果BTC仓位发生变化，计算交易手续费
@@ -289,33 +368,48 @@ class BTCDOM2StrategyEngine {
           btcIsNewPosition = true;
         }
         
+        // 确保所有数值都是有效的
+        const validBtcAmount = isNaN(btcAmount) || btcAmount <= 0 ? 0 : btcAmount;
+        const validBtcQuantity = isNaN(btcQuantity) || btcQuantity <= 0 ? 0 : btcQuantity;
+        const validBtcPnl = isNaN(btcPnl) ? 0 : btcPnl;
+        const validBtcTradingFee = isNaN(btcTradingFee) ? 0 : btcTradingFee;
+        const prevAmount = previousSnapshot?.btcPosition?.amount ?? validBtcAmount;
+        
         btcPosition = {
           symbol: 'BTCUSDT',
           side: 'LONG',
-          amount: btcAmount,
-          quantity: btcQuantity,
+          amount: validBtcAmount,
+          quantity: validBtcQuantity,
           entryPrice: previousSnapshot?.btcPosition?.entryPrice || btcPrice,
           currentPrice: btcPrice,
-          pnl: btcPnl, // 第一期为0，后续期基于价格变化计算
-          pnlPercent: previousSnapshot?.btcPosition ? btcPnl / previousSnapshot.btcPosition.amount : 0,
-          tradingFee: btcTradingFee,
+          pnl: validBtcPnl, // 第一期为0，后续期基于价格变化计算
+          pnlPercent: prevAmount > 0 ? validBtcPnl / prevAmount : 0,
+          tradingFee: validBtcTradingFee,
           isNewPosition: btcIsNewPosition,
           reason: 'BTC基础持仓'
         };
       } else if (previousSnapshot?.btcPosition) {
         // 如果之前有BTC持仓但现在不做多BTC，需要平仓
-        const sellAmount = previousSnapshot.btcPosition.quantity * btcPrice;
+        const validPrevQuantity = previousSnapshot.btcPosition.quantity ?? 0;
+        const validPrevAmount = previousSnapshot.btcPosition.amount ?? 0;
+        const validPrevPrice = previousSnapshot.btcPosition.currentPrice ?? btcPrice;
+        
+        const sellAmount = validPrevQuantity * btcPrice;
         const sellFee = this.calculateTradingFee(sellAmount);
         totalTradingFee += sellFee;
         
-        const finalPnl = previousSnapshot.btcPosition.quantity * (btcPrice - previousSnapshot.btcPosition.currentPrice);
+        const finalPnl = validPrevQuantity * (btcPrice - validPrevPrice);
+        const validFinalPnl = isNaN(finalPnl) ? 0 : finalPnl;
+        const validSellFee = isNaN(sellFee) ? 0 : sellFee;
         
         soldPositions.push({
           ...previousSnapshot.btcPosition,
+          amount: validPrevAmount,
+          quantity: validPrevQuantity,
           currentPrice: btcPrice,
-          pnl: finalPnl,
-          pnlPercent: finalPnl / previousSnapshot.btcPosition.amount,
-          tradingFee: sellFee,
+          pnl: validFinalPnl,
+          pnlPercent: validPrevAmount > 0 ? validFinalPnl / validPrevAmount : 0,
+          tradingFee: validSellFee,
           isSoldOut: true,
           isNewPosition: false,
           quantityChange: { type: 'sold' },
@@ -338,12 +432,20 @@ class BTCDOM2StrategyEngine {
             const priceChangePercent = (currentPrice - prevPosition.currentPrice) / prevPosition.currentPrice;
             const finalPnl = -prevPosition.amount * priceChangePercent;
             
+            // 确保 amount 和 quantity 有有效的数值，避免 null 值
+            const validAmount = prevPosition.amount ?? 0;
+            const validQuantity = prevPosition.quantity ?? 0;
+            const validPnl = isNaN(finalPnl) ? 0 : finalPnl;
+            const validTradingFee = isNaN(sellFee) ? 0 : sellFee;
+            
             soldPositions.push({
               ...prevPosition,
+              amount: validAmount,
+              quantity: validQuantity,
               currentPrice,
-              pnl: finalPnl,
+              pnl: validPnl,
               pnlPercent: -priceChangePercent,
-              tradingFee: sellFee,
+              tradingFee: validTradingFee,
               isSoldOut: true,
               isNewPosition: false, // 卖出的持仓不是新增持仓
               quantityChange: { type: 'sold' },
@@ -362,8 +464,18 @@ class BTCDOM2StrategyEngine {
         
         shortPositions = selectedCandidates.map((candidate, index) => {
         const allocation = allocations[index];
-        const price = candidate.volume24h > 0 ? candidate.quoteVolume24h / candidate.volume24h : 1;
-        const quantity = allocation / price;
+        
+        // 确保价格计算的健壮性，避免除零和无效值
+        let price = 1; // 默认价格
+        if (candidate.volume24h && candidate.quoteVolume24h && candidate.volume24h > 0) {
+          const calculatedPrice = candidate.quoteVolume24h / candidate.volume24h;
+          if (!isNaN(calculatedPrice) && calculatedPrice > 0) {
+            price = calculatedPrice;
+          }
+        }
+        
+        // 确保数量计算的健壮性
+        const quantity = allocation > 0 && price > 0 ? allocation / price : 0;
         
         // 计算做空盈亏和手续费
         let pnl = 0;
@@ -375,13 +487,18 @@ class BTCDOM2StrategyEngine {
           // 从第二期开始，基于价格变化计算盈亏
           const previousShortPosition = previousSnapshot.shortPositions.find(pos => pos.symbol === candidate.symbol);
           if (previousShortPosition) {
+            // 确保之前的持仓数据有效
+            const validPrevAmount = previousShortPosition.amount ?? 0;
+            const validPrevPrice = previousShortPosition.currentPrice ?? price;
+            
             // 做空盈亏：价格下跌时盈利，价格上涨时亏损
-            const priceChangePercent = (price - previousShortPosition.currentPrice) / previousShortPosition.currentPrice;
-            pnl = -previousShortPosition.amount * priceChangePercent;
+            const priceChangePercent = validPrevPrice > 0 ? (price - validPrevPrice) / validPrevPrice : 0;
+            pnl = validPrevAmount > 0 ? -validPrevAmount * priceChangePercent : 0;
             pnlPercent = -priceChangePercent;
             
             // 如果仓位发生变化，计算交易手续费
-            const quantityDiff = Math.abs(quantity - previousShortPosition.quantity);
+            const validPrevQuantity = previousShortPosition.quantity ?? 0;
+            const quantityDiff = Math.abs(quantity - validPrevQuantity);
             if (quantityDiff > 0.0001) {
               tradingFee = this.calculateTradingFee(quantityDiff * price);
               totalTradingFee += tradingFee;
@@ -406,9 +523,9 @@ class BTCDOM2StrategyEngine {
             quantity,
             entryPrice: previousSnapshot?.shortPositions?.find(pos => pos.symbol === candidate.symbol)?.entryPrice || price,
             currentPrice: price,
-            pnl,
-            pnlPercent,
-            tradingFee,
+            pnl: isNaN(pnl) ? 0 : pnl,
+            pnlPercent: isNaN(pnlPercent) ? 0 : pnlPercent,
+            tradingFee: isNaN(tradingFee) ? 0 : tradingFee,
             isNewPosition,
             marketShare: candidate.marketShare,
             reason: candidate.reason
@@ -437,12 +554,20 @@ class BTCDOM2StrategyEngine {
           const priceChangePercent = (currentPrice - prevPosition.currentPrice) / prevPosition.currentPrice;
           const finalPnl = -prevPosition.amount * priceChangePercent;
           
+          // 确保 amount 和 quantity 有有效的数值，避免 null 值
+          const validAmount = prevPosition.amount ?? 0;
+          const validQuantity = prevPosition.quantity ?? 0;
+          const validPnl = isNaN(finalPnl) ? 0 : finalPnl;
+          const validTradingFee = isNaN(sellFee) ? 0 : sellFee;
+          
           soldPositions.push({
             ...prevPosition,
+            amount: validAmount,
+            quantity: validQuantity,
             currentPrice,
-            pnl: finalPnl,
+            pnl: validPnl,
             pnlPercent: -priceChangePercent,
-            tradingFee: sellFee,
+            tradingFee: validTradingFee,
             isSoldOut: true,
             isNewPosition: false, // 卖出的持仓不是新增持仓
             quantityChange: { type: 'sold' },
@@ -453,18 +578,26 @@ class BTCDOM2StrategyEngine {
       
       // 如果之前有BTC持仓且现在不做多BTC，需要卖出
       if (previousSnapshot?.btcPosition && !canLongBtc) {
-        const sellAmount = previousSnapshot.btcPosition.quantity * btcPrice;
+        const validPrevQuantity = previousSnapshot.btcPosition.quantity ?? 0;
+        const validPrevAmount = previousSnapshot.btcPosition.amount ?? 0;
+        const validPrevPrice = previousSnapshot.btcPosition.currentPrice ?? btcPrice;
+        
+        const sellAmount = validPrevQuantity * btcPrice;
         const sellFee = this.calculateTradingFee(sellAmount);
         totalTradingFee += sellFee;
         
-        const finalPnl = previousSnapshot.btcPosition.quantity * (btcPrice - previousSnapshot.btcPosition.currentPrice);
+        const finalPnl = validPrevQuantity * (btcPrice - validPrevPrice);
+        const validFinalPnl = isNaN(finalPnl) ? 0 : finalPnl;
+        const validSellFee = isNaN(sellFee) ? 0 : sellFee;
         
         soldPositions.push({
           ...previousSnapshot.btcPosition,
+          amount: validPrevAmount,
+          quantity: validPrevQuantity,
           currentPrice: btcPrice,
-          pnl: finalPnl,
-          pnlPercent: finalPnl / previousSnapshot.btcPosition.amount,
-          tradingFee: sellFee,
+          pnl: validFinalPnl,
+          pnlPercent: validPrevAmount > 0 ? validFinalPnl / validPrevAmount : 0,
+          tradingFee: validSellFee,
           isSoldOut: true,
           isNewPosition: false,
           quantityChange: { type: 'sold' },
@@ -476,15 +609,19 @@ class BTCDOM2StrategyEngine {
         const btcQuantity = btcAmount / btcPrice;
         
         const previousBtcPosition = previousSnapshot.btcPosition;
-        const btcPnl = previousBtcPosition.quantity * (btcPrice - previousBtcPosition.currentPrice);
+        const validPrevBtcQuantity = previousBtcPosition.quantity ?? 0;
+        const validPrevBtcPrice = previousBtcPosition.currentPrice ?? btcPrice;
+        const btcPnl = validPrevBtcQuantity * (btcPrice - validPrevBtcPrice);
         
         // 如果仓位发生变化，计算交易手续费
         let btcTradingFee = 0;
-        const quantityDiff = Math.abs(btcQuantity - previousBtcPosition.quantity);
+        const quantityDiff = Math.abs(btcQuantity - validPrevBtcQuantity);
         if (quantityDiff > 0.0001) {
           btcTradingFee = this.calculateTradingFee(quantityDiff * btcPrice);
           totalTradingFee += btcTradingFee;
         }
+        
+        const validPrevBtcAmount = previousBtcPosition.amount ?? btcAmount;
         
         btcPosition = {
           symbol: 'BTCUSDT',
@@ -493,9 +630,9 @@ class BTCDOM2StrategyEngine {
           quantity: btcQuantity,
           entryPrice: previousBtcPosition.entryPrice,
           currentPrice: btcPrice,
-          pnl: btcPnl,
-          pnlPercent: btcPnl / previousBtcPosition.amount,
-          tradingFee: btcTradingFee,
+          pnl: isNaN(btcPnl) ? 0 : btcPnl,
+          pnlPercent: validPrevBtcAmount > 0 ? btcPnl / validPrevBtcAmount : 0,
+          tradingFee: isNaN(btcTradingFee) ? 0 : btcTradingFee,
           isNewPosition: false,
           reason: 'BTC基础持仓'
         };
@@ -521,6 +658,8 @@ class BTCDOM2StrategyEngine {
     const totalPnl = totalValue - this.params.initialCapital;
     const totalPnlPercent = totalPnl / this.params.initialCapital;
     
+
+
     return {
       timestamp,
       hour,
@@ -550,7 +689,7 @@ function calculatePerformanceMetrics(
 ): BTCDOM2PerformanceMetrics {
   if (snapshots.length === 0) {
     return {
-      totalReturn: 0, annualizedReturn: 0, volatility: 0, sharpeRatio: 0,
+      totalReturn: 0, btcReturn: 0, altReturn: 0, annualizedReturn: 0, volatility: 0, sharpeRatio: 0,
       maxDrawdown: 0, winRate: 0, avgReturn: 0, bestPeriod: 0, worstPeriod: 0, calmarRatio: 0
     };
   }
@@ -575,7 +714,7 @@ function calculatePerformanceMetrics(
   if (periodReturns.length === 0) {
     const totalReturn = snapshots[0].totalPnlPercent;
     return {
-      totalReturn, annualizedReturn: totalReturn, volatility: 0, sharpeRatio: 0,
+      totalReturn, btcReturn: 0, altReturn: 0, annualizedReturn: totalReturn, volatility: 0, sharpeRatio: 0,
       maxDrawdown: 0, winRate: totalReturn > 0 ? 1 : 0, avgReturn: totalReturn, 
       bestPeriod: totalReturn, worstPeriod: totalReturn, calmarRatio: 0,
       bestPeriodInfo: {
@@ -592,6 +731,47 @@ function calculatePerformanceMetrics(
   }
   
   const totalReturn = snapshots[snapshots.length - 1].totalPnlPercent;
+  
+  // 计算BTC和ALT分别收益率
+  const firstSnapshot = snapshots[0];
+  const lastSnapshot = snapshots[snapshots.length - 1];
+  
+  // BTC收益率：基于BTC价格变化
+  const btcReturn = firstSnapshot.btcPrice > 0 ? 
+    (lastSnapshot.btcPrice - firstSnapshot.btcPrice) / firstSnapshot.btcPrice : 0;
+  
+  // ALT收益率：简化计算，基于做空部分的净收益
+  let altReturn = 0;
+  if (params.shortAlt) {
+    // 计算所有做空相关的累计收益（包括当前持仓和已卖出持仓）
+    let totalShortPnl = 0;
+    let shortInvestmentEstimate = 0;
+    
+    // 当前做空持仓的盈亏
+    const currentShortPnl = lastSnapshot.shortPositions.reduce((sum, pos) => sum + pos.pnl, 0);
+    const currentShortInvestment = lastSnapshot.shortPositions.reduce((sum, pos) => sum + pos.amount, 0);
+    
+    totalShortPnl += currentShortPnl;
+    shortInvestmentEstimate = currentShortInvestment;
+    
+    // 历史卖出做空持仓的累计盈亏（遍历所有快照）
+    for (const snapshot of snapshots) {
+      if (snapshot.soldPositions) {
+        const soldShortPnl = snapshot.soldPositions
+          .filter(pos => pos.side === 'SHORT')
+          .reduce((sum, pos) => sum + pos.pnl, 0);
+        totalShortPnl += soldShortPnl;
+      }
+    }
+    
+    // 估算总的做空投资基数：使用策略分配的做空部分资金
+    const shortAllocationRatio = params.longBtc ? (1 - params.btcRatio) : 1;
+    const estimatedShortInvestment = params.initialCapital * shortAllocationRatio;
+    
+    if (estimatedShortInvestment > 0) {
+      altReturn = totalShortPnl / estimatedShortInvestment;
+    }
+  }
   
   // 年化收益率
   const totalHours = snapshots.length * granularityHours;
@@ -635,6 +815,8 @@ function calculatePerformanceMetrics(
   
   return {
     totalReturn,
+    btcReturn,
+    altReturn,
     annualizedReturn,
     volatility,
     sharpeRatio,

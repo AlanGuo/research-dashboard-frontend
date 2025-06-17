@@ -2,22 +2,22 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from '@/components/ui/table';
-import { 
+import {
   StrategySnapshot,
   BTCDOM2StrategyParams
 } from '@/types/btcdom2';
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  Wallet, 
+import {
+  TrendingUp,
+  TrendingDown,
+  Wallet,
   DollarSign,
   AlertTriangle,
   Plus,
@@ -42,35 +42,38 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
   }
 
   // 格式化金额
-  const formatCurrency = (amount: number) => {
-    if (amount === 0) return '$0.00';
-    
+  // 格式化货币
+  const formatCurrency = (amount: number | null) => {
+    const validAmount = amount ?? 0;
+
     // 对于小于 1 美元的价格，使用更多小数位
-    if (Math.abs(amount) < 1) {
+    if (Math.abs(validAmount) < 1) {
       // 找到第一个非零小数位，然后显示4位有效数字
-      const str = amount.toString();
+      const str = validAmount.toString();
       if (str.includes('e')) {
         // 处理科学计数法
-        return `$${amount.toFixed(8).replace(/\.?0+$/, '')}`;
+        return `$${validAmount.toFixed(8).replace(/\.?0+$/, '')}`;
       } else {
         // 显示最多8位小数，但去除尾随的0
-        return `$${amount.toFixed(8).replace(/\.?0+$/, '')}`;
+        return `$${validAmount.toFixed(8).replace(/\.?0+$/, '')}`;
       }
     }
-    
+
     // 对于大于等于 1 美元的价格，使用标准格式
-    return `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `$${validAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   // 格式化百分比
-  const formatPercent = (value: number) => {
-    return `${(value * 100).toFixed(2)}%`;
+  const formatPercent = (value: number | null) => {
+    const validValue = value ?? 0;
+    return `${(validValue * 100).toFixed(2)}%`;
   };
 
   // 获取盈亏颜色
-  const getPnlColor = (pnl: number) => {
-    if (pnl > 0) return 'text-green-600';
-    if (pnl < 0) return 'text-red-600';
+  const getPnlColor = (pnl: number | null) => {
+    const validPnl = pnl ?? 0;
+    if (validPnl > 0) return 'text-green-600';
+    if (validPnl < 0) return 'text-red-600';
     return 'text-gray-600';
   };
 
@@ -182,7 +185,7 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge 
+                    <Badge
                       variant={
                         position.type === 'SOLD' ? "secondary" :
                         position.side === 'LONG' ? "default" : "destructive"
@@ -212,7 +215,7 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
                       <span>{formatCurrency(position.amount)}</span>
                       {position.type !== 'SOLD' && totalInvestedAmount > 0 && (
                         <span className="text-xs text-gray-500">
-                          ({((Math.abs(position.amount) / totalInvestedAmount) * 100).toFixed(2)}%)
+                          ({((Math.abs(position.amount ?? 0) / Math.max(totalInvestedAmount, 1)) * 100).toFixed(2)}%)
                         </span>
                       )}
                     </div>
@@ -220,9 +223,9 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       <span>
-                        {position.quantity.toLocaleString(undefined, { 
-                          minimumFractionDigits: 4, 
-                          maximumFractionDigits: 4 
+                        {position.quantity.toLocaleString(undefined, {
+                          minimumFractionDigits: 4,
+                          maximumFractionDigits: 4
                         })}
                       </span>
                       {position.quantityChange && (
@@ -233,7 +236,7 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
                             </div>
                           )}
                           {position.quantityChange.type === 'increase' && (
-                            <div title={`增加 ${position.quantityChange.changePercent?.toFixed(2)}%`}>
+                            <div title={`增加 ${(position.quantityChange.changePercent ?? 0).toFixed(2)}%`}>
                               <ArrowUp className="w-3 h-3 text-green-500" />
                             </div>
                           )}
@@ -281,9 +284,9 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
                       ) : (
                         position.priceChange && position.priceChange.changePercent !== undefined && position.priceChange.changePercent !== 0 && (
                           <span className={`text-xs ${
-                            position.priceChange.changePercent > 0 ? 'text-green-600' : 'text-red-600'
+                            (position.priceChange.changePercent ?? 0) > 0 ? 'text-green-600' : 'text-red-600'
                           }`}>
-                            ({position.priceChange.changePercent > 0 ? '+' : ''}{position.priceChange.changePercent.toFixed(2)}%)
+                            ({(position.priceChange.changePercent ?? 0) > 0 ? '+' : ''}{(position.priceChange.changePercent ?? 0).toFixed(2)}%)
                           </span>
                         )
                       )}
@@ -360,13 +363,13 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
                     <TableRow key={candidate.symbol}>
                       <TableCell className="font-medium">{candidate.symbol}</TableCell>
                       <TableCell className="text-right">{candidate.rank}</TableCell>
-                      <TableCell className={`text-right ${candidate.priceChange24h >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {candidate.priceChange24h.toFixed(2)}%
+                      <TableCell className={`text-right ${(candidate.priceChange24h ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {(candidate.priceChange24h ?? 0).toFixed(2)}%
                       </TableCell>
-                      <TableCell className="text-right">{candidate.priceChangeScore.toFixed(3)}</TableCell>
-                      <TableCell className="text-right">{candidate.volumeScore.toFixed(3)}</TableCell>
-                      <TableCell className="text-right">{candidate.volatilityScore.toFixed(3)}</TableCell>
-                      <TableCell className="text-right font-medium">{candidate.totalScore.toFixed(3)}</TableCell>
+                      <TableCell className="text-right">{(candidate.priceChangeScore ?? 0).toFixed(3)}</TableCell>
+                      <TableCell className="text-right">{(candidate.volumeScore ?? 0).toFixed(3)}</TableCell>
+                      <TableCell className="text-right">{(candidate.volatilityScore ?? 0).toFixed(3)}</TableCell>
+                      <TableCell className="text-right font-medium">{(candidate.totalScore ?? 0).toFixed(3)}</TableCell>
                       <TableCell>
                         <Badge variant={candidate.eligible ? "default" : "secondary"} className="text-xs">
                           {candidate.eligible ? "已选择" : "已排除"}
@@ -379,7 +382,7 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
                           ) : (
                             <div className="space-y-1">
                               {candidate.reason?.includes('涨幅过大') && (
-                                <div className="text-red-600">24h涨幅过大 ({candidate.priceChange24h.toFixed(2)}%)</div>
+                                <div className="text-red-600">24h涨幅过大 ({(candidate.priceChange24h ?? 0).toFixed(2)}%)</div>
                               )}
                               {candidate.reason?.includes('成交量不足') && (
                                 <div className="text-orange-600">成交量不足</div>
@@ -388,15 +391,15 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
                                 <div className="text-purple-600">波动率过高</div>
                               )}
                               {candidate.reason?.includes('综合分数不足') && (
-                                <div className="text-gray-600">综合分数不足 ({candidate.totalScore.toFixed(3)})</div>
+                                <div className="text-gray-600">综合分数不足 ({(candidate.totalScore ?? 0).toFixed(3)})</div>
                               )}
                               {candidate.reason?.includes('超出数量限制') && (
                                 <div className="text-blue-600">超出最大做空数量</div>
                               )}
-                              {candidate.reason && !candidate.reason.includes('涨幅过大') && 
-                               !candidate.reason.includes('成交量不足') && 
-                               !candidate.reason.includes('波动率过高') && 
-                               !candidate.reason.includes('综合分数不足') && 
+                              {candidate.reason && !candidate.reason.includes('涨幅过大') &&
+                               !candidate.reason.includes('成交量不足') &&
+                               !candidate.reason.includes('波动率过高') &&
+                               !candidate.reason.includes('综合分数不足') &&
                                !candidate.reason.includes('超出数量限制') && (
                                 <div className="text-gray-600">{candidate.reason}</div>
                               )}

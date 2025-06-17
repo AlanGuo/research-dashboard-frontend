@@ -154,6 +154,8 @@ export interface BTCDOM2BacktestResult {
 // 性能指标
 export interface BTCDOM2PerformanceMetrics {
   totalReturn: number;        // 总收益率
+  btcReturn: number;         // BTC做多收益率
+  altReturn: number;         // ALT做空收益率
   annualizedReturn: number;   // 年化收益率
   volatility: number;         // 波动率
   sharpeRatio: number;        // 夏普比率

@@ -23,12 +23,12 @@ import {
 import { BTCDOM2Chart } from '@/components/btcdom2/btcdom2-chart';
 import { BTCDOM2PerformanceCard } from '@/components/btcdom2/btcdom2-performance-card';
 import { BTCDOM2PositionTable } from '@/components/btcdom2/btcdom2-position-table';
-import { AlertCircle, Play, Settings, TrendingUp, TrendingDown, Clock, Loader2, Eye, Info } from 'lucide-react';
+import { AlertCircle, Play, Settings, TrendingUp, TrendingDown, Clock, Loader2, Eye, Info, Bitcoin, ArrowDown, ArrowUp } from 'lucide-react';
 
 export default function BTCDOM2Dashboard() {
   // 策略参数状态
   const [params, setParams] = useState<BTCDOM2StrategyParams>({
-    startDate: '2024-05-01',
+    startDate: '2024-03-01',
     endDate: '2025-06-17',
     initialCapital: 10000,
     btcRatio: 0.5,
@@ -888,12 +888,55 @@ export default function BTCDOM2Dashboard() {
           <>
             {/* 性能指标卡片 */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <BTCDOM2PerformanceCard
-                title="总收益率"
-                value={`${(backtestResult.performance.totalReturn * 100).toFixed(2)}%`}
-                icon={backtestResult.performance.totalReturn >= 0 ? TrendingUp : TrendingDown}
-                trend={backtestResult.performance.totalReturn >= 0 ? 'positive' : 'negative'}
-              />
+              {/* 收益率分解卡片 */}
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium text-gray-600">
+                    收益率分解
+                  </CardTitle>
+                  <TrendingUp className={`h-4 w-4 ${
+                    backtestResult.performance.totalReturn >= 0 ? 'text-green-500' : 'text-red-500'
+                  }`} />
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {/* 总收益率 - 突出显示 */}
+                    <div className="flex justify-between items-center p-2 bg-gray-50">
+                      <span className="text-sm font-medium text-gray-700">总收益率</span>
+                      <span className={`text-xl font-bold ${
+                        backtestResult.performance.totalReturn >= 0 ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {(backtestResult.performance.totalReturn * 100).toFixed(2)}%
+                      </span>
+                    </div>
+                    
+                    {/* 只在选择做多BTC时显示BTC收益率 */}
+                    {params.longBtc && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-orange-500">BTC做多</span>
+                        <span className={`text-sm font-bold ${
+                          backtestResult.performance.btcReturn >= 0 ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {(backtestResult.performance.btcReturn * 100).toFixed(2)}%
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* 只在选择做空ALT时显示ALT收益率 */}
+                    {params.shortAlt && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-blue-500">ALT做空</span>
+                        <span className={`text-sm font-bold ${
+                          backtestResult.performance.altReturn >= 0 ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {(backtestResult.performance.altReturn * 100).toFixed(2)}%
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+              
               <BTCDOM2PerformanceCard
                 title="年化收益率"
                 value={`${(backtestResult.performance.annualizedReturn * 100).toFixed(2)}%`}
