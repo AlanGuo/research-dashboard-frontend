@@ -53,7 +53,7 @@ export default function BTCDOM2Dashboard() {
   // 工具函数：格式化时间
   const formatPeriodTime = (timestamp: string): string => {
     const date = new Date(timestamp);
-    return `${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+    return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
   };
   const [parameterErrors, setParameterErrors] = useState<Record<string, string>>({});
 
