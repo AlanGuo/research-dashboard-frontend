@@ -94,6 +94,15 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
       .map(pos => ({ ...pos, type: 'SOLD' as const }))
   ];
 
+  // 计算总投资金额用于百分比计算
+  const totalInvestedAmount = allPositions.reduce((sum, pos) => {
+    // 只计算当前持仓的金额，不包括已卖出的持仓
+    if (pos.type !== 'SOLD') {
+      return sum + Math.abs(pos.amount);
+    }
+    return sum;
+  }, 0);
+
   return (
     <div className="space-y-4">
       {/* 基本信息 */}
@@ -199,7 +208,14 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right font-medium">
-                    {formatCurrency(position.amount)}
+                    <div className="flex flex-col">
+                      <span>{formatCurrency(position.amount)}</span>
+                      {position.type !== 'SOLD' && totalInvestedAmount > 0 && (
+                        <span className="text-xs text-gray-500">
+                          ({((Math.abs(position.amount) / totalInvestedAmount) * 100).toFixed(2)}%)
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
@@ -331,6 +347,7 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
                     <TableHead>标的</TableHead>
                     <TableHead className="text-right">排名</TableHead>
                     <TableHead className="text-right">24h涨跌</TableHead>
+                    <TableHead className="text-right">跌幅分数</TableHead>
                     <TableHead className="text-right">成交量分数</TableHead>
                     <TableHead className="text-right">波动率分数</TableHead>
                     <TableHead className="text-right">综合分数</TableHead>
@@ -346,8 +363,9 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
                       <TableCell className={`text-right ${candidate.priceChange24h >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {candidate.priceChange24h.toFixed(2)}%
                       </TableCell>
-                      <TableCell className="text-right">{candidate.volumeScore.toFixed(3)}</TableCell>
                       <TableCell className="text-right">{candidate.priceChangeScore.toFixed(3)}</TableCell>
+                      <TableCell className="text-right">{candidate.volumeScore.toFixed(3)}</TableCell>
+                      <TableCell className="text-right">{candidate.volatilityScore.toFixed(3)}</TableCell>
                       <TableCell className="text-right font-medium">{candidate.totalScore.toFixed(3)}</TableCell>
                       <TableCell>
                         <Badge variant={candidate.eligible ? "default" : "secondary"} className="text-xs">
@@ -355,8 +373,35 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
                         </Badge>
                       </TableCell>
                       <TableCell className="max-w-48">
-                        <div className="text-xs text-muted-foreground whitespace-pre-wrap break-words" title={candidate.reason}>
-                          {candidate.reason?.replace(/\(/g, '\n(')}
+                        <div className="text-xs text-muted-foreground" title={candidate.reason}>
+                          {candidate.eligible ? (
+                            <span>已选择</span>
+                          ) : (
+                            <div className="space-y-1">
+                              {candidate.reason?.includes('涨幅过大') && (
+                                <div className="text-red-600">24h涨幅过大 ({candidate.priceChange24h.toFixed(2)}%)</div>
+                              )}
+                              {candidate.reason?.includes('成交量不足') && (
+                                <div className="text-orange-600">成交量不足</div>
+                              )}
+                              {candidate.reason?.includes('波动率过高') && (
+                                <div className="text-purple-600">波动率过高</div>
+                              )}
+                              {candidate.reason?.includes('综合分数不足') && (
+                                <div className="text-gray-600">综合分数不足 ({candidate.totalScore.toFixed(3)})</div>
+                              )}
+                              {candidate.reason?.includes('超出数量限制') && (
+                                <div className="text-blue-600">超出最大做空数量</div>
+                              )}
+                              {candidate.reason && !candidate.reason.includes('涨幅过大') && 
+                               !candidate.reason.includes('成交量不足') && 
+                               !candidate.reason.includes('波动率过高') && 
+                               !candidate.reason.includes('综合分数不足') && 
+                               !candidate.reason.includes('超出数量限制') && (
+                                <div className="text-gray-600">{candidate.reason}</div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

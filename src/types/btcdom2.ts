@@ -1,18 +1,28 @@
 // BTCDOM2.0策略相关类型定义
 
+// 仓位分配策略枚举
+export enum PositionAllocationStrategy {
+  BY_VOLUME = 'BY_VOLUME',           // 按成交量比例分配
+  BY_COMPOSITE_SCORE = 'BY_COMPOSITE_SCORE', // 按综合分数分配权重
+  EQUAL_ALLOCATION = 'EQUAL_ALLOCATION'      // 平均分配
+}
+
 // 策略参数配置
 export interface BTCDOM2StrategyParams {
   startDate: string;           // 持仓开始时间 (YYYY-MM-DD)
   endDate: string;             // 持仓结束时间 (YYYY-MM-DD)
   initialCapital: number;      // 初始本金 (USDT)
   btcRatio: number;           // BTC占比 (0-1)
-  volumeWeight: number;       // 成交量排行榜权重 (0-1)
-  volatilityWeight: number;   // 波动率排行榜权重 (0-1)
+  priceChangeWeight: number;  // 跌幅权重 (0-1)
+  volumeWeight: number;       // 成交量权重 (0-1)
+  volatilityWeight: number;   // 波动率权重 (0-1)
   maxShortPositions: number;  // 最多做空标的数量
   tradingFeeRate: number;     // 交易手续费率 (默认0.002 = 0.2%)
   rebalanceMode?: boolean;    // 是否启用重新平衡模式，默认true
   longBtc: boolean;           // 是否做多BTC (默认true)
   shortAlt: boolean;          // 是否做空ALT (默认true)
+  allocationStrategy: PositionAllocationStrategy; // 仓位分配策略
+  maxSinglePositionRatio: number; // 最高单币种持仓限制 (0-1)
 }
 
 // 新API返回的排行榜数据项
@@ -66,8 +76,9 @@ export interface ShortCandidate {
   marketShare: number;        // 市场份额
   
   // 评分相关
+  priceChangeScore: number;   // 跌幅分数
   volumeScore: number;        // 成交量分数
-  priceChangeScore: number;   // 波动率分数（保留字段名兼容性，实际存储波动率分数）
+  volatilityScore: number;    // 波动率分数
   totalScore: number;         // 综合分数
   
   eligible: boolean;          // 是否符合做空条件

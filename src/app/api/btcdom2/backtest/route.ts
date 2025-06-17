@@ -11,7 +11,8 @@ import {
   VolumeBacktestDataPoint,
   RankingItem,
   ShortCandidate,
-  ShortSelectionResult
+  ShortSelectionResult,
+  PositionAllocationStrategy
 } from '@/types/btcdom2';
 
 // 策略引擎类
@@ -27,6 +28,71 @@ class BTCDOM2StrategyEngine {
     return amount * this.params.tradingFeeRate;
   }
 
+  // 计算仓位分配
+  private calculatePositionAllocations(candidates: ShortCandidate[], totalAmount: number): number[] {
+    const allocations: number[] = [];
+    
+    switch (this.params.allocationStrategy) {
+      case PositionAllocationStrategy.BY_VOLUME:
+        // 按成交量比例分配（现有逻辑）
+        const totalMarketShare = candidates.reduce((sum, c) => sum + c.marketShare, 0);
+        candidates.forEach(candidate => {
+          allocations.push(totalAmount * (candidate.marketShare / totalMarketShare));
+        });
+        break;
+        
+      case PositionAllocationStrategy.BY_COMPOSITE_SCORE:
+        // 按综合分数分配权重
+        const totalScore = candidates.reduce((sum, c) => sum + c.totalScore, 0);
+        const maxSingleAllocation = totalAmount * this.params.maxSinglePositionRatio;
+        
+        candidates.forEach(candidate => {
+          let allocation = totalAmount * (candidate.totalScore / totalScore);
+          // 限制单个币种最大持仓
+          allocation = Math.min(allocation, maxSingleAllocation);
+          allocations.push(allocation);
+        });
+        
+        // 如果有剩余资金（由于单币种限制），按比例重新分配给未达到上限的币种
+        const totalAllocated = allocations.reduce((sum, a) => sum + a, 0);
+        const remaining = totalAmount - totalAllocated;
+        if (remaining > 0) {
+          const availableForReallocation = candidates.map((candidate, index) => {
+            const currentAllocation = allocations[index];
+            const maxPossible = maxSingleAllocation;
+            return maxPossible - currentAllocation;
+          });
+          const totalAvailable = availableForReallocation.reduce((sum, a) => sum + a, 0);
+          
+          if (totalAvailable > 0) {
+            availableForReallocation.forEach((available, index) => {
+              if (available > 0) {
+                allocations[index] += remaining * (available / totalAvailable);
+              }
+            });
+          }
+        }
+        break;
+        
+      case PositionAllocationStrategy.EQUAL_ALLOCATION:
+        // 平均分配
+        const equalAmount = totalAmount / candidates.length;
+        candidates.forEach(() => {
+          allocations.push(equalAmount);
+        });
+        break;
+        
+      default:
+        // 默认按成交量比例分配
+        const defaultTotalMarketShare = candidates.reduce((sum, c) => sum + c.marketShare, 0);
+        candidates.forEach(candidate => {
+          allocations.push(totalAmount * (candidate.marketShare / defaultTotalMarketShare));
+        });
+    }
+    
+    return allocations;
+  }
+
   // 筛选做空候选标的
   selectShortCandidates(
     rankings: RankingItem[], 
@@ -40,44 +106,49 @@ class BTCDOM2StrategyEngine {
     
     // 添加权重调试日志
     console.log('权重参数:', {
+      priceChangeWeight: this.params.priceChangeWeight,
       volumeWeight: this.params.volumeWeight,
       volatilityWeight: this.params.volatilityWeight,
-      sum: this.params.volumeWeight + this.params.volatilityWeight
+      sum: this.params.priceChangeWeight + this.params.volumeWeight + this.params.volatilityWeight
     });
     
     // 分析波动率范围
-    const volatilities = filteredRankings.map(r => r.volatility24h);
-    const minVolatility = Math.min(...volatilities);
-    const maxVolatility = Math.max(...volatilities);
+    // 获取所有波动率数据用于正态分布计算
+    const allVolatilities = filteredRankings.map(item => item.volatility24h);
+    const minVolatility = Math.min(...allVolatilities);
+    const maxVolatility = Math.max(...allVolatilities);
+    const avgVolatility = allVolatilities.reduce((sum, vol) => sum + vol, 0) / allVolatilities.length;
     
-    console.log('波动率分析:', {
+    console.log('波动率统计:', {
       btcPriceChange,
-      minVolatility: minVolatility.toFixed(4),
-      maxVolatility: maxVolatility.toFixed(4),
+      min: minVolatility.toFixed(4),
+      max: maxVolatility.toFixed(4),
+      avg: avgVolatility.toFixed(4),
       range: (maxVolatility - minVolatility).toFixed(4),
+      count: allVolatilities.length,
       eligibleCount: filteredRankings.filter(r => r.priceChange24h < btcPriceChange).length,
-      totalCount: filteredRankings.length
+      samples: allVolatilities.slice(0, 5).map(v => v.toFixed(4)) // 显示前5个样本
     });
     
-    // 按波动率排序，用于计算波动率排名分数
-    const sortedByVolatility = [...filteredRankings].sort((a, b) => b.volatility24h - a.volatility24h);
-    const volatilityRankMap = new Map<string, number>();
-    sortedByVolatility.forEach((item, index) => {
-      volatilityRankMap.set(item.symbol, index + 1); // 排名从1开始
-    });
+    // 动态设置理想波动率中心值为平均值，标准差为范围的1/4
+    const idealVolatility = avgVolatility;
+    const volatilitySpread = Math.max((maxVolatility - minVolatility) / 4, 0.01); // 至少0.01防止除零
     
     filteredRankings.forEach((item) => {
       const priceChange = item.priceChange24h;
       
+      // 计算跌幅分数：跌幅越大分数越高（负值变正值，绝对值越大分数越高）
+      const priceChangeScore = Math.abs(Math.min(priceChange, 0)) / Math.max(...filteredRankings.map(r => Math.abs(Math.min(r.priceChange24h, 0))));
+      
       // 计算成交量分数：成交量排名越靠前（数字越小），分数越高
       const volumeScore = (totalCandidates - item.rank + 1) / totalCandidates;
       
-      // 计算波动率分数：波动率排名越靠前（波动率越大），分数越高
-      const volatilityRank = volatilityRankMap.get(item.symbol) || totalCandidates;
-      const volatilityScore = (totalCandidates - volatilityRank + 1) / totalCandidates;
+      // 计算波动率分数：使用正态分布，适中得分最高
+      const volatilityScore = Math.exp(-Math.pow(item.volatility24h - idealVolatility, 2) / (2 * Math.pow(volatilitySpread, 2)));
       
       // 计算综合分数
-      const totalScore = volumeScore * this.params.volumeWeight + 
+      const totalScore = priceChangeScore * this.params.priceChangeWeight + 
+                        volumeScore * this.params.volumeWeight + 
                         volatilityScore * this.params.volatilityWeight;
       
       // 判断是否符合做空条件
@@ -86,9 +157,9 @@ class BTCDOM2StrategyEngine {
       
       if (priceChange >= btcPriceChange) {
         eligible = false;
-        reason = `涨跌幅(${priceChange.toFixed(2)}%)不低于BTC(${btcPriceChange.toFixed(2)}%)`;
+        reason = `涨跌幅 ${priceChange.toFixed(2)}% 不低于BTC ${btcPriceChange.toFixed(2)}%`;
       } else {
-        reason = `综合评分: ${totalScore.toFixed(3)} (成交量: ${volumeScore.toFixed(3)}, 波动率: ${volatilityScore.toFixed(3)})`;
+        reason = `综合评分: ${totalScore.toFixed(3)} (跌幅: ${priceChangeScore.toFixed(3)}, 成交量: ${volumeScore.toFixed(3)}, 波动率: ${volatilityScore.toFixed(3)})`;
       }
       
       allCandidates.push({
@@ -99,8 +170,9 @@ class BTCDOM2StrategyEngine {
         quoteVolume24h: item.quoteVolume24h,
         volatility24h: item.volatility24h,
         marketShare: item.marketShare,
+        priceChangeScore,
         volumeScore,
-        priceChangeScore: volatilityScore, // 这里改为波动率分数
+        volatilityScore,
         totalScore,
         eligible,
         reason
@@ -117,20 +189,23 @@ class BTCDOM2StrategyEngine {
         symbol: c.symbol,
         rank: c.rank,
         priceChange: c.priceChange24h.toFixed(2) + '%',
+        priceChangeScore: c.priceChangeScore.toFixed(3),
         volScore: c.volumeScore.toFixed(3),
-        volatilityScore: c.priceChangeScore.toFixed(3), // 实际存储的是波动率分数
+        volatilityScore: c.volatilityScore.toFixed(3),
         totalScore: c.totalScore.toFixed(3),
         eligible: c.eligible
       })));
       
       // 显示纯成交量排序 vs 加权排序的差异
       const volumeOnlyRanking = [...allCandidates].sort((a, b) => b.volumeScore - a.volumeScore);
-      const volatilityOnlyRanking = [...allCandidates].sort((a, b) => b.priceChangeScore - a.priceChangeScore);
+      const volatilityOnlyRanking = [...allCandidates].sort((a, b) => b.volatilityScore - a.volatilityScore);
+      const priceChangeOnlyRanking = [...allCandidates].sort((a, b) => b.priceChangeScore - a.priceChangeScore);
       
       console.log('排序对比:', {
-        '当前加权排序前3': topCandidates.map(c => c.symbol),
-        '纯成交量排序前3': volumeOnlyRanking.slice(0, 3).map(c => c.symbol),
-        '纯波动率排序前3': volatilityOnlyRanking.slice(0, 3).map(c => c.symbol)
+        跌幅前3: priceChangeOnlyRanking.slice(0, 3).map(c => c.symbol),
+        volume前3: volumeOnlyRanking.slice(0, 3).map(c => c.symbol),
+        volatility前3: volatilityOnlyRanking.slice(0, 3).map(c => c.symbol),
+        weighted前3: topCandidates.map(c => c.symbol)
       });
     }
     
@@ -281,10 +356,12 @@ class BTCDOM2StrategyEngine {
       // 做空持仓部分 - 只在选择做空ALT且有候选标的时创建
       if (canShortAlt && hasShortCandidates) {
         const shortAmount = totalValue * (canLongBtc ? (1 - this.params.btcRatio) : 1);
-        const totalMarketShare = selectedCandidates.reduce((sum, c) => sum + c.marketShare, 0);
         
-        shortPositions = selectedCandidates.map(candidate => {
-        const allocation = shortAmount * (candidate.marketShare / totalMarketShare);
+        // 根据分配策略计算仓位分配
+        const allocations = this.calculatePositionAllocations(selectedCandidates, shortAmount);
+        
+        shortPositions = selectedCandidates.map((candidate, index) => {
+        const allocation = allocations[index];
         const price = candidate.volume24h > 0 ? candidate.quoteVolume24h / candidate.volume24h : 1;
         const quantity = allocation / price;
         
@@ -631,6 +708,9 @@ export async function POST(request: NextRequest) {
       ...rawParams,
       longBtc: rawParams.longBtc !== undefined ? rawParams.longBtc : true,
       shortAlt: rawParams.shortAlt !== undefined ? rawParams.shortAlt : true,
+      priceChangeWeight: rawParams.priceChangeWeight !== undefined ? rawParams.priceChangeWeight : 0.5,
+      allocationStrategy: rawParams.allocationStrategy !== undefined ? rawParams.allocationStrategy : PositionAllocationStrategy.BY_VOLUME,
+      maxSinglePositionRatio: rawParams.maxSinglePositionRatio !== undefined ? rawParams.maxSinglePositionRatio : 0.25,
     };
     
     // 验证参数
@@ -646,6 +726,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: false,
         error: '至少需要选择一种策略：做多BTC或做空ALT'
+      }, { status: 400 });
+    }
+
+    // 验证权重之和
+    const totalWeight = params.priceChangeWeight + params.volumeWeight + params.volatilityWeight;
+    if (Math.abs(totalWeight - 1) > 0.001) {
+      return NextResponse.json({
+        success: false,
+        error: '跌幅权重、成交量权重和波动率权重之和必须等于1'
       }, { status: 400 });
     }
     

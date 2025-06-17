@@ -10,13 +10,15 @@ import { Slider } from '@/components/ui/slider';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-import {
-  BTCDOM2StrategyParams,
-  BTCDOM2BacktestResult,
-  BTCDOM2ChartData,
+import { 
+  BTCDOM2StrategyParams, 
+  BTCDOM2BacktestResult, 
+  BTCDOM2ChartData, 
   StrategySnapshot,
-  PositionInfo
+  PositionInfo,
+  PositionAllocationStrategy
 } from '@/types/btcdom2';
 import { BTCDOM2Chart } from '@/components/btcdom2/btcdom2-chart';
 import { BTCDOM2PerformanceCard } from '@/components/btcdom2/btcdom2-performance-card';
@@ -26,16 +28,19 @@ import { AlertCircle, Play, Settings, TrendingUp, TrendingDown, Clock, Loader2, 
 export default function BTCDOM2Dashboard() {
   // 策略参数状态
   const [params, setParams] = useState<BTCDOM2StrategyParams>({
-    startDate: '2024-08-01',
+    startDate: '2024-05-01',
     endDate: '2025-06-17',
     initialCapital: 10000,
     btcRatio: 0.5,
-    volumeWeight: 0.6,
-    volatilityWeight: 0.4,
+    priceChangeWeight: 0.5,
+    volumeWeight: 0.3,
+    volatilityWeight: 0.2,
     maxShortPositions: 20,
     tradingFeeRate: 0.002,
     longBtc: true,
-    shortAlt: true
+    shortAlt: true,
+    allocationStrategy: PositionAllocationStrategy.BY_VOLUME,
+    maxSinglePositionRatio: 0.25
   });
 
   // 数据状态
@@ -69,8 +74,8 @@ export default function BTCDOM2Dashboard() {
       errors.btcRatio = 'BTC占比必须在0-1之间';
     }
 
-    if (Math.abs(params.volumeWeight + params.volatilityWeight - 1) > 0.001) {
-      errors.weights = '成交量权重和波动率权重之和必须等于1';
+    if (Math.abs(params.priceChangeWeight + params.volumeWeight + params.volatilityWeight - 1) > 0.001) {
+      errors.weights = '跌幅权重、成交量权重和波动率权重之和必须等于1';
     }
 
     if (params.maxShortPositions <= 0 || params.maxShortPositions > 50) {
@@ -213,32 +218,51 @@ export default function BTCDOM2Dashboard() {
   };
 
   // 权重调整处理
-  const handleWeightChange = (type: 'volume' | 'volatility', value: number) => {
+  const handleWeightChange = (type: 'priceChange' | 'volume' | 'volatility', value: number) => {
     const weight = value / 100;
-    let newParams;
-    if (type === 'volume') {
+    let newParams: BTCDOM2StrategyParams;
+    
+    if (type === 'priceChange') {
+      // 调整跌幅权重时，按比例调整其他两个权重
+      const remaining = 1 - weight;
+      const currentOtherTotal = params.volumeWeight + params.volatilityWeight;
+      newParams = {
+        ...params,
+        priceChangeWeight: weight,
+        volumeWeight: currentOtherTotal > 0 ? remaining * (params.volumeWeight / currentOtherTotal) : remaining * 0.6,
+        volatilityWeight: currentOtherTotal > 0 ? remaining * (params.volatilityWeight / currentOtherTotal) : remaining * 0.4
+      };
+    } else if (type === 'volume') {
+      // 调整成交量权重时，按比例调整其他两个权重
+      const remaining = 1 - weight;
+      const currentOtherTotal = params.priceChangeWeight + params.volatilityWeight;
       newParams = {
         ...params,
         volumeWeight: weight,
-        volatilityWeight: 1 - weight
+        priceChangeWeight: currentOtherTotal > 0 ? remaining * (params.priceChangeWeight / currentOtherTotal) : remaining * 0.625,
+        volatilityWeight: currentOtherTotal > 0 ? remaining * (params.volatilityWeight / currentOtherTotal) : remaining * 0.375
       };
     } else {
+      // 调整波动率权重时，按比例调整其他两个权重
+      const remaining = 1 - weight;
+      const currentOtherTotal = params.priceChangeWeight + params.volumeWeight;
       newParams = {
         ...params,
         volatilityWeight: weight,
-        volumeWeight: 1 - weight
+        priceChangeWeight: currentOtherTotal > 0 ? remaining * (params.priceChangeWeight / currentOtherTotal) : remaining * 0.625,
+        volumeWeight: currentOtherTotal > 0 ? remaining * (params.volumeWeight / currentOtherTotal) : remaining * 0.375
       };
     }
-    
-    // 添加调试日志
+
     console.log('权重调整:', {
       type,
       inputValue: value,
+      newPriceChangeWeight: newParams.priceChangeWeight,
       newVolumeWeight: newParams.volumeWeight,
       newVolatilityWeight: newParams.volatilityWeight,
-      sum: newParams.volumeWeight + newParams.volatilityWeight
+      sum: newParams.priceChangeWeight + newParams.volumeWeight + newParams.volatilityWeight
     });
-    
+
     setParams(newParams);
 
     // 清除权重错误
@@ -659,7 +683,23 @@ export default function BTCDOM2Dashboard() {
               <div className="space-y-4 border-t pt-4">
                 <h4 className="font-medium text-gray-900">高级设置</h4>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>跌幅权重</Label>
+                    <div className="flex items-center space-x-2">
+                      <Slider
+                        value={[params.priceChangeWeight * 100]}
+                        onValueChange={(value) => handleWeightChange('priceChange', value[0])}
+                        max={100}
+                        step={1}
+                        className="flex-1"
+                      />
+                      <span className="text-sm font-medium w-12 text-right">
+                        {(params.priceChangeWeight * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                  </div>
+
                   <div className="space-y-2">
                     <Label>成交量权重</Label>
                     <div className="flex items-center space-x-2">
@@ -694,7 +734,9 @@ export default function BTCDOM2Dashboard() {
                       <p className="text-xs text-red-500">{parameterErrors.weights}</p>
                     )}
                   </div>
+                </div>
 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="maxShortPositions">最多做空标的数量</Label>
                     <Input
@@ -710,7 +752,7 @@ export default function BTCDOM2Dashboard() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="tradingFeeRate">交易手续费率</Label>
+                    <Label htmlFor="tradingFeeRate">交易手续费率<span className="text-xs text-gray-500">(按交易金额收取)</span></Label>
                     <div className="flex items-center space-x-2">
                       <Input
                         id="tradingFeeRate"
@@ -729,7 +771,43 @@ export default function BTCDOM2Dashboard() {
                     {parameterErrors.tradingFeeRate && (
                       <p className="text-xs text-red-500">{parameterErrors.tradingFeeRate}</p>
                     )}
-                    <p className="text-xs text-gray-500">按交易金额收取</p>
+                  </div>
+                </div>
+
+                {/* 仓位配置策略 */}
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-4 gap-4">
+                    <div className="flex-1">
+                      <Select 
+                        value={params.allocationStrategy} 
+                        onValueChange={(value) => handleParamChange('allocationStrategy', value as PositionAllocationStrategy)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={PositionAllocationStrategy.BY_VOLUME}>按成交量比例分配</SelectItem>
+                          <SelectItem value={PositionAllocationStrategy.BY_COMPOSITE_SCORE}>按综合分数分配权重</SelectItem>
+                          <SelectItem value={PositionAllocationStrategy.EQUAL_ALLOCATION}>平均分配做空资金</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {params.allocationStrategy === PositionAllocationStrategy.BY_COMPOSITE_SCORE && (
+                      <div className="flex items-center space-x-2 flex-1">
+                        <Label className="text-sm whitespace-nowrap">最高单币种持仓限制</Label>
+                        <Slider
+                          value={[params.maxSinglePositionRatio * 100]}
+                          onValueChange={(value) => handleParamChange('maxSinglePositionRatio', value[0] / 100)}
+                          max={50}
+                          step={1}
+                          className="flex-1"
+                        />
+                        <span className="text-sm font-medium w-12 text-right">
+                          {(params.maxSinglePositionRatio * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
