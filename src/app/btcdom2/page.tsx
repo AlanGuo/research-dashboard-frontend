@@ -35,7 +35,7 @@ export default function BTCDOM2Dashboard() {
     priceChangeWeight: 0.5,
     volumeWeight: 0.3,
     volatilityWeight: 0.2,
-    maxShortPositions: 20,
+    maxShortPositions: 10,
     tradingFeeRate: 0.002,
     longBtc: true,
     shortAlt: true,

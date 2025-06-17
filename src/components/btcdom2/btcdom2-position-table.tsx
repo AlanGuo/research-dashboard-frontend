@@ -340,7 +340,7 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
       {snapshot.shortCandidates && snapshot.shortCandidates.length > 0 && (
         <Card className="mt-4">
           <CardHeader>
-            <CardTitle className="text-sm">做空候选标的评分详情</CardTitle>
+            <CardTitle className="text-sm">做空候选标的评分详情(前10)</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
