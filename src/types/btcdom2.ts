@@ -23,6 +23,7 @@ export interface BTCDOM2StrategyParams {
   shortAlt: boolean;          // 是否做空ALT (默认true)
   allocationStrategy: PositionAllocationStrategy; // 仓位分配策略
   maxSinglePositionRatio: number; // 最高单币种持仓限制 (0-1)
+  granularityHours?: number;  // 回测粒度（小时），默认8小时
 }
 
 // 资金费率历史数据项
@@ -44,11 +45,12 @@ export interface RankingItem {
   volume24h: number;          // 24小时交易量
   quoteVolume24h: number;     // 24小时交易金额
   marketShare: number;        // 市场份额百分比
-  volatility24h: number;      // 24小时波动率
-  high24h: number;           // 24小时最高价
-  low24h: number;            // 24小时最低价
-  futurePriceAtTime?: number; // 期货价格（如果有）
-  fundingRateHistory?: FundingRateHistoryItem[]; // 资金费率历史
+  volatility24h: number;         // 24小时波动率百分比
+  high24h: number;               // 24小时最高价
+  low24h: number;                // 24小时最低价
+  futureSymbol?: string;         // 对应的期货交易对symbol（如果与现货不同）
+  futurePriceAtTime?: number;    // 期货价格（当前时间点）
+  fundingRateHistory?: FundingRateHistoryItem[]; // 对应时间段的资金费率历史
 }
 
 // 市场统计数据
