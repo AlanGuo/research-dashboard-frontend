@@ -12,8 +12,7 @@ import {
 } from '@/components/ui/table';
 import {
   StrategySnapshot,
-  BTCDOM2StrategyParams,
-  FundingRateHistoryItem
+  BTCDOM2StrategyParams
 } from '@/types/btcdom2';
 import {
   TrendingUp,
@@ -75,38 +74,22 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
     if (position.side !== 'SHORT') {
       return 0;
     }
-    
+    if (position.symbol === "ICXUSDT") {
+      console.log(position)
+    }
     // 如果已经有计算好的资金费，直接使用
-    if (position.fundingFee !== undefined) {
-      return position.fundingFee;
-    }
-    
-    // 如果没有资金费率历史数据，返回0
-    if (!position.fundingRateHistory || position.fundingRateHistory.length === 0) {
-      return 0;
-    }
-    
-    let totalFundingPnL = 0;
-    
-    for (const funding of position.fundingRateHistory) {
-      // 对于做空头寸：
-      // 资金费率为负数时，空头支付资金费（亏损）
-      // 资金费率为正数时，空头收取资金费（盈利）
-      // 所以公式是：资金费率盈亏 = 头寸价值 × 资金费率
-      const positionValue = position.quantity * funding.markPrice;
-      const fundingPnL = positionValue * funding.fundingRate;
-      totalFundingPnL += fundingPnL;
-    }
-    
-    return totalFundingPnL;
+    return position.fundingFee ?? 0;
   };
 
-  // 获取当前资金费率
+  // 获取当前资金费率（累加所有历史资金费率）
   const getCurrentFundingRate = (position: any): number => {
     if (!position.fundingRateHistory || position.fundingRateHistory.length === 0) {
       return 0;
     }
-    return position.fundingRateHistory[position.fundingRateHistory.length - 1].fundingRate;
+    // 累加所有资金费率
+    return position.fundingRateHistory.reduce((sum: number, funding: any) => {
+      return sum + (funding.fundingRate || 0);
+    }, 0);
   };
 
   // 获取盈亏颜色
@@ -344,13 +327,19 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
                           }
                         </div>
                         <div className="text-xs text-gray-500">
-                          {getCurrentFundingRate(position) !== 0 ? (
+                          {position.isNewPosition ? (
+                            <div className="flex flex-col">
+                              <span className="text-blue-600">新开仓</span>
+                              {getCurrentFundingRate(position) !== 0 && (
+                                <span className={getCurrentFundingRate(position) > 0 ? 'text-green-600' : 'text-red-600'}>
+                                  费率: {(getCurrentFundingRate(position) * 100).toFixed(4)}%
+                                </span>
+                              )}
+                            </div>
+                          ) : getCurrentFundingRate(position) !== 0 ? (
                             <span className={getCurrentFundingRate(position) > 0 ? 'text-green-600' : 'text-red-600'}>
                               费率: {(getCurrentFundingRate(position) * 100).toFixed(4)}%
-                              {getCurrentFundingRate(position) > 0 ? ' (收取)' : ' (支出)'}
                             </span>
-                          ) : position.isNewPosition ? (
-                            <span className="text-blue-600">新开仓</span>
                           ) : (
                             <span className="text-gray-400">无数据</span>
                           )}

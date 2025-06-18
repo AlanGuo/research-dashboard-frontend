@@ -310,7 +310,8 @@ class BTCDOM2StrategyEngine {
   // 生成策略快照
   generateSnapshot(
     dataPoint: VolumeBacktestDataPoint,
-    previousSnapshot: StrategySnapshot | null
+    previousSnapshot: StrategySnapshot | null,
+    previousData: VolumeBacktestDataPoint | null = null
   ): StrategySnapshot {
     const { timestamp, hour, btcPrice, btcPriceChange24h, rankings, removedSymbols } = dataPoint;
     
@@ -460,6 +461,20 @@ class BTCDOM2StrategyEngine {
             const validPnl = isNaN(finalPnl) ? 0 : finalPnl;
             const validTradingFee = isNaN(sellFee) ? 0 : sellFee;
             
+            // 计算卖出持仓的资金费率（如果有）
+            // 卖出时结算的是上一期的资金费率，从previousData.rankings获取
+            let soldFundingFee = 0;
+            const soldRankingItem = previousData?.rankings?.find(r => r.symbol === prevPosition.symbol);
+            const soldFundingRateHistory = soldRankingItem?.fundingRateHistory || [];
+            if (soldFundingRateHistory.length > 0 && validQuantity > 0) {
+              for (const funding of soldFundingRateHistory) {
+                // 对于做空头寸：资金费率为负数时支付，为正数时收取
+                const positionValue = validQuantity * funding.markPrice;
+                soldFundingFee += positionValue * funding.fundingRate;
+              }
+            }
+            totalFundingFee += soldFundingFee;
+            
             soldPositions.push({
               ...prevPosition,
               amount: validAmount,
@@ -468,6 +483,7 @@ class BTCDOM2StrategyEngine {
               pnl: validPnl,
               pnlPercent: -priceChangePercent,
               tradingFee: validTradingFee,
+              fundingFee: soldFundingFee,
               priceChange24h: priceChange24h, // 使用从removedSymbols或rankings获取的24H价格变化
               isSoldOut: true,
               isNewPosition: false, // 卖出的持仓不是新增持仓
@@ -477,6 +493,7 @@ class BTCDOM2StrategyEngine {
                 changePercent: priceChangePercent
               },
               quantityChange: { type: 'sold' },
+              fundingRateHistory: soldFundingRateHistory,
               reason: '持仓卖出'
             });
           }
@@ -505,12 +522,12 @@ class BTCDOM2StrategyEngine {
         // 确保数量计算的健壮性
         const quantity = allocation > 0 && price > 0 ? allocation / price : 0;
         
-        // 计算做空盈亏和手续费
         let pnl = 0;
         let pnlPercent = 0;
         let tradingFee = 0;
         let fundingFee = 0;
         let isNewPosition = false;
+        let previousFundingRateHistory: any[] = [];
         
         if (previousSnapshot?.shortPositions) {
           // 从第二期开始，基于价格变化计算盈亏
@@ -545,20 +562,23 @@ class BTCDOM2StrategyEngine {
           isNewPosition = true;
         }
         
-        // 获取资金费率历史数据
-        const rankingItem = rankings.find(r => r.symbol === candidate.symbol);
-        const fundingRateHistory = rankingItem?.fundingRateHistory || [];
-        
         // 计算资金费率盈亏 - 只对非新开仓的持仓计算
         // 新开仓的持仓从下一期开始收取资金费率
-        if (!isNewPosition && fundingRateHistory.length > 0 && quantity > 0) {
-          for (const funding of fundingRateHistory) {
-            // 对于做空头寸：
-            // 资金费率为负数时，空头支付资金费（亏损）
-            // 资金费率为正数时，空头收取资金费（盈利）
-            // 所以公式是：资金费率盈亏 = 头寸价值 × 资金费率
-            const positionValue = quantity * funding.markPrice;
-            fundingFee += positionValue * funding.fundingRate;
+        // 对于持仓的position，使用上一期data元素的rankings中的资金费率历史
+        if (!isNewPosition && quantity > 0) {
+          // 从上一期data元素的rankings中获取资金费率历史
+          const prevRankingItem = previousData?.rankings?.find(r => r.symbol === candidate.symbol);
+          previousFundingRateHistory = prevRankingItem?.fundingRateHistory || [];
+          
+          if (previousFundingRateHistory.length > 0) {
+            for (const funding of previousFundingRateHistory) {
+              // 对于做空头寸：
+              // 资金费率为负数时，空头支付资金费（亏损）
+              // 资金费率为正数时，空头收取资金费（盈利）
+              // 所以公式是：资金费率盈亏 = 头寸价值 × 资金费率
+              const positionValue = quantity * funding.markPrice;
+              fundingFee += positionValue * funding.fundingRate;
+            }
           }
         }
         
@@ -584,7 +604,7 @@ class BTCDOM2StrategyEngine {
               previousPrice: previousPrice,
               changePercent: previousPrice > 0 ? (price - previousPrice) / previousPrice : 0
             } : undefined,
-            fundingRateHistory: fundingRateHistory,
+            fundingRateHistory: isNewPosition ? [] : previousFundingRateHistory,
             marketShare: candidate.marketShare,
             reason: candidate.reason
           };
@@ -629,9 +649,10 @@ class BTCDOM2StrategyEngine {
           const validTradingFee = isNaN(sellFee) ? 0 : sellFee;
           
           // 计算卖出持仓的资金费率（如果有）
-          // 卖出时需要结算当期的资金费率
+          // 卖出时结算的是上一期的资金费率，从previousData.rankings获取
           let soldFundingFee = 0;
-          const soldFundingRateHistory = rankingItem?.fundingRateHistory || [];
+          const soldRankingItem = previousData?.rankings?.find(r => r.symbol === prevPosition.symbol);
+          const soldFundingRateHistory = soldRankingItem?.fundingRateHistory || [];
           if (soldFundingRateHistory.length > 0 && validQuantity > 0) {
             for (const funding of soldFundingRateHistory) {
               // 对于做空头寸：资金费率为负数时支付，为正数时收取
@@ -1056,8 +1077,10 @@ export async function POST(request: NextRequest) {
     const snapshots: StrategySnapshot[] = [];
     let previousSnapshot: StrategySnapshot | null = null;
     
-    for (const dataPoint of data) {
-      const snapshot = strategyEngine.generateSnapshot(dataPoint, previousSnapshot);
+    for (let index = 0; index < data.length; index++) {
+      const dataPoint = data[index];
+      const previousData = index > 0 ? data[index - 1] : null;
+      const snapshot = strategyEngine.generateSnapshot(dataPoint, previousSnapshot, previousData);
       snapshots.push(snapshot);
       previousSnapshot = snapshot;
     }

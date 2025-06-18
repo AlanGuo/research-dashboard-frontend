@@ -27,7 +27,7 @@ import { AlertCircle, Play, Settings, TrendingUp, TrendingDown, Clock, Loader2, 
 export default function BTCDOM2Dashboard() {
   // 策略参数状态
   const [params, setParams] = useState<BTCDOM2StrategyParams>({
-    startDate: '2025-05-01',
+    startDate: '2025-06-15',
     endDate: '2025-06-18',
     initialCapital: 10000,
     btcRatio: 0.5,
