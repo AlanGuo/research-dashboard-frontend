@@ -84,6 +84,8 @@ export interface ShortCandidate {
   quoteVolume24h: number;     // 交易金额
   volatility24h: number;      // 波动率
   marketShare: number;        // 市场份额
+  priceAtTime?: number;       // 当前时刻现货价格
+  futurePriceAtTime?: number; // 期货价格（如果有）
   
   // 评分相关
   priceChangeScore: number;   // 跌幅分数

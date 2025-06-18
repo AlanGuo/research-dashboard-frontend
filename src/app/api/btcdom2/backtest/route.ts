@@ -249,6 +249,8 @@ class BTCDOM2StrategyEngine {
         quoteVolume24h: item.quoteVolume24h,
         volatility24h: item.volatility24h,
         marketShare: item.marketShare,
+        priceAtTime: item.priceAtTime, // 添加当前时刻现货价格
+        futurePriceAtTime: item.futurePriceAtTime, // 添加期货价格
         priceChangeScore: validPriceChangeScore,
         volumeScore: validVolumeScore,
         volatilityScore: validVolatilityScore,
@@ -510,14 +512,17 @@ class BTCDOM2StrategyEngine {
         shortPositions = selectedCandidates.map((candidate, index) => {
         const allocation = allocations[index];
         
-        // 确保价格计算的健壮性，避免除零和无效值
+        // 价格优先级：期货价格 > 现货价格
         let price = 1; // 默认价格
-        if (candidate.volume24h && candidate.quoteVolume24h && candidate.volume24h > 0) {
-          const calculatedPrice = candidate.quoteVolume24h / candidate.volume24h;
-          if (!isNaN(calculatedPrice) && calculatedPrice > 0) {
-            price = calculatedPrice;
-          }
-        }
+        
+        // 1. 优先使用期货价格（futurePriceAtTime）- 最精确
+        if (candidate.futurePriceAtTime && candidate.futurePriceAtTime > 0) {
+          price = candidate.futurePriceAtTime;
+        } 
+        // 2. 其次使用当前时刻现货价格（priceAtTime）- 精确的瞬时价格
+        else if (candidate.priceAtTime && candidate.priceAtTime > 0) {
+          price = candidate.priceAtTime;
+        } 
         
         // 确保数量计算的健壮性
         const quantity = allocation > 0 && price > 0 ? allocation / price : 0;

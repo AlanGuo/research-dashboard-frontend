@@ -74,9 +74,6 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
     if (position.side !== 'SHORT') {
       return 0;
     }
-    if (position.symbol === "ICXUSDT") {
-      console.log(position)
-    }
     // 如果已经有计算好的资金费，直接使用
     return position.fundingFee ?? 0;
   };
