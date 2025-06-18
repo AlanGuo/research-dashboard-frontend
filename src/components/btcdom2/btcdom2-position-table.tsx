@@ -12,7 +12,8 @@ import {
 } from '@/components/ui/table';
 import {
   StrategySnapshot,
-  BTCDOM2StrategyParams
+  BTCDOM2StrategyParams,
+  FundingRateHistoryItem
 } from '@/types/btcdom2';
 import {
   TrendingUp,
@@ -69,6 +70,45 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
     return `${(validValue * 100).toFixed(2)}%`;
   };
 
+  // 计算资金费率盈亏
+  const calculateFundingPnL = (position: any): number => {
+    if (position.side !== 'SHORT') {
+      return 0;
+    }
+    
+    // 如果已经有计算好的资金费，直接使用
+    if (position.fundingFee !== undefined) {
+      return position.fundingFee;
+    }
+    
+    // 如果没有资金费率历史数据，返回0
+    if (!position.fundingRateHistory || position.fundingRateHistory.length === 0) {
+      return 0;
+    }
+    
+    let totalFundingPnL = 0;
+    
+    for (const funding of position.fundingRateHistory) {
+      // 对于做空头寸：
+      // 资金费率为负数时，空头支付资金费（亏损）
+      // 资金费率为正数时，空头收取资金费（盈利）
+      // 所以公式是：资金费率盈亏 = 头寸价值 × 资金费率
+      const positionValue = position.quantity * funding.markPrice;
+      const fundingPnL = positionValue * funding.fundingRate;
+      totalFundingPnL += fundingPnL;
+    }
+    
+    return totalFundingPnL;
+  };
+
+  // 获取当前资金费率
+  const getCurrentFundingRate = (position: any): number => {
+    if (!position.fundingRateHistory || position.fundingRateHistory.length === 0) {
+      return 0;
+    }
+    return position.fundingRateHistory[position.fundingRateHistory.length - 1].fundingRate;
+  };
+
   // 获取盈亏颜色
   const getPnlColor = (pnl: number | null) => {
     const validPnl = pnl ?? 0;
@@ -109,7 +149,7 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
   return (
     <div className="space-y-4">
       {/* 基本信息 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-4 mb-4">
         <div className="text-center">
           <p className="text-sm text-gray-500">总资产</p>
           <p className="text-lg font-semibold">{formatCurrency(snapshot.totalValue)}</p>
@@ -150,6 +190,18 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
             {formatCurrency(snapshot.accumulatedTradingFee || 0)}
           </p>
         </div>
+        <div className="text-center">
+          <p className="text-sm text-gray-500">当期资金费</p>
+          <p className="text-lg font-semibold text-purple-600">
+            {formatCurrency(snapshot.totalFundingFee || 0)}
+          </p>
+        </div>
+        <div className="text-center">
+          <p className="text-sm text-gray-500">累计资金费</p>
+          <p className="text-lg font-semibold text-purple-700">
+            {formatCurrency(snapshot.accumulatedFundingFee || 0)}
+          </p>
+        </div>
       </div>
 
       {/* 持仓列表 */}
@@ -163,6 +215,7 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
                 <TableHead className="text-right">金额</TableHead>
                 <TableHead className="text-right">数量</TableHead>
                 <TableHead className="text-right">手续费</TableHead>
+                <TableHead className="text-right">资金费</TableHead>
                 <TableHead className="text-right">24H涨跌</TableHead>
                 <TableHead className="text-right">价格</TableHead>
                 <TableHead className="text-right">本期盈亏</TableHead>
@@ -282,6 +335,32 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
                     {formatCurrency(position.tradingFee || 0)}
                   </TableCell>
                   <TableCell className="text-right">
+                    {position.side === 'SHORT' ? (
+                      <div className="text-right">
+                        <div className={`font-medium ${calculateFundingPnL(position) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {calculateFundingPnL(position) === 0 ? 
+                            <span className="text-gray-400">$0.00</span> : 
+                            formatCurrency(calculateFundingPnL(position))
+                          }
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {getCurrentFundingRate(position) !== 0 ? (
+                            <span className={getCurrentFundingRate(position) > 0 ? 'text-green-600' : 'text-red-600'}>
+                              费率: {(getCurrentFundingRate(position) * 100).toFixed(4)}%
+                              {getCurrentFundingRate(position) > 0 ? ' (收取)' : ' (支出)'}
+                            </span>
+                          ) : position.isNewPosition ? (
+                            <span className="text-blue-600">新开仓</span>
+                          ) : (
+                            <span className="text-gray-400">无数据</span>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-gray-400">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right">
                     {/* 优先使用专门的24H价格变化数据 */}
                     {position.priceChange24h !== undefined ? (
                       <span className={`font-medium ${
@@ -307,9 +386,9 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex flex-col">
-                      <span>
-                        {formatCurrency(position.currentPrice)}
-                      </span>
+                      <div className="flex flex-col items-end">
+                        <span>{formatCurrency(position.currentPrice)}</span>
+                      </div>
                       {/* 显示相对于上一期价格的变化率 */}
                       {position.priceChange?.previousPrice && position.priceChange.previousPrice > 0 && position.currentPrice !== position.priceChange.previousPrice ? (
                         <span className={`text-xs ${

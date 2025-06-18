@@ -25,6 +25,13 @@ export interface BTCDOM2StrategyParams {
   maxSinglePositionRatio: number; // 最高单币种持仓限制 (0-1)
 }
 
+// 资金费率历史数据项
+export interface FundingRateHistoryItem {
+  fundingTime: string;        // 资金费率时间
+  fundingRate: number;        // 资金费率
+  markPrice: number;          // 标记价格
+}
+
 // 新API返回的排行榜数据项
 export interface RankingItem {
   rank: number;
@@ -40,6 +47,8 @@ export interface RankingItem {
   volatility24h: number;      // 24小时波动率
   high24h: number;           // 24小时最高价
   low24h: number;            // 24小时最低价
+  futurePriceAtTime?: number; // 期货价格（如果有）
+  fundingRateHistory?: FundingRateHistoryItem[]; // 资金费率历史
 }
 
 // 市场统计数据
@@ -97,6 +106,8 @@ export interface PositionInfo {
   pnl: number;               // 盈亏
   pnlPercent: number;        // 盈亏百分比
   tradingFee: number;        // 当期交易手续费
+  fundingFee?: number;       // 当期资金费
+  accumulatedFundingFee?: number; // 累计资金费
   priceChange24h?: number;   // 24小时价格变化百分比
   marketShare?: number;       // 市场份额 (用于计算做空比例)
   reason: string;            // 持仓原因
@@ -112,6 +123,7 @@ export interface PositionInfo {
     previousPrice?: number;
     changePercent?: number;
   };
+  fundingRateHistory?: FundingRateHistoryItem[]; // 资金费率历史
 }
 
 // 策略快照 (每个时间点的状态)
@@ -132,6 +144,8 @@ export interface StrategySnapshot {
   periodPnlPercent: number;          // 本期收益率 (相对于上期)
   totalTradingFee: number;           // 当期总手续费
   accumulatedTradingFee: number;     // 累计总手续费
+  totalFundingFee?: number;          // 当期总资金费
+  accumulatedFundingFee?: number;    // 累计总资金费
   cashPosition: number;              // 现金持仓 (当无符合条件的做空标的时)
   
   // 策略状态

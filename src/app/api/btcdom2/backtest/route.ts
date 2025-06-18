@@ -333,7 +333,9 @@ class BTCDOM2StrategyEngine {
     let cashPosition = 0;
     let totalValue = previousValue;
     let totalTradingFee = 0;
+    let totalFundingFee = 0;
     const accumulatedTradingFee = (previousSnapshot?.accumulatedTradingFee || 0);
+    const accumulatedFundingFee = (previousSnapshot?.accumulatedFundingFee || 0);
     let inactiveReason = '';
     
     if (isActive) {
@@ -442,7 +444,7 @@ class BTCDOM2StrategyEngine {
               rankingItem = rankings.find(r => r.symbol === prevPosition.symbol);
             }
             
-            const currentPrice = rankingItem?.priceAtTime || prevPosition.currentPrice;
+            const currentPrice = rankingItem?.futurePriceAtTime || rankingItem?.priceAtTime || prevPosition.currentPrice;
             const priceChange24h = rankingItem?.priceChange24h || 0;
             const sellAmount = prevPosition.quantity * currentPrice;
             const sellFee = this.calculateTradingFee(sellAmount);
@@ -507,6 +509,7 @@ class BTCDOM2StrategyEngine {
         let pnl = 0;
         let pnlPercent = 0;
         let tradingFee = 0;
+        let fundingFee = 0;
         let isNewPosition = false;
         
         if (previousSnapshot?.shortPositions) {
@@ -542,6 +545,23 @@ class BTCDOM2StrategyEngine {
           isNewPosition = true;
         }
         
+        // 获取资金费率历史数据
+        const rankingItem = rankings.find(r => r.symbol === candidate.symbol);
+        const fundingRateHistory = rankingItem?.fundingRateHistory || [];
+        
+        // 计算资金费率盈亏 - 只对非新开仓的持仓计算
+        // 新开仓的持仓从下一期开始收取资金费率
+        if (!isNewPosition && fundingRateHistory.length > 0 && quantity > 0) {
+          for (const funding of fundingRateHistory) {
+            // 对于做空头寸：
+            // 资金费率为负数时，空头支付资金费（亏损）
+            // 资金费率为正数时，空头收取资金费（盈利）
+            // 所以公式是：资金费率盈亏 = 头寸价值 × 资金费率
+            const positionValue = quantity * funding.markPrice;
+            fundingFee += positionValue * funding.fundingRate;
+          }
+        }
+        
         // 获取之前的持仓信息用于价格变化计算
         const previousShortPosition = previousSnapshot?.shortPositions?.find(pos => pos.symbol === candidate.symbol);
         const previousPrice = previousShortPosition?.currentPrice;
@@ -556,6 +576,7 @@ class BTCDOM2StrategyEngine {
             pnl: isNaN(pnl) ? 0 : pnl,
             pnlPercent: isNaN(pnlPercent) ? 0 : pnlPercent,
             tradingFee: isNaN(tradingFee) ? 0 : tradingFee,
+            fundingFee: isNaN(fundingFee) ? 0 : fundingFee,
             priceChange24h: candidate.priceChange24h, // 添加24H价格变化
             isNewPosition,
             priceChange: previousPrice ? {
@@ -563,17 +584,21 @@ class BTCDOM2StrategyEngine {
               previousPrice: previousPrice,
               changePercent: previousPrice > 0 ? (price - previousPrice) / previousPrice : 0
             } : undefined,
+            fundingRateHistory: fundingRateHistory,
             marketShare: candidate.marketShare,
             reason: candidate.reason
           };
         });
       }
       
-      // 更新总价值（考虑手续费）
+      // 计算总资金费率
+      totalFundingFee = shortPositions.reduce((sum, pos) => sum + (pos.fundingFee || 0), 0);
+      
+      // 更新总价值（考虑手续费和资金费率）
       const btcValueChange = btcPnl;
       const shortValueChange = shortPositions.reduce((sum, pos) => sum + pos.pnl, 0);
       const soldValueChange = soldPositions.reduce((sum, pos) => sum + pos.pnl, 0);
-      totalValue = previousValue + btcValueChange + shortValueChange + soldValueChange - totalTradingFee;
+      totalValue = previousValue + btcValueChange + shortValueChange + soldValueChange - totalTradingFee + totalFundingFee;
       
     } else {
       // 策略不活跃：无符合条件的标的或策略未启用，持有现金
@@ -587,7 +612,7 @@ class BTCDOM2StrategyEngine {
             rankingItem = rankings.find(r => r.symbol === prevPosition.symbol);
           }
           
-          const currentPrice = rankingItem?.priceAtTime || prevPosition.currentPrice;
+          const currentPrice = rankingItem?.futurePriceAtTime || rankingItem?.priceAtTime || prevPosition.currentPrice;
           const priceChange24h = rankingItem?.priceChange24h || 0;
           const sellAmount = prevPosition.quantity * currentPrice;
           const sellFee = this.calculateTradingFee(sellAmount);
@@ -603,6 +628,19 @@ class BTCDOM2StrategyEngine {
           const validPnl = isNaN(finalPnl) ? 0 : finalPnl;
           const validTradingFee = isNaN(sellFee) ? 0 : sellFee;
           
+          // 计算卖出持仓的资金费率（如果有）
+          // 卖出时需要结算当期的资金费率
+          let soldFundingFee = 0;
+          const soldFundingRateHistory = rankingItem?.fundingRateHistory || [];
+          if (soldFundingRateHistory.length > 0 && validQuantity > 0) {
+            for (const funding of soldFundingRateHistory) {
+              // 对于做空头寸：资金费率为负数时支付，为正数时收取
+              const positionValue = validQuantity * funding.markPrice;
+              soldFundingFee += positionValue * funding.fundingRate;
+            }
+          }
+          totalFundingFee += soldFundingFee;
+
           soldPositions.push({
             ...prevPosition,
             amount: validAmount,
@@ -611,6 +649,7 @@ class BTCDOM2StrategyEngine {
             pnl: validPnl,
             pnlPercent: -priceChangePercent,
             tradingFee: validTradingFee,
+            fundingFee: soldFundingFee,
             priceChange24h: priceChange24h, // 使用从removedSymbols或rankings获取的24H价格变化
             isSoldOut: true,
             isNewPosition: false, // 卖出的持仓不是新增持仓
@@ -620,6 +659,7 @@ class BTCDOM2StrategyEngine {
               changePercent: priceChangePercent
             },
             quantityChange: { type: 'sold' },
+            fundingRateHistory: soldFundingRateHistory,
             reason: canShortAlt ? '无符合条件标的，卖出持仓' : '策略调整：不再做空ALT'
           });
         }
@@ -712,7 +752,7 @@ class BTCDOM2StrategyEngine {
       
       const soldValueChange = soldPositions.reduce((sum, pos) => sum + pos.pnl, 0);
       const btcValueChange = btcPosition ? btcPosition.pnl : 0;
-      totalValue = previousValue + btcValueChange + soldValueChange - totalTradingFee;
+      totalValue = previousValue + btcValueChange + soldValueChange - totalTradingFee + totalFundingFee;
       cashPosition = totalValue - (btcPosition ? btcPosition.amount : 0);
     }
     
@@ -739,6 +779,8 @@ class BTCDOM2StrategyEngine {
       periodPnlPercent,
       totalTradingFee,
       accumulatedTradingFee: accumulatedTradingFee + totalTradingFee,
+      totalFundingFee,
+      accumulatedFundingFee: accumulatedFundingFee + totalFundingFee,
       cashPosition,
       isActive,
       rebalanceReason: isActive ? selectionReason : inactiveReason,

@@ -12,10 +12,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-import { 
-  BTCDOM2StrategyParams, 
-  BTCDOM2BacktestResult, 
-  BTCDOM2ChartData, 
+import {
+  BTCDOM2StrategyParams,
+  BTCDOM2BacktestResult,
+  BTCDOM2ChartData,
   StrategySnapshot,
   PositionInfo,
   PositionAllocationStrategy
@@ -27,8 +27,8 @@ import { AlertCircle, Play, Settings, TrendingUp, TrendingDown, Clock, Loader2, 
 export default function BTCDOM2Dashboard() {
   // 策略参数状态
   const [params, setParams] = useState<BTCDOM2StrategyParams>({
-    startDate: '2023-12-01',
-    endDate: '2025-06-17',
+    startDate: '2025-05-01',
+    endDate: '2025-06-18',
     initialCapital: 10000,
     btcRatio: 0.5,
     priceChangeWeight: 0.5,
@@ -58,6 +58,27 @@ export default function BTCDOM2Dashboard() {
   const formatPeriodTime = (timestamp: string): string => {
     const date = new Date(timestamp);
     return `${date.getUTCFullYear()}-${(date.getUTCMonth() + 1).toString().padStart(2, '0')}-${date.getUTCDate().toString().padStart(2, '0')} ${date.getUTCHours().toString().padStart(2, '0')}:${date.getUTCMinutes().toString().padStart(2, '0')}`;
+  };
+
+  // 工具函数：格式化货币
+  const formatCurrency = (amount: number | null) => {
+    const validAmount = amount ?? 0;
+
+    // 对于小于 1 美元的价格，使用更多小数位
+    if (Math.abs(validAmount) < 1) {
+      // 找到第一个非零小数位，然后显示4位有效数字
+      const str = validAmount.toString();
+      if (str.includes('e')) {
+        // 处理科学计数法
+        return `$${validAmount.toFixed(8).replace(/\.?0+$/, '')}`;
+      } else {
+        // 显示最多8位小数，但去除尾随的0
+        return `$${validAmount.toFixed(8).replace(/\.?0+$/, '')}`;
+      }
+    }
+
+    // 对于大于等于 1 美元的价格，使用标准格式
+    return `$${validAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
   const [parameterErrors, setParameterErrors] = useState<Record<string, string>>({});
 
@@ -179,7 +200,7 @@ export default function BTCDOM2Dashboard() {
   const handleWeightChange = (type: 'priceChange' | 'volume' | 'volatility', value: number) => {
     const weight = value / 100;
     let newParams: BTCDOM2StrategyParams;
-    
+
     if (type === 'priceChange') {
       // 调整跌幅权重时，按比例调整其他两个权重
       const remaining = 1 - weight;
@@ -724,8 +745,8 @@ export default function BTCDOM2Dashboard() {
                 <div className="space-y-4">
                   <div className="flex items-center space-x-4 gap-4">
                     <div className="flex-1">
-                      <Select 
-                        value={params.allocationStrategy} 
+                      <Select
+                        value={params.allocationStrategy}
                         onValueChange={(value) => handleParamChange('allocationStrategy', value as PositionAllocationStrategy)}
                       >
                         <SelectTrigger>
@@ -861,7 +882,7 @@ export default function BTCDOM2Dashboard() {
                       </div>
                     </div>
                   </div>
-                  
+
                   {/* 年化收益率 */}
                   <div className="flex justify-between items-center py-1">
                     <span className="text-xs text-gray-500">年化收益率</span>
@@ -871,7 +892,7 @@ export default function BTCDOM2Dashboard() {
                       {(backtestResult.performance.annualizedReturn * 100).toFixed(2)}%
                     </span>
                   </div>
-                  
+
                   {/* 只在选择做多BTC时显示BTC收益率 */}
                   {params.longBtc && (
                     <div className="flex justify-between items-center py-1">
@@ -886,7 +907,7 @@ export default function BTCDOM2Dashboard() {
                       </span>
                     </div>
                   )}
-                  
+
                   {/* 只在选择做空ALT时显示ALT收益率 */}
                   {params.shortAlt && (
                     <div className="flex justify-between items-center py-1">
@@ -898,6 +919,48 @@ export default function BTCDOM2Dashboard() {
                         backtestResult.performance.altReturn >= 0 ? 'text-green-600' : 'text-red-600'
                       }`}>
                         {(backtestResult.performance.altReturn * 100).toFixed(2)}%
+                      </span>
+                    </div>
+                  )}
+
+                  {/* 手续费盈亏 */}
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-xs text-orange-500">手续费盈亏</span>
+                    <span className="text-sm font-semibold text-red-600">
+                      -{formatCurrency(backtestResult.snapshots[backtestResult.snapshots.length - 1]?.accumulatedTradingFee || 0)}
+                    </span>
+                  </div>
+
+                  {/* 资金费率盈亏 */}
+                  {params.shortAlt && (
+                    <div className="flex justify-between items-center py-1">
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-purple-500">资金费率盈亏</span>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-4 w-4 p-0 hover:bg-gray-100">
+                              <Info className="h-3 w-3 text-gray-400" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-80 text-sm">
+                            <div className="space-y-2">
+                              <p className="font-medium">资金费率说明</p>
+                              <p className="text-gray-600">
+                                对于做空头寸：
+                              </p>
+                              <div className="text-xs text-gray-500 space-y-1">
+                                <p>• 资金费率为负数时，空头支付资金费（亏损）</p>
+                                <p>• 资金费率为正数时，空头收取资金费（盈利）</p>
+                                <p>• 新开仓的交易对从下一期开始收取资金费率</p>
+                              </div>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      <span className={`text-sm font-semibold ${
+                        (backtestResult.snapshots[backtestResult.snapshots.length - 1]?.accumulatedFundingFee || 0) >= 0 ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {(backtestResult.snapshots[backtestResult.snapshots.length - 1]?.accumulatedFundingFee || 0) >= 0 ? '+' : ''}{formatCurrency(backtestResult.snapshots[backtestResult.snapshots.length - 1]?.accumulatedFundingFee || 0)}
                       </span>
                     </div>
                   )}
@@ -925,7 +988,7 @@ export default function BTCDOM2Dashboard() {
                       </div>
                     </div>
                   </div>
-                  
+
                   {/* 夏普比率 */}
                   <div className="flex justify-between items-center py-1">
                     <div className="flex items-center gap-1">
@@ -958,7 +1021,7 @@ export default function BTCDOM2Dashboard() {
                       {backtestResult.performance.sharpeRatio.toFixed(2)}
                     </span>
                   </div>
-                  
+
                   {/* 波动率 */}
                   <div className="flex justify-between items-center py-1">
                     <span className="text-xs text-gray-500">波动率</span>
@@ -966,7 +1029,7 @@ export default function BTCDOM2Dashboard() {
                       {(backtestResult.performance.volatility * 100).toFixed(2)}%
                     </span>
                   </div>
-                  
+
                   {/* 胜率 */}
                   <div className="flex justify-between items-center py-1">
                     <span className="text-xs text-gray-500">胜率</span>
@@ -984,8 +1047,8 @@ export default function BTCDOM2Dashboard() {
                 <CardTitle>
                   BTC价格与策略收益对比
                   <span className="text-sm font-normal text-gray-500 ml-2">
-                    ({params.longBtc && params.shortAlt ? '做多BTC + 做空ALT' : 
-                      params.longBtc ? '做多BTC' : 
+                    ({params.longBtc && params.shortAlt ? '做多BTC + 做空ALT' :
+                      params.longBtc ? '做多BTC' :
                       params.shortAlt ? '做空ALT' : '无策略'})
                   </span>
                 </CardTitle>
@@ -1140,8 +1203,8 @@ export default function BTCDOM2Dashboard() {
                     <Eye className="w-4 h-4" />
                     持仓历史分析
                     <span className="text-sm font-normal text-gray-500 ml-2">
-                      ({params.longBtc && params.shortAlt ? '做多BTC + 做空ALT' : 
-                        params.longBtc ? '做多BTC' : 
+                      ({params.longBtc && params.shortAlt ? '做多BTC + 做空ALT' :
+                        params.longBtc ? '做多BTC' :
                         params.shortAlt ? '做空ALT' : '无策略'})
                     </span>
                   </CardTitle>
