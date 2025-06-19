@@ -197,6 +197,18 @@ export interface BTCDOM2PerformanceMetrics {
     timestamp: string;
     period: number;
   };
+  bestFundingPeriod?: number;        // 最多资金费期
+  worstFundingPeriod?: number;       // 最少资金费期
+  bestFundingPeriodInfo?: {          // 最多资金费期详情
+    fundingFee: number;
+    timestamp: string;
+    period: number;
+  };
+  worstFundingPeriodInfo?: {         // 最少资金费期详情
+    fundingFee: number;
+    timestamp: string;
+    period: number;
+  };
   // 盈亏金额分解
   pnlBreakdown: {
     totalPnlAmount: number;      // 总盈亏金额

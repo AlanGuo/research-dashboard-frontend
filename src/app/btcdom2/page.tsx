@@ -873,9 +873,6 @@ export default function BTCDOM2Dashboard() {
               {/* 收益率分解卡片 */}
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                  <CardTitle className="text-sm font-medium text-gray-600">
-                    收益率分解
-                  </CardTitle>
                   <TrendingUp className={`h-4 w-4 ${
                     backtestResult.performance.totalReturn >= 0 ? 'text-green-500' : 'text-red-500'
                   }`} />
@@ -988,25 +985,12 @@ export default function BTCDOM2Dashboard() {
                       </>
                     );
                   })()}
-
-                  {/* 年化收益率 */}
-                  <div className="flex justify-between items-center py-1">
-                    <span className="text-xs text-gray-500">年化收益率</span>
-                    <span className={`text-sm font-semibold ${getValueColorClass(backtestResult.performance.annualizedReturn)}`}>
-                      {formatPercent(
-                        backtestResult.performance.annualizedReturn * 100
-                      )}
-                    </span>
-                  </div>
                 </CardContent>
               </Card>
 
               {/* 风险指标卡片 */}
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                  <CardTitle className="text-sm font-medium text-gray-600">
-                    风险指标
-                  </CardTitle>
                   <TrendingDown className="h-4 w-4 text-red-500" />
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -1020,7 +1004,15 @@ export default function BTCDOM2Dashboard() {
                       )}
                     </div>
                   </div>
-
+                  {/* 年化收益率 */}
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-xs text-gray-500">年化收益率</span>
+                    <span className={`text-sm font-semibold ${getValueColorClass(backtestResult.performance.annualizedReturn)}`}>
+                      {formatPercent(
+                        backtestResult.performance.annualizedReturn * 100
+                      )}
+                    </span>
+                  </div>
                   {/* 夏普比率 */}
                   <div className="flex justify-between items-center py-1">
                     <div className="flex items-center gap-1">
@@ -1176,7 +1168,10 @@ export default function BTCDOM2Dashboard() {
                               第{backtestResult.performance.bestPeriodInfo.period}期 • {formatPeriodTime(backtestResult.performance.bestPeriodInfo.timestamp)}
                             </span>
                           )}
-                          {(backtestResult.performance.bestPeriod * 100).toFixed(2)}%
+                          {formatAmountWithPercent(
+                            params.initialCapital * backtestResult.performance.bestPeriod,
+                            backtestResult.performance.bestPeriod * 100
+                          )}
                         </span>
                       </div>
                     </div>
@@ -1189,7 +1184,42 @@ export default function BTCDOM2Dashboard() {
                               第{backtestResult.performance.worstPeriodInfo.period}期 • {formatPeriodTime(backtestResult.performance.worstPeriodInfo.timestamp)}
                             </span>
                           )}
-                          {(backtestResult.performance.worstPeriod * 100).toFixed(2)}%
+                          {formatAmountWithPercent(
+                            params.initialCapital * backtestResult.performance.worstPeriod,
+                            backtestResult.performance.worstPeriod * 100
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">最多资金费期</span>
+                      <div className="text-right">
+                        <span className="font-medium text-green-600">
+                          {backtestResult.performance.bestFundingPeriodInfo && (
+                            <span className="text-xs text-gray-500 mr-2">
+                              第{backtestResult.performance.bestFundingPeriodInfo.period}期 • {formatPeriodTime(backtestResult.performance.bestFundingPeriodInfo.timestamp)}
+                            </span>
+                          )}
+                          {formatAmountWithPercent(
+                            backtestResult.performance.bestFundingPeriod || 0,
+                            ((backtestResult.performance.bestFundingPeriod || 0) / params.initialCapital) * 100
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">最少资金费期</span>
+                      <div className="text-right">
+                        <span className="font-medium text-red-600">
+                          {backtestResult.performance.worstFundingPeriodInfo && (
+                            <span className="text-xs text-gray-500 mr-2">
+                              第{backtestResult.performance.worstFundingPeriodInfo.period}期 • {formatPeriodTime(backtestResult.performance.worstFundingPeriodInfo.timestamp)}
+                            </span>
+                          )}
+                          {formatAmountWithPercent(
+                            backtestResult.performance.worstFundingPeriod || 0,
+                            ((backtestResult.performance.worstFundingPeriod || 0) / params.initialCapital) * 100
+                          )}
                         </span>
                       </div>
                     </div>

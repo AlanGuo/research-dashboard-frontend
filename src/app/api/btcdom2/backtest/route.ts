@@ -799,6 +799,7 @@ function calculatePerformanceMetrics(
     return {
       totalReturn: 0, btcReturn: 0, altReturn: 0, annualizedReturn: 0, volatility: 0, sharpeRatio: 0,
       maxDrawdown: 0, winRate: 0, avgReturn: 0, bestPeriod: 0, worstPeriod: 0, calmarRatio: 0,
+      bestFundingPeriod: 0, worstFundingPeriod: 0,
       pnlBreakdown: {
         totalPnlAmount: 0, btcPnlAmount: 0, altPnlAmount: 0, tradingFeeAmount: 0, fundingFeeAmount: 0,
         totalPnlRate: 0, btcPnlRate: 0, altPnlRate: 0, tradingFeeRate: 0, fundingFeeRate: 0
@@ -833,12 +834,24 @@ function calculatePerformanceMetrics(
       bestPeriodInfo: {
         return: totalReturn,
         timestamp: snapshots[0].timestamp,
-        period: 0
+        period: 1
       },
       worstPeriodInfo: {
         return: totalReturn,
         timestamp: snapshots[0].timestamp,
-        period: 0
+        period: 1
+      },
+      bestFundingPeriod: firstSnapshot.totalFundingFee || 0,
+      worstFundingPeriod: firstSnapshot.totalFundingFee || 0,
+      bestFundingPeriodInfo: {
+        fundingFee: firstSnapshot.totalFundingFee || 0,
+        timestamp: snapshots[0].timestamp,
+        period: 1
+      },
+      worstFundingPeriodInfo: {
+        fundingFee: firstSnapshot.totalFundingFee || 0,
+        timestamp: snapshots[0].timestamp,
+        period: 1
       },
       pnlBreakdown: {
         totalPnlAmount: firstSnapshot.totalPnl,
@@ -933,6 +946,27 @@ function calculatePerformanceMetrics(
   const bestPeriodInfo = periodInfo.find(p => p.return === bestPeriod);
   const worstPeriodInfo = periodInfo.find(p => p.return === worstPeriod);
 
+  // 计算最多和最少资金费期
+  const fundingFeeInfo: Array<{ fundingFee: number; timestamp: string; period: number }> = [];
+  
+  for (let i = 0; i < snapshots.length; i++) {
+    const snapshot = snapshots[i];
+    const currentFundingFee = snapshot.totalFundingFee || 0;
+    fundingFeeInfo.push({
+      fundingFee: currentFundingFee,
+      timestamp: snapshot.timestamp,
+      period: i + 1 // 期数从1开始
+    });
+  }
+
+  // 最多和最少资金费期
+  const bestFundingPeriod = fundingFeeInfo.length > 0 ? Math.max(...fundingFeeInfo.map(f => f.fundingFee)) : 0;
+  const worstFundingPeriod = fundingFeeInfo.length > 0 ? Math.min(...fundingFeeInfo.map(f => f.fundingFee)) : 0;
+
+  // 找到最多和最少资金费期的详细信息
+  const bestFundingPeriodInfo = fundingFeeInfo.find(f => f.fundingFee === bestFundingPeriod);
+  const worstFundingPeriodInfo = fundingFeeInfo.find(f => f.fundingFee === worstFundingPeriod);
+
   const calmarRatio = maxDrawdown > 0 ? annualizedReturn / maxDrawdown : 0;
 
   // 计算盈亏金额分解
@@ -1018,6 +1052,10 @@ function calculatePerformanceMetrics(
     calmarRatio,
     bestPeriodInfo,
     worstPeriodInfo,
+    bestFundingPeriod,
+    worstFundingPeriod,
+    bestFundingPeriodInfo,
+    worstFundingPeriodInfo,
     pnlBreakdown: {
       totalPnlAmount,
       btcPnlAmount,
