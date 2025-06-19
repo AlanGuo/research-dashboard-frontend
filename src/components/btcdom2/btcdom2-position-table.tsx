@@ -49,23 +49,9 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
   // 格式化货币
   const formatCurrency = (amount: number | null) => {
     const validAmount = amount ?? 0;
-    let formattedValue;
-
-    // 对于小于 1 美元的价格，使用更多小数位
-    if (Math.abs(validAmount) < 1) {
-      // 找到第一个非零小数位，然后显示4位有效数字
-      const str = validAmount.toString();
-      if (str.includes('e')) {
-        // 处理科学计数法
-        formattedValue = `$${validAmount.toFixed(8).replace(/\.?0+$/, '')}`;
-      } else {
-        // 显示最多8位小数，但去除尾随的0
-        formattedValue = `$${validAmount.toFixed(8).replace(/\.?0+$/, '')}`;
-      }
-    } else {
-      // 对于大于等于 1 美元的价格，使用标准格式
-      formattedValue = `$${validAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    }
+    
+    // 统一使用2位小数格式
+    const formattedValue = `$${validAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     // 为正数添加 + 号
     return validAmount > 0 ? `+${formattedValue}` : formattedValue;
@@ -76,6 +62,18 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
     const validValue = value ?? 0;
     const percentValue = (validValue * 100).toFixed(2);
     return validValue > 0 ? `+${percentValue}%` : `${percentValue}%`;
+  };
+
+  // 格式化价格（不带正负号前缀）
+  const formatPrice = (amount: number | null) => {
+    const validAmount = amount ?? 0;
+    return `$${validAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  // 格式化金额（不带正负号前缀）
+  const formatAmount = (amount: number | null) => {
+    const validAmount = amount ?? 0;
+    return `$${Math.abs(validAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   // 工具函数：格式化时间（使用UTC+0时区）
@@ -332,8 +330,8 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>资产</TableHead>
-                <TableHead>方向</TableHead>
+                <TableHead className="w-28">资产</TableHead>
+                <TableHead className="w-20">方向</TableHead>
                 <TableHead className="text-right">金额</TableHead>
                 <TableHead className="text-right">数量</TableHead>
                 <TableHead className="text-right">手续费</TableHead>
@@ -368,13 +366,13 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                       )}
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="w-20">
                     <Badge
                       variant={
                         position.type === 'SOLD' ? "secondary" :
                         position.side === 'LONG' ? "default" : "destructive"
                       }
-                      className="text-xs"
+                      className="text-xs px-2 py-1"
                     >
                       {position.type === 'SOLD' ? (
                         <>
@@ -396,7 +394,7 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                   </TableCell>
                   <TableCell className="text-right font-medium">
                     <div className="flex flex-col">
-                      <span>{formatCurrency(position.amount)}</span>
+                      <span>{formatAmount(position.amount)}</span>
                       {position.type !== 'SOLD' && totalInvestedAmount > 0 && (
                         <span className="text-xs text-gray-500">
                           ({((Math.abs(position.amount ?? 0) / Math.max(totalInvestedAmount, 1)) * 100).toFixed(2)}%)
@@ -471,13 +469,13 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                               <span>新开仓</span>
                               {getCurrentFundingRate(position) !== 0 && (
                                 <span className={getCurrentFundingRate(position) > 0 ? 'text-green-600' : 'text-red-600'}>
-                                  费率: {(getCurrentFundingRate(position) * 100).toFixed(4)}%
+                                  费率: {(getCurrentFundingRate(position) * 100).toFixed(2)}%
                                 </span>
                               )}
                             </div>
                           ) : getCurrentFundingRate(position) !== 0 ? (
                             <span className={getCurrentFundingRate(position) > 0 ? 'text-green-600' : 'text-red-600'}>
-                              费率: {(getCurrentFundingRate(position) * 100).toFixed(4)}%
+                              费率: {(getCurrentFundingRate(position) * 100).toFixed(2)}%
                             </span>
                           ) : (
                             <span className="text-gray-400">无数据</span>
@@ -515,7 +513,7 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                   <TableCell className="text-right">
                     <div className="flex flex-col">
                       <div className="flex flex-col items-end">
-                        <span>{formatCurrency(position.currentPrice)}</span>
+                        <span>{formatPrice(position.currentPrice)}</span>
                       </div>
                       {/* 显示相对于上一期价格的变化率 */}
                       {position.priceChange?.previousPrice && position.priceChange.previousPrice > 0 && position.currentPrice !== position.priceChange.previousPrice ? (
