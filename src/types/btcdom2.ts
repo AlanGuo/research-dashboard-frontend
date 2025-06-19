@@ -197,6 +197,20 @@ export interface BTCDOM2PerformanceMetrics {
     timestamp: string;
     period: number;
   };
+  // 盈亏金额分解
+  pnlBreakdown: {
+    totalPnlAmount: number;      // 总盈亏金额
+    btcPnlAmount: number;        // BTC做多盈亏金额
+    altPnlAmount: number;        // ALT做空盈亏金额
+    tradingFeeAmount: number;    // 手续费金额（负数）
+    fundingFeeAmount: number;    // 资金费率金额
+    // 收益率（基于初始资本）
+    totalPnlRate: number;        // 总盈亏收益率
+    btcPnlRate: number;          // BTC做多收益率
+    altPnlRate: number;          // ALT做空收益率
+    tradingFeeRate: number;      // 手续费收益率
+    fundingFeeRate: number;      // 资金费率收益率
+  };
 }
 
 // 图表数据点

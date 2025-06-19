@@ -160,25 +160,25 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
         </div>
         <div className="text-center">
           <p className="text-sm text-gray-500">当期手续费</p>
-          <p className="text-lg font-semibold text-orange-600">
+          <p className={`text-lg font-semibold ${getPnlColor(snapshot.totalTradingFee || 0)}`}>
             {formatCurrency(snapshot.totalTradingFee || 0)}
           </p>
         </div>
         <div className="text-center">
           <p className="text-sm text-gray-500">累计手续费</p>
-          <p className="text-lg font-semibold text-orange-700">
+          <p className={`text-lg font-semibold ${getPnlColor(snapshot.accumulatedTradingFee || 0)}`}>
             {formatCurrency(snapshot.accumulatedTradingFee || 0)}
           </p>
         </div>
         <div className="text-center">
           <p className="text-sm text-gray-500">当期资金费</p>
-          <p className="text-lg font-semibold text-purple-600">
+          <p className={`text-lg font-semibold ${getPnlColor(snapshot.totalFundingFee || 0)}`}>
             {formatCurrency(snapshot.totalFundingFee || 0)}
           </p>
         </div>
         <div className="text-center">
           <p className="text-sm text-gray-500">累计资金费</p>
-          <p className="text-lg font-semibold text-purple-700">
+          <p className={`text-lg font-semibold ${getPnlColor(snapshot.accumulatedFundingFee || 0)}`}>
             {formatCurrency(snapshot.accumulatedFundingFee || 0)}
           </p>
         </div>
@@ -311,7 +311,7 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-right text-orange-600">
+                  <TableCell className={`text-right font-medium ${getPnlColor(position.tradingFee || 0)}`}>
                     {formatCurrency(position.tradingFee || 0)}
                   </TableCell>
                   <TableCell className="text-right">

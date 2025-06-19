@@ -27,7 +27,7 @@ import { AlertCircle, Play, Settings, TrendingUp, TrendingDown, Clock, Loader2, 
 export default function BTCDOM2Dashboard() {
   // 策略参数状态
   const [params, setParams] = useState<BTCDOM2StrategyParams>({
-    startDate: '2025-06-15',
+    startDate: '2025-06-01',
     endDate: '2025-06-18',
     initialCapital: 10000,
     btcRatio: 0.5,
@@ -60,25 +60,31 @@ export default function BTCDOM2Dashboard() {
     return `${date.getUTCFullYear()}-${(date.getUTCMonth() + 1).toString().padStart(2, '0')}-${date.getUTCDate().toString().padStart(2, '0')} ${date.getUTCHours().toString().padStart(2, '0')}:${date.getUTCMinutes().toString().padStart(2, '0')}`;
   };
 
-  // 工具函数：格式化货币
-  const formatCurrency = (amount: number | null) => {
-    const validAmount = amount ?? 0;
+  // 工具函数：获取数值的颜色类名
+  const getValueColorClass = (value: number | null) => {
+    const validValue = value ?? 0;
+    if (validValue > 0) return 'text-green-600';
+    if (validValue < 0) return 'text-red-600';
+    return 'text-gray-600';
+  };
 
-    // 对于小于 1 美元的价格，使用更多小数位
-    if (Math.abs(validAmount) < 1) {
-      // 找到第一个非零小数位，然后显示4位有效数字
-      const str = validAmount.toString();
-      if (str.includes('e')) {
-        // 处理科学计数法
-        return `$${validAmount.toFixed(8).replace(/\.?0+$/, '')}`;
-      } else {
-        // 显示最多8位小数，但去除尾随的0
-        return `$${validAmount.toFixed(8).replace(/\.?0+$/, '')}`;
-      }
+  // 工具函数：格式化金额和百分比的组合显示
+  const formatAmountWithPercent = (amount: number, percent: number) => {
+    // 对于金额，负号放在$符号前面
+    let formattedAmount;
+    if (amount > 0) {
+      formattedAmount = `+$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    } else if (amount < 0) {
+      formattedAmount = `-$${Math.abs(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    } else {
+      formattedAmount = `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     }
 
-    // 对于大于等于 1 美元的价格，使用标准格式
-    return `$${validAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    // 对于百分比，如果是正数加+号，负数保持-号
+    const percentSign = percent > 0 ? '+' : '';
+    const formattedPercent = `${percentSign}${percent.toFixed(2)}%`;
+
+    return `${formattedAmount} (${formattedPercent})`;
   };
   const [parameterErrors, setParameterErrors] = useState<Record<string, string>>({});
 
@@ -866,104 +872,124 @@ export default function BTCDOM2Dashboard() {
                   }`} />
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {/* 总盈亏 - 突出显示 */}
-                  <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
-                    <span className="text-sm font-medium text-gray-700">总盈亏</span>
-                    <div className="text-right">
-                      <div className={`text-xl font-bold ${
-                        backtestResult.performance.totalReturn >= 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {backtestResult.performance.totalReturn >= 0 ? '+' : ''}${(params.initialCapital * backtestResult.performance.totalReturn).toFixed(2)}
-                      </div>
-                      <div className={`text-sm font-medium ${
-                        backtestResult.performance.totalReturn >= 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        ({backtestResult.performance.totalReturn >= 0 ? '+' : ''}{(backtestResult.performance.totalReturn * 100).toFixed(2)}%)
-                      </div>
-                    </div>
-                  </div>
+                  {/* 使用后端计算好的盈亏分解数据 */}
+                  {(() => {
+                    const pnlBreakdown = backtestResult.performance.pnlBreakdown;
+                    
+                    return (
+                      <>
+                        {/* 总盈亏 - 突出显示 */}
+                        <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
+                          <span className="text-sm font-medium text-gray-700">总盈亏</span>
+                          <div className={`text-xl font-bold ${getValueColorClass(pnlBreakdown.totalPnlAmount)}`}>
+                            {formatAmountWithPercent(
+                              pnlBreakdown.totalPnlAmount,
+                              pnlBreakdown.totalPnlRate * 100
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 只在选择做多BTC时显示BTC收益率 */}
+                        {params.longBtc && (
+                          <div className="flex justify-between items-center py-1">
+                            <span className="text-xs text-gray-500 flex items-center gap-1">
+                              <Bitcoin className="w-3 h-3" />
+                              BTC做多
+                            </span>
+                            <span className={`text-sm font-semibold ${getValueColorClass(pnlBreakdown.btcPnlAmount)}`}>
+                              {formatAmountWithPercent(
+                                pnlBreakdown.btcPnlAmount,
+                                pnlBreakdown.btcPnlRate * 100
+                              )}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* 只在选择做空ALT时显示ALT收益率 */}
+                        {params.shortAlt && (
+                          <div className="flex justify-between items-center py-1">
+                            <span className="text-xs text-gray-500 flex items-center gap-1">
+                              <ArrowDown className="w-3 h-3" />
+                              ALT做空
+                            </span>
+                            <span className={`text-sm font-semibold ${getValueColorClass(pnlBreakdown.altPnlAmount)}`}>
+                              {formatAmountWithPercent(
+                                pnlBreakdown.altPnlAmount,
+                                pnlBreakdown.altPnlRate * 100
+                              )}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* 手续费盈亏 */}
+                        <div className="flex justify-between items-center py-1">
+                          <span className="text-xs text-gray-500">手续费盈亏</span>
+                          <span className={`text-sm font-semibold ${getValueColorClass(pnlBreakdown.tradingFeeAmount)}`}>
+                            {formatAmountWithPercent(
+                              pnlBreakdown.tradingFeeAmount,
+                              pnlBreakdown.tradingFeeRate * 100
+                            )}
+                          </span>
+                        </div>
+
+                        {/* 资金费率盈亏 */}
+                        {params.shortAlt && (
+                          <div className="flex justify-between items-center py-1">
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs text-gray-500">资金费率盈亏</span>
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="h-4 w-4 p-0 hover:bg-gray-100">
+                                    <Info className="h-3 w-3 text-gray-400" />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-80 text-sm">
+                                  <div className="space-y-2">
+                                    <p className="font-medium">资金费率说明</p>
+                                    <p className="text-gray-600">
+                                      对于做空头寸：
+                                    </p>
+                                    <div className="text-xs text-gray-500 space-y-1">
+                                      <p>• 资金费率为负数时，空头支付资金费（亏损）</p>
+                                      <p>• 资金费率为正数时，空头收取资金费（盈利）</p>
+                                      <p>• 新开仓的交易对从下一期开始收取资金费率</p>
+                                    </div>
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
+                            </div>
+                            <span className={`text-sm font-semibold ${getValueColorClass(pnlBreakdown.fundingFeeAmount)}`}>
+                              {formatAmountWithPercent(
+                                pnlBreakdown.fundingFeeAmount,
+                                pnlBreakdown.fundingFeeRate * 100
+                              )}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* 盈亏验证 - 开发调试用 */}
+                        {process.env.NODE_ENV === 'development' && (
+                          <div className="mt-4 p-2 bg-green-50 rounded text-xs text-green-700 border border-green-200">
+                            <div className="font-medium mb-1">盈亏分解验证：</div>
+                            <div>BTC: ${pnlBreakdown.btcPnlAmount.toFixed(2)} + ALT: ${pnlBreakdown.altPnlAmount.toFixed(2)} + 手续费: ${pnlBreakdown.tradingFeeAmount.toFixed(2)} + 资金费: ${pnlBreakdown.fundingFeeAmount.toFixed(2)}</div>
+                            <div>= ${(pnlBreakdown.btcPnlAmount + pnlBreakdown.altPnlAmount + pnlBreakdown.tradingFeeAmount + pnlBreakdown.fundingFeeAmount).toFixed(2)}</div>
+                            <div>总盈亏: ${pnlBreakdown.totalPnlAmount.toFixed(2)} (差额: ${(pnlBreakdown.totalPnlAmount - (pnlBreakdown.btcPnlAmount + pnlBreakdown.altPnlAmount + pnlBreakdown.tradingFeeAmount + pnlBreakdown.fundingFeeAmount)).toFixed(2)})</div>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
 
                   {/* 年化收益率 */}
                   <div className="flex justify-between items-center py-1">
                     <span className="text-xs text-gray-500">年化收益率</span>
-                    <span className={`text-sm font-semibold ${
-                      backtestResult.performance.annualizedReturn >= 0 ? 'text-green-600' : 'text-red-600'
-                    }`}>
-                      {(backtestResult.performance.annualizedReturn * 100).toFixed(2)}%
+                    <span className={`text-sm font-semibold ${getValueColorClass(backtestResult.performance.annualizedReturn)}`}>
+                      {formatAmountWithPercent(
+                        params.initialCapital * backtestResult.performance.annualizedReturn,
+                        backtestResult.performance.annualizedReturn * 100
+                      )}
                     </span>
                   </div>
-
-                  {/* 只在选择做多BTC时显示BTC收益率 */}
-                  {params.longBtc && (
-                    <div className="flex justify-between items-center py-1">
-                      <span className="text-xs text-orange-500 flex items-center gap-1">
-                        <Bitcoin className="w-3 h-3" />
-                        BTC做多
-                      </span>
-                      <span className={`text-sm font-semibold ${
-                        backtestResult.performance.btcReturn >= 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {(backtestResult.performance.btcReturn * 100).toFixed(2)}%
-                      </span>
-                    </div>
-                  )}
-
-                  {/* 只在选择做空ALT时显示ALT收益率 */}
-                  {params.shortAlt && (
-                    <div className="flex justify-between items-center py-1">
-                      <span className="text-xs text-blue-500 flex items-center gap-1">
-                        <ArrowDown className="w-3 h-3" />
-                        ALT做空
-                      </span>
-                      <span className={`text-sm font-semibold ${
-                        backtestResult.performance.altReturn >= 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {(backtestResult.performance.altReturn * 100).toFixed(2)}%
-                      </span>
-                    </div>
-                  )}
-
-                  {/* 手续费盈亏 */}
-                  <div className="flex justify-between items-center py-1">
-                    <span className="text-xs text-orange-500">手续费盈亏</span>
-                    <span className="text-sm font-semibold text-red-600">
-                      -{formatCurrency(backtestResult.snapshots[backtestResult.snapshots.length - 1]?.accumulatedTradingFee || 0)}
-                    </span>
-                  </div>
-
-                  {/* 资金费率盈亏 */}
-                  {params.shortAlt && (
-                    <div className="flex justify-between items-center py-1">
-                      <div className="flex items-center gap-1">
-                        <span className="text-xs text-purple-500">资金费率盈亏</span>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-4 w-4 p-0 hover:bg-gray-100">
-                              <Info className="h-3 w-3 text-gray-400" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-80 text-sm">
-                            <div className="space-y-2">
-                              <p className="font-medium">资金费率说明</p>
-                              <p className="text-gray-600">
-                                对于做空头寸：
-                              </p>
-                              <div className="text-xs text-gray-500 space-y-1">
-                                <p>• 资金费率为负数时，空头支付资金费（亏损）</p>
-                                <p>• 资金费率为正数时，空头收取资金费（盈利）</p>
-                                <p>• 新开仓的交易对从下一期开始收取资金费率</p>
-                              </div>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                      <span className={`text-sm font-semibold ${
-                        (backtestResult.snapshots[backtestResult.snapshots.length - 1]?.accumulatedFundingFee || 0) >= 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {(backtestResult.snapshots[backtestResult.snapshots.length - 1]?.accumulatedFundingFee || 0) >= 0 ? '+' : ''}{formatCurrency(backtestResult.snapshots[backtestResult.snapshots.length - 1]?.accumulatedFundingFee || 0)}
-                      </span>
-                    </div>
-                  )}
                 </CardContent>
               </Card>
 
@@ -979,13 +1005,11 @@ export default function BTCDOM2Dashboard() {
                   {/* 最大回撤 - 突出显示 */}
                   <div className="flex justify-between items-center p-3 bg-red-50 rounded-md">
                     <span className="text-sm font-medium text-gray-700">最大回撤</span>
-                    <div className="text-right">
-                      <div className="text-xl font-bold text-red-600">
-                        -${(params.initialCapital * backtestResult.performance.maxDrawdown).toFixed(2)}
-                      </div>
-                      <div className="text-sm font-medium text-red-600">
-                        ({(backtestResult.performance.maxDrawdown * 100).toFixed(2)}%)
-                      </div>
+                    <div className="text-xl font-bold text-red-600">
+                      {formatAmountWithPercent(
+                        params.initialCapital * backtestResult.performance.maxDrawdown,
+                        backtestResult.performance.maxDrawdown * 100
+                      )}
                     </div>
                   </div>
 
