@@ -195,6 +195,17 @@ export default function BTCDOM2Dashboard() {
     runBacktest();
   }, []); // 空依赖数组，只在组件挂载时执行一次
 
+  // 检查权重是否有效
+  const isWeightsValid = useCallback(() => {
+    const weightSum = params.priceChangeWeight + params.volumeWeight + params.volatilityWeight + params.fundingRateWeight;
+    return Math.abs(weightSum - 1) <= 0.001;
+  }, [params.priceChangeWeight, params.volumeWeight, params.volatilityWeight, params.fundingRateWeight]);
+
+  // 获取权重总和百分比
+  const getWeightSumPercent = useCallback(() => {
+    return ((params.priceChangeWeight + params.volumeWeight + params.volatilityWeight + params.fundingRateWeight) * 100).toFixed(0);
+  }, [params.priceChangeWeight, params.volumeWeight, params.volatilityWeight, params.fundingRateWeight]);
+
   // 参数更新处理
   const handleParamChange = (key: keyof BTCDOM2StrategyParams, value: string | number | boolean) => {
     setParams(prev => ({
@@ -671,11 +682,11 @@ export default function BTCDOM2Dashboard() {
                     <h5 className="text-sm font-medium text-gray-700">做空标的选择权重配置</h5>
                     <div className="flex items-center gap-3">
                       <span className={`text-sm transition-colors duration-200 ${
-                        Math.abs((params.priceChangeWeight + params.volumeWeight + params.volatilityWeight + params.fundingRateWeight) - 1) > 0.001 
+                        !isWeightsValid() 
                           ? 'text-red-600 font-semibold' 
                           : 'text-gray-600'
                       }`}>
-                        权重总和: {((params.priceChangeWeight + params.volumeWeight + params.volatilityWeight + params.fundingRateWeight) * 100).toFixed(0)}%
+                        权重总和: {getWeightSumPercent()}%
                       </span>
                       <Button
                         type="button"
@@ -916,18 +927,6 @@ export default function BTCDOM2Dashboard() {
                     </div>
                   </div>
 
-                  {/* 悬浮的错误提示，不影响页面布局 */}
-                  {parameterErrors.strategySelection && (
-                    <div className="absolute top-full left-0 right-0 z-10 mt-2 animate-in slide-in-from-top-2 duration-200">
-                      <div className="bg-red-50 border border-red-200 rounded-md p-3 shadow-lg">
-                        <p className="text-sm text-red-600 flex items-center gap-2">
-                          <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                          {parameterErrors.strategySelection}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
                   <div className="text-xs text-gray-500 bg-blue-50 p-3 rounded-lg">
                     <p><strong>策略说明：</strong>BTCDOM策略通过同时做多BTC和做空ALT币来获得BTC相对强势时的超额收益。</p>
                   </div>
@@ -937,24 +936,32 @@ export default function BTCDOM2Dashboard() {
 
             {/* 执行按钮 */}
             <div className="flex justify-center pt-4">
-              <Button
-                onClick={handleRunBacktest}
-                disabled={loading}
-                className="px-8 py-2"
-                size="lg"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    执行回测中...
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-4 h-4 mr-2" />
-                    执行回测
-                  </>
+              <div className="text-center">
+                <Button
+                  onClick={handleRunBacktest}
+                  disabled={loading || Math.abs((params.priceChangeWeight + params.volumeWeight + params.volatilityWeight + params.fundingRateWeight) - 1) > 0.001}
+                  className="px-8 py-2"
+                  size="lg"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      执行回测中...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-4 h-4 mr-2" />
+                      执行回测
+                    </>
+                  )}
+                </Button>
+                {Math.abs((params.priceChangeWeight + params.volumeWeight + params.volatilityWeight + params.fundingRateWeight) - 1) > 0.001 && (
+                  <p className="text-xs text-red-500 mt-2 flex items-center justify-center gap-1">
+                    <AlertCircle className="w-3 h-3" />
+                    权重总和必须等于100%才能执行回测
+                  </p>
                 )}
-              </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
