@@ -827,13 +827,32 @@ export default function BTCDOM2Dashboard() {
                       value={params.allocationStrategy}
                       onValueChange={(value) => handleParamChange('allocationStrategy', value as PositionAllocationStrategy)}
                     >
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
+                      <SelectTrigger className="w-full text-left">
+                        <SelectValue>
+                          {params.allocationStrategy === PositionAllocationStrategy.BY_VOLUME && "按成交量比例分配"}
+                          {params.allocationStrategy === PositionAllocationStrategy.BY_COMPOSITE_SCORE && "按综合分数分配权重"}
+                          {params.allocationStrategy === PositionAllocationStrategy.EQUAL_ALLOCATION && "平均分配做空资金"}
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value={PositionAllocationStrategy.BY_VOLUME}>按成交量比例分配</SelectItem>
-                        <SelectItem value={PositionAllocationStrategy.BY_COMPOSITE_SCORE}>按综合分数分配权重</SelectItem>
-                        <SelectItem value={PositionAllocationStrategy.EQUAL_ALLOCATION}>平均分配做空资金</SelectItem>
+                        <SelectItem value={PositionAllocationStrategy.BY_VOLUME}>
+                          <div className="flex flex-col">
+                            <span>按成交量比例分配</span>
+                            <span className="text-xs text-gray-500">根据币种成交量大小按比例分配资金</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value={PositionAllocationStrategy.BY_COMPOSITE_SCORE}>
+                          <div className="flex flex-col">
+                            <span>按综合分数分配权重</span>
+                            <span className="text-xs text-gray-500">根据跌幅、成交量、波动率、资金费率的综合评分分配资金</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value={PositionAllocationStrategy.EQUAL_ALLOCATION}>
+                          <div className="flex flex-col">
+                            <span>平均分配做空资金</span>
+                            <span className="text-xs text-gray-500">每个选中的币种分配相等的资金</span>
+                          </div>
+                        </SelectItem>
                       </SelectContent>
                     </Select>
 
@@ -862,12 +881,6 @@ export default function BTCDOM2Dashboard() {
                         </div>
                       </div>
                     )}
-
-                    <div className="text-xs text-gray-500 space-y-1">
-                      <p><strong>按成交量比例分配：</strong>根据币种成交量大小按比例分配资金</p>
-                      <p><strong>按综合分数分配：</strong>根据跌幅、成交量、波动率、资金费率的综合评分分配资金</p>
-                      <p><strong>平均分配：</strong>每个选中的币种分配相等的资金</p>
-                    </div>
                   </div>
                 </div>
 
