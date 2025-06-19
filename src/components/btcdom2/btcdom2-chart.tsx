@@ -148,20 +148,20 @@ export function BTCDOM2Chart({ data, params }: BTCDOM2ChartProps) {
               <Line
                 yAxisId="right"
                 type="monotone"
-                dataKey="totalReturnPercent"
-                stroke="#2563eb"
-                strokeWidth={2}
-                dot={false}
-                name="策略收益率 (%)"
-              />
-              <Line
-                yAxisId="right"
-                type="monotone"
                 dataKey="btcReturnPercent"
                 stroke="#16a34a"
                 strokeWidth={2}
                 dot={false}
                 name="BTC收益率 (%)"
+              />
+              <Line
+                yAxisId="right"
+                type="monotone"
+                dataKey="totalReturnPercent"
+                stroke="#2563eb"
+                strokeWidth={2}
+                dot={false}
+                name="策略收益率 (%)"
               />
             </ComposedChart>
           </ResponsiveContainer>
