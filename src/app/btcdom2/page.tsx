@@ -1333,6 +1333,7 @@ export default function BTCDOM2Dashboard() {
                           params={params}
                           periodNumber={selectedSnapshotIndex === -1 ? backtestResult.snapshots.length : selectedSnapshotIndex + 1}
                           totalPeriods={backtestResult.snapshots.length}
+                          backtestResult={backtestResult}
                         />
                       )}
                 </CardContent>

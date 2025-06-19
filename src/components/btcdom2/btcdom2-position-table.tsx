@@ -12,7 +12,8 @@ import {
 } from '@/components/ui/table';
 import {
   StrategySnapshot,
-  BTCDOM2StrategyParams
+  BTCDOM2StrategyParams,
+  BTCDOM2BacktestResult
 } from '@/types/btcdom2';
 import {
   TrendingUp,
@@ -31,9 +32,10 @@ interface BTCDOM2PositionTableProps {
   params?: BTCDOM2StrategyParams;
   periodNumber?: number; // 期数
   totalPeriods?: number; // 总期数
+  backtestResult?: BTCDOM2BacktestResult; // 完整的回测结果，用于获取盈亏分解数据
 }
 
-export function BTCDOM2PositionTable({ snapshot, params, periodNumber, totalPeriods }: BTCDOM2PositionTableProps) {
+export function BTCDOM2PositionTable({ snapshot, params, periodNumber, totalPeriods, backtestResult }: BTCDOM2PositionTableProps) {
   if (!snapshot) {
     return (
       <div className="text-center py-8">
@@ -80,6 +82,82 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, totalPeri
   const formatPeriodTime = (timestamp: string): string => {
     const date = new Date(timestamp);
     return `${date.getUTCFullYear()}-${(date.getUTCMonth() + 1).toString().padStart(2, '0')}-${date.getUTCDate().toString().padStart(2, '0')} ${date.getUTCHours().toString().padStart(2, '0')}:${date.getUTCMinutes().toString().padStart(2, '0')}`;
+  };
+
+  // 计算到当前期数的BTC累计盈亏
+  const calculateBtcCumulativePnl = (): { amount: number; rate: number } => {
+    if (!backtestResult || !periodNumber) {
+      return { amount: 0, rate: 0 };
+    }
+
+    const currentIndex = periodNumber - 1; // 转换为数组索引
+    let btcCumulativePnl = 0;
+    const initialCapital = backtestResult.params.initialCapital;
+
+    // 累计到当前期数的BTC盈亏
+    for (let i = 0; i <= currentIndex && i < backtestResult.snapshots.length; i++) {
+      const snapshot = backtestResult.snapshots[i];
+      
+      // 累计BTC持仓的盈亏
+      if (snapshot.btcPosition) {
+        btcCumulativePnl += snapshot.btcPosition.pnl || 0;
+      }
+      
+      // 累计BTC相关的卖出盈亏
+      if (snapshot.soldPositions) {
+        snapshot.soldPositions.forEach(soldPos => {
+          if (soldPos.symbol === 'BTC' || soldPos.side === 'LONG') {
+            btcCumulativePnl += soldPos.pnl || 0;
+          }
+        });
+      }
+    }
+
+    const btcCumulativeRate = initialCapital > 0 ? (btcCumulativePnl / initialCapital) : 0;
+
+    return {
+      amount: btcCumulativePnl,
+      rate: btcCumulativeRate
+    };
+  };
+
+  // 计算到当前期数的做空ALT累计盈亏
+  const calculateAltCumulativePnl = (): { amount: number; rate: number } => {
+    if (!backtestResult || !periodNumber) {
+      return { amount: 0, rate: 0 };
+    }
+
+    const currentIndex = periodNumber - 1; // 转换为数组索引
+    let altCumulativePnl = 0;
+    const initialCapital = backtestResult.params.initialCapital;
+
+    // 累计到当前期数的做空ALT盈亏
+    for (let i = 0; i <= currentIndex && i < backtestResult.snapshots.length; i++) {
+      const snapshot = backtestResult.snapshots[i];
+      
+      // 累计做空持仓的盈亏
+      if (snapshot.shortPositions) {
+        snapshot.shortPositions.forEach(shortPos => {
+          altCumulativePnl += shortPos.pnl || 0;
+        });
+      }
+      
+      // 累计做空相关的卖出盈亏
+      if (snapshot.soldPositions) {
+        snapshot.soldPositions.forEach(soldPos => {
+          if (soldPos.side === 'SHORT') {
+            altCumulativePnl += soldPos.pnl || 0;
+          }
+        });
+      }
+    }
+
+    const altCumulativeRate = initialCapital > 0 ? (altCumulativePnl / initialCapital) : 0;
+
+    return {
+      amount: altCumulativePnl,
+      rate: altCumulativeRate
+    };
   };
 
   // 工具函数：格式化金额和百分比的组合显示
@@ -162,23 +240,46 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, totalPeri
     <div className="space-y-4">
       {/* 时间和期数信息 */}
       <div className="p-3 bg-gray-50 rounded-lg">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
           <div>
-            <span className="text-gray-500">时间: </span>
+            <span className="text-gray-500">第 {periodNumber || 1} 期: </span>
             <span className="font-medium">{formatPeriodTime(snapshot.timestamp)}</span>
           </div>
           <div>
-            <span className="text-gray-500">期数: </span>
-            <span className="font-medium">
-              第 {periodNumber || 1} 期
+            <span className="text-gray-500">总盈亏: </span>
+            <span className={`font-medium ${getPnlColor(snapshot.totalPnl)}`}>
+              {formatAmountWithPercent(snapshot.totalPnl || 0, (snapshot.totalPnlPercent || 0) * 100)}
             </span>
           </div>
           <div>
-            <span className="text-gray-500">BTC价格: </span>
-            <span className="font-medium">${snapshot.btcPrice.toLocaleString()}</span>
-            <span className={`font-medium ${snapshot.btcPriceChange24h >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              ({snapshot.btcPriceChange24h >= 0 ? "+" : ""}{snapshot.btcPriceChange24h.toFixed(2)}%)
-            </span>
+            <span className="text-gray-500">BTC累计盈亏: </span>
+            {backtestResult ? (
+              (() => {
+                const btcPnl = calculateBtcCumulativePnl();
+                return (
+                  <span className={`font-medium ${getPnlColor(btcPnl.amount)}`}>
+                    {formatAmountWithPercent(btcPnl.amount, btcPnl.rate * 100)}
+                  </span>
+                );
+              })()
+            ) : (
+              <span className="font-medium text-gray-400">--</span>
+            )}
+          </div>
+          <div>
+            <span className="text-gray-500">做空ALT累计盈亏: </span>
+            {backtestResult ? (
+              (() => {
+                const altPnl = calculateAltCumulativePnl();
+                return (
+                  <span className={`font-medium ${getPnlColor(altPnl.amount)}`}>
+                    {formatAmountWithPercent(altPnl.amount, altPnl.rate * 100)}
+                  </span>
+                );
+              })()
+            ) : (
+              <span className="font-medium text-gray-400">--</span>
+            )}
           </div>
           <div>
             <span className="text-gray-500">做空标的数: </span>
@@ -188,16 +289,10 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, totalPeri
       </div>
 
       {/* 基本信息 */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 gap-4 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 mb-4">
         <div className="text-center">
           <p className="text-sm text-gray-500">总资产</p>
           <p className="text-lg font-semibold">{formatCurrency(snapshot.totalValue)}</p>
-        </div>
-        <div className="text-center">
-          <p className="text-sm text-gray-500">累计盈亏</p>
-          <p className={`text-lg font-semibold ${getPnlColor(snapshot.totalPnl)}`}>
-            {formatAmountWithPercent(snapshot.totalPnl || 0, (snapshot.totalPnlPercent || 0) * 100)}
-          </p>
         </div>
         <div className="text-center">
           <p className="text-sm text-gray-500">当期盈亏</p>
@@ -212,15 +307,15 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, totalPeri
           </p>
         </div>
         <div className="text-center">
-          <p className="text-sm text-gray-500">累计手续费</p>
-          <p className={`text-lg font-semibold ${getPnlColor(snapshot.accumulatedTradingFee || 0)}`}>
-            {formatCurrency(snapshot.accumulatedTradingFee || 0)}
-          </p>
-        </div>
-        <div className="text-center">
           <p className="text-sm text-gray-500">当期资金费</p>
           <p className={`text-lg font-semibold ${getPnlColor(snapshot.totalFundingFee || 0)}`}>
             {formatCurrency(snapshot.totalFundingFee || 0)}
+          </p>
+        </div>
+        <div className="text-center">
+          <p className="text-sm text-gray-500">累计手续费</p>
+          <p className={`text-lg font-semibold ${getPnlColor(snapshot.accumulatedTradingFee || 0)}`}>
+            {formatCurrency(snapshot.accumulatedTradingFee || 0)}
           </p>
         </div>
         <div className="text-center">
