@@ -181,7 +181,7 @@ export default function BTCDOM2Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, [validateParameters]);
+  }, [validateParameters, params]);
 
   // 按钮点击处理
   const handleRunBacktest = () => {
@@ -192,7 +192,7 @@ export default function BTCDOM2Dashboard() {
   useEffect(() => {
     // 只在页面首次加载时执行回测
     runBacktest();
-  }, []); // 空依赖数组，只在组件挂载时执行一次
+  }, [runBacktest]); // 添加runBacktest作为依赖
 
   // 参数更新处理
   const handleParamChange = (key: keyof BTCDOM2StrategyParams, value: string | number | boolean) => {
@@ -1332,7 +1332,6 @@ export default function BTCDOM2Dashboard() {
                           snapshot={currentSnapshot} 
                           params={params}
                           periodNumber={selectedSnapshotIndex === -1 ? backtestResult.snapshots.length : selectedSnapshotIndex + 1}
-                          totalPeriods={backtestResult.snapshots.length}
                           backtestResult={backtestResult}
                         />
                       )}

@@ -31,11 +31,11 @@ interface BTCDOM2PositionTableProps {
   snapshot: StrategySnapshot;
   params?: BTCDOM2StrategyParams;
   periodNumber?: number; // 期数
-  totalPeriods?: number; // 总期数
+  // totalPeriods removed as it's not used
   backtestResult?: BTCDOM2BacktestResult; // 完整的回测结果，用于获取盈亏分解数据
 }
 
-export function BTCDOM2PositionTable({ snapshot, params, periodNumber, totalPeriods, backtestResult }: BTCDOM2PositionTableProps) {
+export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestResult }: BTCDOM2PositionTableProps) {
   if (!snapshot) {
     return (
       <div className="text-center py-8">
@@ -180,7 +180,7 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, totalPeri
   };
 
   // 计算资金费率盈亏
-  const calculateFundingPnL = (position: any): number => {
+  const calculateFundingPnL = (position: {side: string, fundingFee?: number}): number => {
     if (position.side !== 'SHORT') {
       return 0;
     }
@@ -189,12 +189,12 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, totalPeri
   };
 
   // 获取当前资金费率（累加所有历史资金费率）
-  const getCurrentFundingRate = (position: any): number => {
+  const getCurrentFundingRate = (position: {fundingRateHistory?: Array<{fundingRate?: number}>}): number => {
     if (!position.fundingRateHistory || position.fundingRateHistory.length === 0) {
       return 0;
     }
     // 累加所有资金费率
-    return position.fundingRateHistory.reduce((sum: number, funding: any) => {
+    return position.fundingRateHistory.reduce((sum: number, funding: {fundingRate?: number}) => {
       return sum + (funding.fundingRate || 0);
     }, 0);
   };
@@ -240,7 +240,7 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, totalPeri
     <div className="space-y-4">
       {/* 时间和期数信息 */}
       <div className="p-3 bg-gray-50 rounded-lg">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
           <div>
             <span className="text-gray-500">第 {periodNumber || 1} 期: </span>
             <span className="font-medium">{formatPeriodTime(snapshot.timestamp)}</span>
@@ -282,14 +282,22 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, totalPeri
             )}
           </div>
           <div>
-            <span className="text-gray-500">做空标的数: </span>
-            <span className="font-medium">{snapshot.shortPositions.length}</span>
+            <span className="text-gray-500">累计手续费: </span>
+            <span className={`font-medium ${getPnlColor(snapshot.accumulatedTradingFee || 0)}`}>
+              {formatCurrency(snapshot.accumulatedTradingFee || 0)}
+            </span>
+          </div>
+          <div>
+            <span className="text-gray-500">累计资金费: </span>
+            <span className={`font-medium ${getPnlColor(snapshot.accumulatedFundingFee || 0)}`}>
+              {formatCurrency(snapshot.accumulatedFundingFee || 0)}
+            </span>
           </div>
         </div>
       </div>
 
       {/* 基本信息 */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-4">
         <div className="text-center">
           <p className="text-sm text-gray-500">总资产</p>
           <p className="text-lg font-semibold">{formatCurrency(snapshot.totalValue)}</p>
@@ -313,16 +321,8 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, totalPeri
           </p>
         </div>
         <div className="text-center">
-          <p className="text-sm text-gray-500">累计手续费</p>
-          <p className={`text-lg font-semibold ${getPnlColor(snapshot.accumulatedTradingFee || 0)}`}>
-            {formatCurrency(snapshot.accumulatedTradingFee || 0)}
-          </p>
-        </div>
-        <div className="text-center">
-          <p className="text-sm text-gray-500">累计资金费</p>
-          <p className={`text-lg font-semibold ${getPnlColor(snapshot.accumulatedFundingFee || 0)}`}>
-            {formatCurrency(snapshot.accumulatedFundingFee || 0)}
-          </p>
+          <p className="text-sm text-gray-500">做空标的数</p>
+          <p className="text-lg font-semibold">{snapshot.shortPositions.length}</p>
         </div>
       </div>
 
