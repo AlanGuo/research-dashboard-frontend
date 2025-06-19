@@ -813,7 +813,15 @@ export default function BTCDOM2Dashboard() {
                             {(params.maxSinglePositionRatio * 100).toFixed(0)}%
                           </span>
                         </div>
-                        <p className="text-xs text-blue-700">防止单一币种持仓过于集中的风险控制</p>
+                        <div className="space-y-1">
+                          <p className="text-xs text-blue-700">防止单一币种持仓过于集中的风险控制</p>
+                          <p className="text-xs text-blue-600 font-medium">
+                            📍 此百分比是相对于分配给ALT做空的资金({((1 - params.btcRatio) * 100).toFixed(0)}%)而言
+                          </p>
+                          <p className="text-xs text-gray-600">
+                            例如：ALT做空资金 {params.initialCapital > 0 ? `$${(params.initialCapital * (1 - params.btcRatio)).toLocaleString()}` : 'X'}，单币种最多 {params.initialCapital > 0 ? `$${(params.initialCapital * (1 - params.btcRatio) * params.maxSinglePositionRatio).toLocaleString()}` : `X × ${(params.maxSinglePositionRatio * 100).toFixed(0)}%`}
+                          </p>
+                        </div>
                       </div>
                     )}
 

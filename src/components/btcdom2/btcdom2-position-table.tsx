@@ -346,7 +346,7 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
             <TableBody>
               {allPositions.map((position, index) => (
                 <TableRow key={`${position.symbol}-${index}`}>
-                  <TableCell className="font-medium">
+                  <TableCell className="font-medium w-28">
                     <div className="flex items-center gap-2">
                       {position.type === 'BTC' ? (
                         <div className="w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
@@ -357,7 +357,7 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                           {position.symbol.slice(0, 2)}
                         </div>
                       )}
-                      <span>{position.symbol}</span>
+                      <span className="truncate">{position.symbol}</span>
                       {position.isNewPosition && !position.isSoldOut && (
                         <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700 border-blue-200">
                           <Plus className="w-3 h-3 mr-1" />
