@@ -29,9 +29,11 @@ import {
 interface BTCDOM2PositionTableProps {
   snapshot: StrategySnapshot;
   params?: BTCDOM2StrategyParams;
+  periodNumber?: number; // 期数
+  totalPeriods?: number; // 总期数
 }
 
-export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableProps) {
+export function BTCDOM2PositionTable({ snapshot, params, periodNumber, totalPeriods }: BTCDOM2PositionTableProps) {
   if (!snapshot) {
     return (
       <div className="text-center py-8">
@@ -45,6 +47,7 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
   // 格式化货币
   const formatCurrency = (amount: number | null) => {
     const validAmount = amount ?? 0;
+    let formattedValue;
 
     // 对于小于 1 美元的价格，使用更多小数位
     if (Math.abs(validAmount) < 1) {
@@ -52,21 +55,50 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
       const str = validAmount.toString();
       if (str.includes('e')) {
         // 处理科学计数法
-        return `$${validAmount.toFixed(8).replace(/\.?0+$/, '')}`;
+        formattedValue = `$${validAmount.toFixed(8).replace(/\.?0+$/, '')}`;
       } else {
         // 显示最多8位小数，但去除尾随的0
-        return `$${validAmount.toFixed(8).replace(/\.?0+$/, '')}`;
+        formattedValue = `$${validAmount.toFixed(8).replace(/\.?0+$/, '')}`;
       }
+    } else {
+      // 对于大于等于 1 美元的价格，使用标准格式
+      formattedValue = `$${validAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     }
 
-    // 对于大于等于 1 美元的价格，使用标准格式
-    return `$${validAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    // 为正数添加 + 号
+    return validAmount > 0 ? `+${formattedValue}` : formattedValue;
   };
 
   // 格式化百分比
   const formatPercent = (value: number | null) => {
     const validValue = value ?? 0;
-    return `${(validValue * 100).toFixed(2)}%`;
+    const percentValue = (validValue * 100).toFixed(2);
+    return validValue > 0 ? `+${percentValue}%` : `${percentValue}%`;
+  };
+
+  // 工具函数：格式化时间（使用UTC+0时区）
+  const formatPeriodTime = (timestamp: string): string => {
+    const date = new Date(timestamp);
+    return `${date.getUTCFullYear()}-${(date.getUTCMonth() + 1).toString().padStart(2, '0')}-${date.getUTCDate().toString().padStart(2, '0')} ${date.getUTCHours().toString().padStart(2, '0')}:${date.getUTCMinutes().toString().padStart(2, '0')}`;
+  };
+
+  // 工具函数：格式化金额和百分比的组合显示
+  const formatAmountWithPercent = (amount: number, percent: number) => {
+    // 对于金额，负号放在$符号前面
+    let formattedAmount;
+    if (amount > 0) {
+      formattedAmount = `+$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    } else if (amount < 0) {
+      formattedAmount = `-$${Math.abs(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    } else {
+      formattedAmount = `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+
+    // 对于百分比，如果是正数加+号，负数保持-号
+    const percentSign = percent > 0 ? '+' : '';
+    const formattedPercent = `${percentSign}${percent.toFixed(2)}%`;
+
+    return `${formattedAmount} (${formattedPercent})`;
   };
 
   // 计算资金费率盈亏
@@ -128,34 +160,49 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
 
   return (
     <div className="space-y-4">
+      {/* 时间和期数信息 */}
+      <div className="p-3 bg-gray-50 rounded-lg">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+          <div>
+            <span className="text-gray-500">时间: </span>
+            <span className="font-medium">{formatPeriodTime(snapshot.timestamp)}</span>
+          </div>
+          <div>
+            <span className="text-gray-500">期数: </span>
+            <span className="font-medium">
+              第 {periodNumber || 1} 期
+            </span>
+          </div>
+          <div>
+            <span className="text-gray-500">BTC价格: </span>
+            <span className="font-medium">${snapshot.btcPrice.toLocaleString()}</span>
+            <span className={`font-medium ${snapshot.btcPriceChange24h >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              ({snapshot.btcPriceChange24h >= 0 ? "+" : ""}{snapshot.btcPriceChange24h.toFixed(2)}%)
+            </span>
+          </div>
+          <div>
+            <span className="text-gray-500">做空标的数: </span>
+            <span className="font-medium">{snapshot.shortPositions.length}</span>
+          </div>
+        </div>
+      </div>
+
       {/* 基本信息 */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-4 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7 gap-4 mb-4">
         <div className="text-center">
           <p className="text-sm text-gray-500">总资产</p>
           <p className="text-lg font-semibold">{formatCurrency(snapshot.totalValue)}</p>
         </div>
         <div className="text-center">
-          <p className="text-sm text-gray-500">总盈亏</p>
+          <p className="text-sm text-gray-500">累计盈亏</p>
           <p className={`text-lg font-semibold ${getPnlColor(snapshot.totalPnl)}`}>
-            {formatCurrency(snapshot.totalPnl)}
-          </p>
-        </div>
-        <div className="text-center">
-          <p className="text-sm text-gray-500">总收益率</p>
-          <p className={`text-lg font-semibold ${getPnlColor(snapshot.totalPnl)}`}>
-            {formatPercent(snapshot.totalPnlPercent)}
+            {formatAmountWithPercent(snapshot.totalPnl || 0, (snapshot.totalPnlPercent || 0) * 100)}
           </p>
         </div>
         <div className="text-center">
           <p className="text-sm text-gray-500">当期盈亏</p>
           <p className={`text-lg font-semibold ${getPnlColor(snapshot.periodPnl || 0)}`}>
-            {formatCurrency(snapshot.periodPnl || 0)}
-          </p>
-        </div>
-        <div className="text-center">
-          <p className="text-sm text-gray-500">当期收益率</p>
-          <p className={`text-lg font-semibold ${getPnlColor(snapshot.periodPnlPercent || 0)}`}>
-            {formatPercent(snapshot.periodPnlPercent || 0)}
+            {formatAmountWithPercent(snapshot.periodPnl || 0, (snapshot.periodPnlPercent || 0) * 100)}
           </p>
         </div>
         <div className="text-center">
@@ -326,7 +373,7 @@ export function BTCDOM2PositionTable({ snapshot, params }: BTCDOM2PositionTableP
                         <div className="text-xs text-gray-500">
                           {position.isNewPosition ? (
                             <div className="flex flex-col">
-                              <span className="text-blue-600">新开仓</span>
+                              <span>新开仓</span>
                               {getCurrentFundingRate(position) !== 0 && (
                                 <span className={getCurrentFundingRate(position) > 0 ? 'text-green-600' : 'text-red-600'}>
                                   费率: {(getCurrentFundingRate(position) * 100).toFixed(4)}%

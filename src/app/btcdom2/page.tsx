@@ -68,6 +68,15 @@ export default function BTCDOM2Dashboard() {
     return 'text-gray-600';
   };
 
+  // 工具函数：格式化百分比
+  const formatPercent = (percent: number) => {
+    // 对于百分比，如果是正数加+号，负数保持-号
+    const percentSign = percent > 0 ? '+' : '';
+    const formattedPercent = `${percentSign}${percent.toFixed(2)}%`;
+
+    return `${formattedPercent}`;
+  };
+
   // 工具函数：格式化金额和百分比的组合显示
   const formatAmountWithPercent = (amount: number, percent: number) => {
     // 对于金额，负号放在$符号前面
@@ -984,8 +993,7 @@ export default function BTCDOM2Dashboard() {
                   <div className="flex justify-between items-center py-1">
                     <span className="text-xs text-gray-500">年化收益率</span>
                     <span className={`text-sm font-semibold ${getValueColorClass(backtestResult.performance.annualizedReturn)}`}>
-                      {formatAmountWithPercent(
-                        params.initialCapital * backtestResult.performance.annualizedReturn,
+                      {formatPercent(
                         backtestResult.performance.annualizedReturn * 100
                       )}
                     </span>
@@ -1318,39 +1326,14 @@ export default function BTCDOM2Dashboard() {
                         </div>
                       </div>
 
-                      {/* 当前选中时间点的详细信息 */}
-                      {currentSnapshot && (
-                        <div className="p-3 bg-gray-50 rounded-lg">
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                            <div>
-                              <span className="text-gray-500">时间: </span>
-                              <span className="font-medium">{formatPeriodTime(currentSnapshot.timestamp)}</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">期数: </span>
-                              <span className="font-medium">
-                                第 {selectedSnapshotIndex === -1 ? backtestResult.snapshots.length : selectedSnapshotIndex + 1} 期
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">BTC价格: </span>
-                              <span className="font-medium">${currentSnapshot.btcPrice.toLocaleString()}</span>
-                              <span className={`font-medium ${currentSnapshot.btcPriceChange24h >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                ({currentSnapshot.btcPriceChange24h >= 0 ? "+" : ""}{currentSnapshot.btcPriceChange24h.toFixed(2)}%)
-                              </span>
-                            </div>
-
-                            <div>
-                              <span className="text-gray-500">做空标的数: </span>
-                              <span className="font-medium">{currentSnapshot.shortPositions.length}</span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
                       {/* 持仓表格 */}
                       {currentSnapshot && (
-                        <BTCDOM2PositionTable snapshot={currentSnapshot} params={params} />
+                        <BTCDOM2PositionTable 
+                          snapshot={currentSnapshot} 
+                          params={params}
+                          periodNumber={selectedSnapshotIndex === -1 ? backtestResult.snapshots.length : selectedSnapshotIndex + 1}
+                          totalPeriods={backtestResult.snapshots.length}
+                        />
                       )}
                 </CardContent>
               </Card>
