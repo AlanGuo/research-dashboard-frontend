@@ -231,18 +231,6 @@ export default function BTCDOM2Dashboard() {
       [`${type}Weight`]: weight
     };
 
-    console.log('权重调整:', {
-      type,
-      inputValue: value,
-      newWeight: weight,
-      currentWeights: {
-        priceChange: type === 'priceChange' ? weight : params.priceChangeWeight,
-        volume: type === 'volume' ? weight : params.volumeWeight,
-        volatility: type === 'volatility' ? weight : params.volatilityWeight,
-        fundingRate: type === 'fundingRate' ? weight : params.fundingRateWeight
-      }
-    });
-
     setParams(newParams);
 
     // 实时验证并更新错误状态
