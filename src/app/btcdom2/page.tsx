@@ -133,6 +133,10 @@ export default function BTCDOM2Dashboard() {
       errors.strategySelection = '至少需要选择一种策略：做多BTC或做空ALT';
     }
 
+    if (params.allocationStrategy === PositionAllocationStrategy.BY_COMPOSITE_SCORE && params.maxSinglePositionRatio < 0.01) {
+      errors.maxSinglePositionRatio = '单币种最高持仓限制不能低于1%';
+    }
+
     return errors;
   }, []);
 
@@ -208,19 +212,15 @@ export default function BTCDOM2Dashboard() {
 
   // 参数更新处理
   const handleParamChange = (key: keyof BTCDOM2StrategyParams, value: string | number | boolean) => {
-    setParams(prev => ({
-      ...prev,
+    const newParams = {
+      ...params,
       [key]: value
-    }));
+    };
+    setParams(newParams);
 
-    // 清除相关参数错误
-    if (parameterErrors[key]) {
-      setParameterErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors[key];
-        return newErrors;
-      });
-    }
+    // 实时验证并更新错误状态
+    const errors = validateParameters(newParams);
+    setParameterErrors(errors);
   };
 
   // 权重调整处理
@@ -245,14 +245,9 @@ export default function BTCDOM2Dashboard() {
 
     setParams(newParams);
 
-    // 清除权重错误
-    if (parameterErrors.weights) {
-      setParameterErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors.weights;
-        return newErrors;
-      });
-    }
+    // 实时验证并更新错误状态
+    const errors = validateParameters(newParams);
+    setParameterErrors(errors);
   };
 
   // 标准化权重 - 将所有权重按比例调整使总和为1
@@ -270,14 +265,9 @@ export default function BTCDOM2Dashboard() {
 
     setParams(normalizedParams);
     
-    // 清除权重错误
-    if (parameterErrors.weights) {
-      setParameterErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors.weights;
-        return newErrors;
-      });
-    }
+    // 实时验证并更新错误状态
+    const errors = validateParameters(normalizedParams);
+    setParameterErrors(errors);
   };
 
   // 处理时间点选择
@@ -610,7 +600,6 @@ export default function BTCDOM2Dashboard() {
                     }
                   }}
                   placeholder="选择开始日期"
-                  className={parameterErrors.dateRange ? 'border-red-500' : ''}
                 />
               </div>
 
@@ -630,11 +619,7 @@ export default function BTCDOM2Dashboard() {
                     }
                   }}
                   placeholder="选择结束日期"
-                  className={parameterErrors.dateRange ? 'border-red-500' : ''}
                 />
-                {parameterErrors.dateRange && (
-                  <p className="text-xs text-red-500">{parameterErrors.dateRange}</p>
-                )}
               </div>
 
               <div className="space-y-2">
@@ -644,11 +629,7 @@ export default function BTCDOM2Dashboard() {
                   type="number"
                   value={params.initialCapital}
                   onChange={(e) => handleParamChange('initialCapital', parseFloat(e.target.value) || 0)}
-                  className={parameterErrors.initialCapital ? 'border-red-500' : ''}
                 />
-                {parameterErrors.initialCapital && (
-                  <p className="text-xs text-red-500">{parameterErrors.initialCapital}</p>
-                )}
               </div>
 
               <div className="space-y-2">
@@ -665,9 +646,6 @@ export default function BTCDOM2Dashboard() {
                     {(params.btcRatio * 100).toFixed(0)}%
                   </span>
                 </div>
-                {parameterErrors.btcRatio && (
-                  <p className="text-xs text-red-500">{parameterErrors.btcRatio}</p>
-                )}
               </div>
             </div>
 
@@ -677,7 +655,7 @@ export default function BTCDOM2Dashboard() {
                 <h4 className="font-medium text-gray-900 mb-4">高级设置</h4>
 
                 {/* 权重配置区域 */}
-                <div className="space-y-4 relative">
+                <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <h5 className="text-sm font-medium text-gray-700">做空标的选择权重配置</h5>
                     <div className="flex items-center gap-3">
@@ -699,18 +677,6 @@ export default function BTCDOM2Dashboard() {
                       </Button>
                     </div>
                   </div>
-
-                  {/* 悬浮的错误提示，不影响页面布局 */}
-                  {parameterErrors.weights && (
-                    <div className="absolute top-full left-0 right-0 z-10 mt-2 animate-in slide-in-from-top-2 duration-200">
-                      <div className="bg-red-50 border border-red-200 rounded-md p-3 shadow-lg">
-                        <p className="text-sm text-red-600 flex items-center gap-2">
-                          <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                          {parameterErrors.weights}
-                        </p>
-                      </div>
-                    </div>
-                  )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-3">
@@ -787,7 +753,7 @@ export default function BTCDOM2Dashboard() {
                 <div className="space-y-4">
                   <h5 className="text-sm font-medium text-gray-700">其他配置</h5>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-3 relative">
+                    <div className="space-y-3">
                       <Label htmlFor="maxShortPositions" className="text-sm font-medium">最多做空标的数量</Label>
                       <Input
                         id="maxShortPositions"
@@ -796,23 +762,12 @@ export default function BTCDOM2Dashboard() {
                         max="50"
                         value={params.maxShortPositions}
                         onChange={(e) => handleParamChange('maxShortPositions', parseInt(e.target.value) || 0)}
-                        className={parameterErrors.maxShortPositions ? 'border-red-500' : ''}
                         placeholder="请输入1-50的数字"
                       />
-                      {parameterErrors.maxShortPositions && (
-                        <div className="absolute top-full left-0 right-0 z-10 mt-1 animate-in slide-in-from-top-2 duration-200">
-                          <div className="bg-red-50 border border-red-200 rounded-md p-2 shadow-lg">
-                            <p className="text-xs text-red-600 flex items-center gap-2">
-                              <AlertCircle className="w-3 h-3 flex-shrink-0" />
-                              {parameterErrors.maxShortPositions}
-                            </p>
-                          </div>
-                        </div>
-                      )}
                       <p className="text-xs text-gray-500">控制同时做空的币种数量</p>
                     </div>
 
-                    <div className="space-y-3 relative">
+                    <div className="space-y-3">
                       <Label htmlFor="tradingFeeRate" className="text-sm font-medium">
                         交易手续费率 <span className="text-gray-400">(按交易金额收取)</span>
                       </Label>
@@ -825,23 +780,13 @@ export default function BTCDOM2Dashboard() {
                           max="0.01"
                           value={params.tradingFeeRate}
                           onChange={(e) => handleParamChange('tradingFeeRate', parseFloat(e.target.value) || 0)}
-                          className={`flex-1 ${parameterErrors.tradingFeeRate ? 'border-red-500' : ''}`}
+                          className="flex-1"
                           placeholder="0.002"
                         />
                         <span className="text-sm font-medium w-16 text-right bg-gray-50 px-2 py-1 rounded">
                           {(params.tradingFeeRate * 100).toFixed(1)}%
                         </span>
                       </div>
-                      {parameterErrors.tradingFeeRate && (
-                        <div className="absolute top-full left-0 right-0 z-10 mt-1 animate-in slide-in-from-top-2 duration-200">
-                          <div className="bg-red-50 border border-red-200 rounded-md p-2 shadow-lg">
-                            <p className="text-xs text-red-600 flex items-center gap-2">
-                              <AlertCircle className="w-3 h-3 flex-shrink-0" />
-                              {parameterErrors.tradingFeeRate}
-                            </p>
-                          </div>
-                        </div>
-                      )}
                       <p className="text-xs text-gray-500">买入卖出时的手续费成本</p>
                     </div>
                   </div>
@@ -939,7 +884,7 @@ export default function BTCDOM2Dashboard() {
               <div className="text-center">
                 <Button
                   onClick={handleRunBacktest}
-                  disabled={loading || Math.abs((params.priceChangeWeight + params.volumeWeight + params.volatilityWeight + params.fundingRateWeight) - 1) > 0.001}
+                  disabled={loading || Object.keys(parameterErrors).length > 0}
                   className="px-8 py-2"
                   size="lg"
                 >
@@ -955,12 +900,13 @@ export default function BTCDOM2Dashboard() {
                     </>
                   )}
                 </Button>
-                {Math.abs((params.priceChangeWeight + params.volumeWeight + params.volatilityWeight + params.fundingRateWeight) - 1) > 0.001 && (
-                  <p className="text-xs text-red-500 mt-2 flex items-center justify-center gap-1">
+                {/* 显示所有参数错误 */}
+                {Object.entries(parameterErrors).map(([key, message]) => (
+                  <p key={key} className="text-xs text-red-500 mt-2 flex items-center justify-center gap-1">
                     <AlertCircle className="w-3 h-3" />
-                    权重总和必须等于100%才能执行回测
+                    {message}
                   </p>
-                )}
+                ))}
               </div>
             </div>
           </CardContent>
