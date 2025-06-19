@@ -838,7 +838,7 @@ export default function BTCDOM2Dashboard() {
                     </Select>
 
                     {params.allocationStrategy === PositionAllocationStrategy.BY_COMPOSITE_SCORE && (
-                      <div className="space-y-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="space-y-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
                         <Label className="text-sm font-medium text-blue-900">单币种最高持仓限制</Label>
                         <div className="flex items-center space-x-3">
                           <Slider
