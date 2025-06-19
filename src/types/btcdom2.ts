@@ -16,6 +16,7 @@ export interface BTCDOM2StrategyParams {
   priceChangeWeight: number;  // 跌幅权重 (0-1)
   volumeWeight: number;       // 成交量权重 (0-1)
   volatilityWeight: number;   // 波动率权重 (0-1)
+  fundingRateWeight: number;  // 资金费率权重 (0-1)
   maxShortPositions: number;  // 最多做空标的数量
   tradingFeeRate: number;     // 交易手续费率 (默认0.002 = 0.2%)
   rebalanceMode?: boolean;    // 是否启用重新平衡模式，默认true
@@ -93,6 +94,7 @@ export interface ShortCandidate {
   priceChangeScore: number;   // 跌幅分数
   volumeScore: number;        // 成交量分数
   volatilityScore: number;    // 波动率分数
+  fundingRateScore: number;   // 资金费率分数
   totalScore: number;         // 综合分数
   
   eligible: boolean;          // 是否符合做空条件

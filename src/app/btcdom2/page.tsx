@@ -31,9 +31,10 @@ export default function BTCDOM2Dashboard() {
     endDate: '2025-06-18',
     initialCapital: 10000,
     btcRatio: 0.5,
-    priceChangeWeight: 0.5,
-    volumeWeight: 0.3,
-    volatilityWeight: 0.2,
+    priceChangeWeight: 0.4,
+    volumeWeight: 0.2,
+    volatilityWeight: 0.1,
+    fundingRateWeight: 0.3,
     maxShortPositions: 10,
     tradingFeeRate: 0.002,
     longBtc: true,
@@ -109,8 +110,9 @@ export default function BTCDOM2Dashboard() {
       errors.btcRatio = 'BTC占比必须在0-1之间';
     }
 
-    if (Math.abs(params.priceChangeWeight + params.volumeWeight + params.volatilityWeight - 1) > 0.001) {
-      errors.weights = '跌幅权重、成交量权重和波动率权重之和必须等于1';
+    const weightSum = params.priceChangeWeight + params.volumeWeight + params.volatilityWeight + params.fundingRateWeight;
+    if (Math.abs(weightSum - 1) > 0.001) {
+      errors.weights = '跌幅权重、成交量权重、波动率权重和资金费率权重之和必须等于1';
     }
 
     if (params.maxShortPositions <= 0 || params.maxShortPositions > 50) {
@@ -212,53 +214,52 @@ export default function BTCDOM2Dashboard() {
   };
 
   // 权重调整处理
-  const handleWeightChange = (type: 'priceChange' | 'volume' | 'volatility', value: number) => {
+  const handleWeightChange = (type: 'priceChange' | 'volume' | 'volatility' | 'fundingRate', value: number) => {
     const weight = value / 100;
-    let newParams: BTCDOM2StrategyParams;
-
-    if (type === 'priceChange') {
-      // 调整跌幅权重时，按比例调整其他两个权重
-      const remaining = 1 - weight;
-      const currentOtherTotal = params.volumeWeight + params.volatilityWeight;
-      newParams = {
-        ...params,
-        priceChangeWeight: weight,
-        volumeWeight: currentOtherTotal > 0 ? remaining * (params.volumeWeight / currentOtherTotal) : remaining * 0.6,
-        volatilityWeight: currentOtherTotal > 0 ? remaining * (params.volatilityWeight / currentOtherTotal) : remaining * 0.4
-      };
-    } else if (type === 'volume') {
-      // 调整成交量权重时，按比例调整其他两个权重
-      const remaining = 1 - weight;
-      const currentOtherTotal = params.priceChangeWeight + params.volatilityWeight;
-      newParams = {
-        ...params,
-        volumeWeight: weight,
-        priceChangeWeight: currentOtherTotal > 0 ? remaining * (params.priceChangeWeight / currentOtherTotal) : remaining * 0.625,
-        volatilityWeight: currentOtherTotal > 0 ? remaining * (params.volatilityWeight / currentOtherTotal) : remaining * 0.375
-      };
-    } else {
-      // 调整波动率权重时，按比例调整其他两个权重
-      const remaining = 1 - weight;
-      const currentOtherTotal = params.priceChangeWeight + params.volumeWeight;
-      newParams = {
-        ...params,
-        volatilityWeight: weight,
-        priceChangeWeight: currentOtherTotal > 0 ? remaining * (params.priceChangeWeight / currentOtherTotal) : remaining * 0.625,
-        volumeWeight: currentOtherTotal > 0 ? remaining * (params.volumeWeight / currentOtherTotal) : remaining * 0.375
-      };
-    }
+    const newParams = {
+      ...params,
+      [`${type}Weight`]: weight
+    };
 
     console.log('权重调整:', {
       type,
       inputValue: value,
-      newPriceChangeWeight: newParams.priceChangeWeight,
-      newVolumeWeight: newParams.volumeWeight,
-      newVolatilityWeight: newParams.volatilityWeight,
-      sum: newParams.priceChangeWeight + newParams.volumeWeight + newParams.volatilityWeight
+      newWeight: weight,
+      currentWeights: {
+        priceChange: type === 'priceChange' ? weight : params.priceChangeWeight,
+        volume: type === 'volume' ? weight : params.volumeWeight,
+        volatility: type === 'volatility' ? weight : params.volatilityWeight,
+        fundingRate: type === 'fundingRate' ? weight : params.fundingRateWeight
+      }
     });
 
     setParams(newParams);
 
+    // 清除权重错误
+    if (parameterErrors.weights) {
+      setParameterErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors.weights;
+        return newErrors;
+      });
+    }
+  };
+
+  // 标准化权重 - 将所有权重按比例调整使总和为1
+  const normalizeWeights = () => {
+    const currentSum = params.priceChangeWeight + params.volumeWeight + params.volatilityWeight + params.fundingRateWeight;
+    if (currentSum === 0) return; // 避免除零
+
+    const normalizedParams = {
+      ...params,
+      priceChangeWeight: params.priceChangeWeight / currentSum,
+      volumeWeight: params.volumeWeight / currentSum,
+      volatilityWeight: params.volatilityWeight / currentSum,
+      fundingRateWeight: params.fundingRateWeight / currentSum
+    };
+
+    setParams(normalizedParams);
+    
     // 清除权重错误
     if (parameterErrors.weights) {
       setParameterErrors(prev => {
@@ -662,168 +663,245 @@ export default function BTCDOM2Dashboard() {
 
             {/* 高级设置 */}
             {showAdvancedSettings && (
-              <div className="space-y-4 border-t pt-4">
-                <h4 className="font-medium text-gray-900">高级设置</h4>
+              <div className="space-y-6 border-t pt-6">
+                <h4 className="font-medium text-gray-900 mb-4">高级设置</h4>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label>跌幅权重</Label>
-                    <div className="flex items-center space-x-2">
-                      <Slider
-                        value={[params.priceChangeWeight * 100]}
-                        onValueChange={(value) => handleWeightChange('priceChange', value[0])}
-                        max={100}
-                        step={1}
-                        className="flex-1"
-                      />
-                      <span className="text-sm font-medium w-12 text-right">
-                        {(params.priceChangeWeight * 100).toFixed(0)}%
+                {/* 权重配置区域 */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h5 className="text-sm font-medium text-gray-700">做空标的选择权重配置</h5>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-gray-600">
+                        权重总和: {((params.priceChangeWeight + params.volumeWeight + params.volatilityWeight + params.fundingRateWeight) * 100).toFixed(0)}%
                       </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={normalizeWeights}
+                        className="text-xs px-3 py-1"
+                      >
+                        标准化权重
+                      </Button>
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label>成交量权重</Label>
-                    <div className="flex items-center space-x-2">
-                      <Slider
-                        value={[params.volumeWeight * 100]}
-                        onValueChange={(value) => handleWeightChange('volume', value[0])}
-                        max={100}
-                        step={1}
-                        className="flex-1"
-                      />
-                      <span className="text-sm font-medium w-12 text-right">
-                        {(params.volumeWeight * 100).toFixed(0)}%
-                      </span>
+                  {parameterErrors.weights && (
+                    <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                      <p className="text-sm text-red-600">{parameterErrors.weights}</p>
                     </div>
-                  </div>
+                  )}
 
-                  <div className="space-y-2">
-                    <Label>波动率权重</Label>
-                    <div className="flex items-center space-x-2">
-                      <Slider
-                        value={[params.volatilityWeight * 100]}
-                        onValueChange={(value) => handleWeightChange('volatility', value[0])}
-                        max={100}
-                        step={1}
-                        className="flex-1"
-                      />
-                      <span className="text-sm font-medium w-12 text-right">
-                        {(params.volatilityWeight * 100).toFixed(0)}%
-                      </span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-3">
+                      <Label className="text-sm font-medium">跌幅权重</Label>
+                      <div className="flex items-center space-x-3">
+                        <Slider
+                          value={[params.priceChangeWeight * 100]}
+                          onValueChange={(value) => handleWeightChange('priceChange', value[0])}
+                          max={100}
+                          step={10}
+                          className="flex-1"
+                        />
+                        <span className="text-sm font-medium w-12 text-right bg-gray-50 px-2 py-1 rounded">
+                          {(params.priceChangeWeight * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500">评估价格下跌程度，跌幅越大分数越高</p>
                     </div>
-                    {parameterErrors.weights && (
-                      <p className="text-xs text-red-500">{parameterErrors.weights}</p>
-                    )}
+
+                    <div className="space-y-3">
+                      <Label className="text-sm font-medium">成交量权重</Label>
+                      <div className="flex items-center space-x-3">
+                        <Slider
+                          value={[params.volumeWeight * 100]}
+                          onValueChange={(value) => handleWeightChange('volume', value[0])}
+                          max={100}
+                          step={10}
+                          className="flex-1"
+                        />
+                        <span className="text-sm font-medium w-12 text-right bg-gray-50 px-2 py-1 rounded">
+                          {(params.volumeWeight * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500">评估交易活跃度和流动性，确保足够流动性</p>
+                    </div>
+
+                    <div className="space-y-3">
+                      <Label className="text-sm font-medium">波动率权重</Label>
+                      <div className="flex items-center space-x-3">
+                        <Slider
+                          value={[params.volatilityWeight * 100]}
+                          onValueChange={(value) => handleWeightChange('volatility', value[0])}
+                          max={100}
+                          step={10}
+                          className="flex-1"
+                        />
+                        <span className="text-sm font-medium w-12 text-right bg-gray-50 px-2 py-1 rounded">
+                          {(params.volatilityWeight * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500">评估价格波动稳定性，适中波动率得分最高</p>
+                    </div>
+
+                    <div className="space-y-3">
+                      <Label className="text-sm font-medium">资金费率权重</Label>
+                      <div className="flex items-center space-x-3">
+                        <Slider
+                          value={[params.fundingRateWeight * 100]}
+                          onValueChange={(value) => handleWeightChange('fundingRate', value[0])}
+                          max={100}
+                          step={10}
+                          className="flex-1"
+                        />
+                        <span className="text-sm font-medium w-12 text-right bg-gray-50 px-2 py-1 rounded">
+                          {(params.fundingRateWeight * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500">评估做空成本和收益，正费率对做空有利</p>
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="maxShortPositions">最多做空标的数量</Label>
-                    <Input
-                      id="maxShortPositions"
-                      type="number"
-                      value={params.maxShortPositions}
-                      onChange={(e) => handleParamChange('maxShortPositions', parseInt(e.target.value) || 0)}
-                      className={parameterErrors.maxShortPositions ? 'border-red-500' : ''}
-                    />
-                    {parameterErrors.maxShortPositions && (
-                      <p className="text-xs text-red-500">{parameterErrors.maxShortPositions}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="tradingFeeRate">交易手续费率<span className="text-xs text-gray-500">(按交易金额收取)</span></Label>
-                    <div className="flex items-center space-x-2">
+                {/* 其他配置 */}
+                <div className="space-y-4">
+                  <h5 className="text-sm font-medium text-gray-700">其他配置</h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-3">
+                      <Label htmlFor="maxShortPositions" className="text-sm font-medium">最多做空标的数量</Label>
                       <Input
-                        id="tradingFeeRate"
+                        id="maxShortPositions"
                         type="number"
-                        step="0.001"
-                        min="0"
-                        max="0.01"
-                        value={params.tradingFeeRate}
-                        onChange={(e) => handleParamChange('tradingFeeRate', parseFloat(e.target.value) || 0)}
-                        className={`flex-1 ${parameterErrors.tradingFeeRate ? 'border-red-500' : ''}`}
+                        min="1"
+                        max="50"
+                        value={params.maxShortPositions}
+                        onChange={(e) => handleParamChange('maxShortPositions', parseInt(e.target.value) || 0)}
+                        className={parameterErrors.maxShortPositions ? 'border-red-500' : ''}
+                        placeholder="请输入1-50的数字"
                       />
-                      <span className="text-sm font-medium w-12 text-right">
-                        {(params.tradingFeeRate * 100).toFixed(1)}%
-                      </span>
+                      {parameterErrors.maxShortPositions && (
+                        <p className="text-xs text-red-500">{parameterErrors.maxShortPositions}</p>
+                      )}
+                      <p className="text-xs text-gray-500">控制同时做空的币种数量</p>
                     </div>
-                    {parameterErrors.tradingFeeRate && (
-                      <p className="text-xs text-red-500">{parameterErrors.tradingFeeRate}</p>
-                    )}
+
+                    <div className="space-y-3">
+                      <Label htmlFor="tradingFeeRate" className="text-sm font-medium">
+                        交易手续费率 <span className="text-gray-400">(按交易金额收取)</span>
+                      </Label>
+                      <div className="flex items-center space-x-3">
+                        <Input
+                          id="tradingFeeRate"
+                          type="number"
+                          step="0.001"
+                          min="0"
+                          max="0.01"
+                          value={params.tradingFeeRate}
+                          onChange={(e) => handleParamChange('tradingFeeRate', parseFloat(e.target.value) || 0)}
+                          className={`flex-1 ${parameterErrors.tradingFeeRate ? 'border-red-500' : ''}`}
+                          placeholder="0.002"
+                        />
+                        <span className="text-sm font-medium w-16 text-right bg-gray-50 px-2 py-1 rounded">
+                          {(params.tradingFeeRate * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                      {parameterErrors.tradingFeeRate && (
+                        <p className="text-xs text-red-500">{parameterErrors.tradingFeeRate}</p>
+                      )}
+                      <p className="text-xs text-gray-500">买入卖出时的手续费成本</p>
+                    </div>
                   </div>
                 </div>
 
                 {/* 仓位配置策略 */}
                 <div className="space-y-4">
-                  <div className="flex items-center space-x-4 gap-4">
-                    <div className="flex-1">
-                      <Select
-                        value={params.allocationStrategy}
-                        onValueChange={(value) => handleParamChange('allocationStrategy', value as PositionAllocationStrategy)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={PositionAllocationStrategy.BY_VOLUME}>按成交量比例分配</SelectItem>
-                          <SelectItem value={PositionAllocationStrategy.BY_COMPOSITE_SCORE}>按综合分数分配权重</SelectItem>
-                          <SelectItem value={PositionAllocationStrategy.EQUAL_ALLOCATION}>平均分配做空资金</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  <h5 className="text-sm font-medium text-gray-700">仓位分配策略</h5>
+                  <div className="space-y-3">
+                    <Select
+                      value={params.allocationStrategy}
+                      onValueChange={(value) => handleParamChange('allocationStrategy', value as PositionAllocationStrategy)}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={PositionAllocationStrategy.BY_VOLUME}>按成交量比例分配</SelectItem>
+                        <SelectItem value={PositionAllocationStrategy.BY_COMPOSITE_SCORE}>按综合分数分配权重</SelectItem>
+                        <SelectItem value={PositionAllocationStrategy.EQUAL_ALLOCATION}>平均分配做空资金</SelectItem>
+                      </SelectContent>
+                    </Select>
 
                     {params.allocationStrategy === PositionAllocationStrategy.BY_COMPOSITE_SCORE && (
-                      <div className="flex items-center space-x-2 flex-1">
-                        <Label className="text-sm whitespace-nowrap">最高单币种持仓限制</Label>
-                        <Slider
-                          value={[params.maxSinglePositionRatio * 100]}
-                          onValueChange={(value) => handleParamChange('maxSinglePositionRatio', value[0] / 100)}
-                          max={50}
-                          step={1}
-                          className="flex-1"
-                        />
-                        <span className="text-sm font-medium w-12 text-right">
-                          {(params.maxSinglePositionRatio * 100).toFixed(0)}%
-                        </span>
+                      <div className="space-y-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        <Label className="text-sm font-medium text-blue-900">单币种最高持仓限制</Label>
+                        <div className="flex items-center space-x-3">
+                          <Slider
+                            value={[params.maxSinglePositionRatio * 100]}
+                            onValueChange={(value) => handleParamChange('maxSinglePositionRatio', value[0] / 100)}
+                            max={50}
+                            step={1}
+                            className="flex-1"
+                          />
+                          <span className="text-sm font-medium w-12 text-right bg-white px-2 py-1 rounded">
+                            {(params.maxSinglePositionRatio * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                        <p className="text-xs text-blue-700">防止单一币种持仓过于集中的风险控制</p>
                       </div>
                     )}
+
+                    <div className="text-xs text-gray-500 space-y-1">
+                      <p><strong>按成交量比例分配：</strong>根据币种成交量大小按比例分配资金</p>
+                      <p><strong>按综合分数分配：</strong>根据跌幅、成交量、波动率、资金费率的综合评分分配资金</p>
+                      <p><strong>平均分配：</strong>每个选中的币种分配相等的资金</p>
+                    </div>
                   </div>
                 </div>
 
                 {/* 策略选择 */}
-                <div className="border-t pt-4">
-                  <h5 className="font-medium text-gray-900 mb-3">策略选择</h5>
+                <div className="space-y-4">
+                  <h5 className="text-sm font-medium text-gray-700">策略组合选择</h5>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-3 p-4 border rounded-lg hover:bg-gray-50 transition-colors">
                       <Checkbox
                         id="longBtc"
                         checked={params.longBtc}
                         onCheckedChange={(checked) => handleParamChange('longBtc', checked as boolean)}
                       />
-                      <Label htmlFor="longBtc" className="text-sm font-medium leading-none">
-                        做多BTC
-                      </Label>
+                      <div className="flex-1">
+                        <Label htmlFor="longBtc" className="font-medium cursor-pointer flex items-center gap-2">
+                          <Bitcoin className="w-4 h-4 text-orange-500" />
+                          做多 BTC
+                        </Label>
+                        <p className="text-xs text-gray-500 mt-1">配置资金的{(params.btcRatio * 100).toFixed(0)}%用于做多BTC</p>
+                      </div>
                     </div>
-                    <div className="flex items-center space-x-2">
+
+                    <div className="flex items-center space-x-3 p-4 border rounded-lg hover:bg-gray-50 transition-colors">
                       <Checkbox
                         id="shortAlt"
                         checked={params.shortAlt}
                         onCheckedChange={(checked) => handleParamChange('shortAlt', checked as boolean)}
                       />
-                      <Label htmlFor="shortAlt" className="text-sm font-medium leading-none">
-                        做空ALT
-                      </Label>
+                      <div className="flex-1">
+                        <Label htmlFor="shortAlt" className="font-medium cursor-pointer flex items-center gap-2">
+                          <ArrowDown className="w-4 h-4 text-red-500" />
+                          做空 ALT币
+                        </Label>
+                        <p className="text-xs text-gray-500 mt-1">配置资金的{((1 - params.btcRatio) * 100).toFixed(0)}%用于做空山寨币</p>
+                      </div>
                     </div>
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">
-                    根据BTC占比分配资金，可单独选择做多BTC或做空ALT，或两者同时进行
-                  </p>
+
                   {parameterErrors.strategySelection && (
-                    <p className="text-xs text-red-500 mt-1">{parameterErrors.strategySelection}</p>
+                    <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                      <p className="text-sm text-red-600">{parameterErrors.strategySelection}</p>
+                    </div>
                   )}
+
+                  <div className="text-xs text-gray-500 bg-blue-50 p-3 rounded-lg">
+                    <p><strong>策略说明：</strong>BTCDOM策略通过同时做多BTC和做空ALT币来获得BTC相对强势时的超额收益。</p>
+                  </div>
                 </div>
               </div>
             )}

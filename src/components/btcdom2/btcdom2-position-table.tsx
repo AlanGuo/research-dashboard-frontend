@@ -604,6 +604,7 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                     <TableHead className="text-right">跌幅分数</TableHead>
                     <TableHead className="text-right">成交量分数</TableHead>
                     <TableHead className="text-right">波动率分数</TableHead>
+                    <TableHead className="text-right">资金费率分数</TableHead>
                     <TableHead className="text-right">综合分数</TableHead>
                     <TableHead>状态</TableHead>
                     <TableHead>原因</TableHead>
@@ -620,6 +621,7 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                       <TableCell className="text-right">{(candidate.priceChangeScore ?? 0).toFixed(3)}</TableCell>
                       <TableCell className="text-right">{(candidate.volumeScore ?? 0).toFixed(3)}</TableCell>
                       <TableCell className="text-right">{(candidate.volatilityScore ?? 0).toFixed(3)}</TableCell>
+                      <TableCell className="text-right">{(candidate.fundingRateScore ?? 0.5).toFixed(3)}</TableCell>
                       <TableCell className="text-right font-medium">{(candidate.totalScore ?? 0).toFixed(3)}</TableCell>
                       <TableCell>
                         <Badge variant={candidate.eligible ? "default" : "secondary"} className="text-xs">

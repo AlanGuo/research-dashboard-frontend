@@ -144,7 +144,8 @@ class BTCDOM2StrategyEngine {
     //   priceChangeWeight: this.params.priceChangeWeight,
     //   volumeWeight: this.params.volumeWeight,
     //   volatilityWeight: this.params.volatilityWeight,
-    //   sum: this.params.priceChangeWeight + this.params.volumeWeight + this.params.volatilityWeight
+    //   fundingRateWeight: this.params.fundingRateWeight,
+    //   sum: this.params.priceChangeWeight + this.params.volumeWeight + this.params.volatilityWeight + this.params.fundingRateWeight
     // });
 
     // 分析波动率范围
@@ -173,6 +174,22 @@ class BTCDOM2StrategyEngine {
     // 预先计算跌幅分数的最大值，避免除零问题
     const maxAbsoluteDecline = Math.max(...filteredRankings.map(r => Math.abs(Math.min(r.priceChange24h, 0))));
     const hasDeclines = maxAbsoluteDecline > 0;
+
+    // 分析资金费率范围用于评分计算
+    const allFundingRates: number[] = [];
+    filteredRankings.forEach(item => {
+      if (item.fundingRateHistory && item.fundingRateHistory.length > 0) {
+        // 获取最近的资金费率
+        const latestFunding = item.fundingRateHistory[item.fundingRateHistory.length - 1];
+        if (latestFunding && !isNaN(latestFunding.fundingRate) && isFinite(latestFunding.fundingRate)) {
+          allFundingRates.push(latestFunding.fundingRate);
+        }
+      }
+    });
+
+    const minFundingRate = allFundingRates.length > 0 ? Math.min(...allFundingRates) : 0;
+    const maxFundingRate = allFundingRates.length > 0 ? Math.max(...allFundingRates) : 0;
+    const fundingRateRange = maxFundingRate - minFundingRate;
 
     filteredRankings.forEach((item) => {
       const priceChange = isNaN(item.priceChange24h) ? 0 : item.priceChange24h;
@@ -204,14 +221,32 @@ class BTCDOM2StrategyEngine {
         volatilityScore = 1; // 如果波动率标准差为0，给所有币种相同分数
       }
 
+      // 计算资金费率分数：资金费率为正对空头有利，正的越多越有利
+      // -2% 得0分，2% 得满分，线性映射到0-1分数
+      let fundingRateScore = 0;
+      if (item.fundingRateHistory && item.fundingRateHistory.length > 0) {
+        const latestFunding = item.fundingRateHistory[item.fundingRateHistory.length - 1];
+        if (latestFunding && !isNaN(latestFunding.fundingRate) && isFinite(latestFunding.fundingRate)) {
+          const fundingRatePercent = latestFunding.fundingRate * 100; // 转换为百分比
+          // -2% -> 0分, 2% -> 1分, 线性映射
+          fundingRateScore = Math.max(0, Math.min(1, (fundingRatePercent + 2) / 4));
+        } else {
+          fundingRateScore = 0.5; // 无效资金费率，给中等分数
+        }
+      } else {
+        fundingRateScore = 0.5; // 无资金费率历史，给中等分数
+      }
+
       // 计算综合分数，确保所有分数都是有效数字
       const validPriceChangeScore = isNaN(priceChangeScore) ? 0 : priceChangeScore;
       const validVolumeScore = isNaN(volumeScore) ? 0 : volumeScore;
       const validVolatilityScore = isNaN(volatilityScore) ? 0 : volatilityScore;
+      const validFundingRateScore = isNaN(fundingRateScore) ? 0.5 : fundingRateScore;
 
       const totalScore = validPriceChangeScore * this.params.priceChangeWeight +
                         validVolumeScore * this.params.volumeWeight +
-                        validVolatilityScore * this.params.volatilityWeight;
+                        validVolatilityScore * this.params.volatilityWeight +
+                        validFundingRateScore * this.params.fundingRateWeight;
 
       // 判断是否符合做空条件
       let eligible = true;
@@ -222,10 +257,10 @@ class BTCDOM2StrategyEngine {
         reason = `涨跌幅 ${priceChange.toFixed(2)}% 不低于BTC ${btcPriceChange.toFixed(2)}%`;
       } else {
         const finalTotalScore = isNaN(totalScore) ? 0 : totalScore;
-        reason = `综合评分: ${finalTotalScore.toFixed(3)} (跌幅: ${validPriceChangeScore.toFixed(3)}, 成交量: ${validVolumeScore.toFixed(3)}, 波动率: ${validVolatilityScore.toFixed(3)})`;
+        reason = `综合评分: ${finalTotalScore.toFixed(3)} (跌幅: ${validPriceChangeScore.toFixed(3)}, 成交量: ${validVolumeScore.toFixed(3)}, 波动率: ${validVolatilityScore.toFixed(3)}, 资金费率: ${validFundingRateScore.toFixed(3)})`;
 
         // 调试信息：记录分数异常的情况
-        if (isNaN(totalScore) || isNaN(validPriceChangeScore) || isNaN(validVolumeScore) || isNaN(validVolatilityScore)) {
+        if (isNaN(totalScore) || isNaN(validPriceChangeScore) || isNaN(validVolumeScore) || isNaN(validVolatilityScore) || isNaN(validFundingRateScore)) {
           console.warn(`[DEBUG] 分数异常 ${item.symbol}:`, {
             priceChange: item.priceChange24h,
             volatility: item.volatility24h,
@@ -233,11 +268,14 @@ class BTCDOM2StrategyEngine {
             priceChangeScore: validPriceChangeScore,
             volumeScore: validVolumeScore,
             volatilityScore: validVolatilityScore,
+            fundingRateScore: validFundingRateScore,
             totalScore: finalTotalScore,
             maxAbsoluteDecline,
             hasDeclines,
             idealVolatility,
-            volatilitySpread
+            volatilitySpread,
+            fundingRateRange,
+            latestFundingRate: item.fundingRateHistory && item.fundingRateHistory.length > 0 ? item.fundingRateHistory[item.fundingRateHistory.length - 1]?.fundingRate : 'N/A'
           });
         }
       }
@@ -255,6 +293,7 @@ class BTCDOM2StrategyEngine {
         priceChangeScore: validPriceChangeScore,
         volumeScore: validVolumeScore,
         volatilityScore: validVolatilityScore,
+        fundingRateScore: validFundingRateScore,
         totalScore: isNaN(totalScore) ? 0 : totalScore,
         eligible,
         reason
@@ -1130,7 +1169,10 @@ export async function POST(request: NextRequest) {
       ...rawParams,
       longBtc: rawParams.longBtc !== undefined ? rawParams.longBtc : true,
       shortAlt: rawParams.shortAlt !== undefined ? rawParams.shortAlt : true,
-      priceChangeWeight: rawParams.priceChangeWeight !== undefined ? rawParams.priceChangeWeight : 0.5,
+      priceChangeWeight: rawParams.priceChangeWeight !== undefined ? rawParams.priceChangeWeight : 0.4,
+      volumeWeight: rawParams.volumeWeight !== undefined ? rawParams.volumeWeight : 0.2,
+      volatilityWeight: rawParams.volatilityWeight !== undefined ? rawParams.volatilityWeight : 0.1,
+      fundingRateWeight: rawParams.fundingRateWeight !== undefined ? rawParams.fundingRateWeight : 0.3,
       allocationStrategy: rawParams.allocationStrategy !== undefined ? rawParams.allocationStrategy : PositionAllocationStrategy.BY_VOLUME,
       maxSinglePositionRatio: rawParams.maxSinglePositionRatio !== undefined ? rawParams.maxSinglePositionRatio : 0.25,
     };
@@ -1152,11 +1194,11 @@ export async function POST(request: NextRequest) {
     }
 
     // 验证权重之和
-    const totalWeight = params.priceChangeWeight + params.volumeWeight + params.volatilityWeight;
+    const totalWeight = params.priceChangeWeight + params.volumeWeight + params.volatilityWeight + params.fundingRateWeight;
     if (Math.abs(totalWeight - 1) > 0.001) {
       return NextResponse.json({
         success: false,
-        error: '跌幅权重、成交量权重和波动率权重之和必须等于1'
+        error: '跌幅权重、成交量权重、波动率权重和资金费率权重之和必须等于1'
       }, { status: 400 });
     }
 
