@@ -202,6 +202,7 @@ export default function BTCDOM2Dashboard() {
   // 页面首次加载时自动执行一次回测
   useEffect(() => {
     runBacktest();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 空依赖数组，只在组件挂载时执行一次
 
   // 检查权重是否有效

@@ -140,33 +140,12 @@ class BTCDOM2StrategyEngine {
     const filteredRankings = rankings.filter(item => item.symbol !== 'BTCUSDT');
     const totalCandidates = filteredRankings.length;
 
-    // 添加权重调试日志
-    // console.log('权重参数:', {
-    //   priceChangeWeight: this.params.priceChangeWeight,
-    //   volumeWeight: this.params.volumeWeight,
-    //   volatilityWeight: this.params.volatilityWeight,
-    //   fundingRateWeight: this.params.fundingRateWeight,
-    //   sum: this.params.priceChangeWeight + this.params.volumeWeight + this.params.volatilityWeight + this.params.fundingRateWeight
-    // });
-
     // 分析波动率范围
     // 获取所有波动率数据用于正态分布计算
     const allVolatilities = filteredRankings.map(item => item.volatility24h).filter(vol => !isNaN(vol) && isFinite(vol));
     const minVolatility = allVolatilities.length > 0 ? Math.min(...allVolatilities) : 0;
     const maxVolatility = allVolatilities.length > 0 ? Math.max(...allVolatilities) : 0;
     const avgVolatility = allVolatilities.length > 0 ? allVolatilities.reduce((sum, vol) => sum + vol, 0) / allVolatilities.length : 0;
-
-    // console.log('波动率统计:', {
-    //   btcPriceChange,
-    //   min: minVolatility.toFixed(4),
-    //   max: maxVolatility.toFixed(4),
-    //   avg: avgVolatility.toFixed(4),
-    //   range: (maxVolatility - minVolatility).toFixed(4),
-    //   count: allVolatilities.length,
-    //   eligibleCount: filteredRankings.filter(r => r.priceChange24h < btcPriceChange).length,
-    //   samples: allVolatilities.slice(0, 5).map(v => v.toFixed(4)), // 显示前5个样本
-    //   invalidVolatilities: filteredRankings.filter(r => isNaN(r.volatility24h) || !isFinite(r.volatility24h)).map(r => ({ symbol: r.symbol, volatility: r.volatility24h }))
-    // });
 
     // 动态设置理想波动率中心值为平均值，标准差为范围的1/4
     const idealVolatility = avgVolatility;
@@ -988,7 +967,7 @@ function calculatePerformanceMetrics(
 
   // 计算最多和最少资金费期
   const fundingFeeInfo: Array<{ fundingFee: number; timestamp: string; period: number }> = [];
-  
+
   for (let i = 0; i < snapshots.length; i++) {
     const snapshot = snapshots[i];
     const currentFundingFee = snapshot.totalFundingFee || 0;
@@ -1011,7 +990,7 @@ function calculatePerformanceMetrics(
 
   // 计算盈亏金额分解
   const totalPnlAmount = finalSnapshot.totalPnl;
-  
+
   // BTC做多盈亏金额 - 累计所有期间的BTC盈亏变化
   let btcPnlAmount = 0;
   if (params.longBtc) {
@@ -1029,7 +1008,7 @@ function calculatePerformanceMetrics(
       }
     }
   }
-  
+
   // ALT做空盈亏金额 - 累计所有期间的ALT做空盈亏变化
   let altPnlAmount = 0;
   if (params.shortAlt) {
@@ -1049,11 +1028,11 @@ function calculatePerformanceMetrics(
       }
     }
   }
-  
+
   // 手续费和资金费率金额
   const tradingFeeAmount = finalSnapshot.accumulatedTradingFee;
   const fundingFeeAmount = finalSnapshot.accumulatedFundingFee || 0;
-  
+
   // 计算各项收益率（基于初始资本）
   const totalPnlRate = totalPnlAmount / params.initialCapital;
   const btcPnlRate = btcPnlAmount / params.initialCapital;
@@ -1064,7 +1043,7 @@ function calculatePerformanceMetrics(
   // 验证盈亏分解是否正确
   const calculatedTotal = btcPnlAmount + altPnlAmount + tradingFeeAmount + fundingFeeAmount;
   const difference = Math.abs(totalPnlAmount - calculatedTotal);
-  
+
   if (difference > 0.01) { // 如果差额大于1分钱，输出调试信息
     console.warn(`盈亏分解验证失败:`, {
       totalPnlAmount: totalPnlAmount.toFixed(2),
