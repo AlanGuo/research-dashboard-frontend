@@ -190,11 +190,10 @@ export default function BTCDOM2Dashboard() {
     runBacktest(params);
   };
 
-  // 页面加载时自动执行一次回测
+  // 页面首次加载时自动执行一次回测
   useEffect(() => {
-    // 只在页面首次加载时执行回测
     runBacktest();
-  }, [runBacktest]); // 添加runBacktest作为依赖
+  }, []); // 空依赖数组，只在组件挂载时执行一次
 
   // 参数更新处理
   const handleParamChange = (key: keyof BTCDOM2StrategyParams, value: string | number | boolean) => {
@@ -667,11 +666,15 @@ export default function BTCDOM2Dashboard() {
                 <h4 className="font-medium text-gray-900 mb-4">高级设置</h4>
 
                 {/* 权重配置区域 */}
-                <div className="space-y-4">
+                <div className="space-y-4 relative">
                   <div className="flex items-center justify-between">
                     <h5 className="text-sm font-medium text-gray-700">做空标的选择权重配置</h5>
                     <div className="flex items-center gap-3">
-                      <span className="text-sm text-gray-600">
+                      <span className={`text-sm transition-colors duration-200 ${
+                        Math.abs((params.priceChangeWeight + params.volumeWeight + params.volatilityWeight + params.fundingRateWeight) - 1) > 0.001 
+                          ? 'text-red-600 font-semibold' 
+                          : 'text-gray-600'
+                      }`}>
                         权重总和: {((params.priceChangeWeight + params.volumeWeight + params.volatilityWeight + params.fundingRateWeight) * 100).toFixed(0)}%
                       </span>
                       <Button
@@ -686,9 +689,15 @@ export default function BTCDOM2Dashboard() {
                     </div>
                   </div>
 
+                  {/* 悬浮的错误提示，不影响页面布局 */}
                   {parameterErrors.weights && (
-                    <div className="bg-red-50 border border-red-200 rounded-md p-3">
-                      <p className="text-sm text-red-600">{parameterErrors.weights}</p>
+                    <div className="absolute top-full left-0 right-0 z-10 mt-2 animate-in slide-in-from-top-2 duration-200">
+                      <div className="bg-red-50 border border-red-200 rounded-md p-3 shadow-lg">
+                        <p className="text-sm text-red-600 flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                          {parameterErrors.weights}
+                        </p>
+                      </div>
                     </div>
                   )}
 
@@ -767,7 +776,7 @@ export default function BTCDOM2Dashboard() {
                 <div className="space-y-4">
                   <h5 className="text-sm font-medium text-gray-700">其他配置</h5>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-3">
+                    <div className="space-y-3 relative">
                       <Label htmlFor="maxShortPositions" className="text-sm font-medium">最多做空标的数量</Label>
                       <Input
                         id="maxShortPositions"
@@ -780,12 +789,19 @@ export default function BTCDOM2Dashboard() {
                         placeholder="请输入1-50的数字"
                       />
                       {parameterErrors.maxShortPositions && (
-                        <p className="text-xs text-red-500">{parameterErrors.maxShortPositions}</p>
+                        <div className="absolute top-full left-0 right-0 z-10 mt-1 animate-in slide-in-from-top-2 duration-200">
+                          <div className="bg-red-50 border border-red-200 rounded-md p-2 shadow-lg">
+                            <p className="text-xs text-red-600 flex items-center gap-2">
+                              <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                              {parameterErrors.maxShortPositions}
+                            </p>
+                          </div>
+                        </div>
                       )}
                       <p className="text-xs text-gray-500">控制同时做空的币种数量</p>
                     </div>
 
-                    <div className="space-y-3">
+                    <div className="space-y-3 relative">
                       <Label htmlFor="tradingFeeRate" className="text-sm font-medium">
                         交易手续费率 <span className="text-gray-400">(按交易金额收取)</span>
                       </Label>
@@ -806,7 +822,14 @@ export default function BTCDOM2Dashboard() {
                         </span>
                       </div>
                       {parameterErrors.tradingFeeRate && (
-                        <p className="text-xs text-red-500">{parameterErrors.tradingFeeRate}</p>
+                        <div className="absolute top-full left-0 right-0 z-10 mt-1 animate-in slide-in-from-top-2 duration-200">
+                          <div className="bg-red-50 border border-red-200 rounded-md p-2 shadow-lg">
+                            <p className="text-xs text-red-600 flex items-center gap-2">
+                              <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                              {parameterErrors.tradingFeeRate}
+                            </p>
+                          </div>
+                        </div>
                       )}
                       <p className="text-xs text-gray-500">买入卖出时的手续费成本</p>
                     </div>
@@ -859,7 +882,7 @@ export default function BTCDOM2Dashboard() {
                 </div>
 
                 {/* 策略选择 */}
-                <div className="space-y-4">
+                <div className="space-y-4 relative">
                   <h5 className="text-sm font-medium text-gray-700">策略组合选择</h5>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex items-center space-x-3 p-4 border rounded-lg hover:bg-gray-50 transition-colors">
@@ -893,9 +916,15 @@ export default function BTCDOM2Dashboard() {
                     </div>
                   </div>
 
+                  {/* 悬浮的错误提示，不影响页面布局 */}
                   {parameterErrors.strategySelection && (
-                    <div className="bg-red-50 border border-red-200 rounded-md p-3">
-                      <p className="text-sm text-red-600">{parameterErrors.strategySelection}</p>
+                    <div className="absolute top-full left-0 right-0 z-10 mt-2 animate-in slide-in-from-top-2 duration-200">
+                      <div className="bg-red-50 border border-red-200 rounded-md p-3 shadow-lg">
+                        <p className="text-sm text-red-600 flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                          {parameterErrors.strategySelection}
+                        </p>
+                      </div>
                     </div>
                   )}
 
