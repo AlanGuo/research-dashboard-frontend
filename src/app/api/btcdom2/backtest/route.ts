@@ -25,8 +25,9 @@ class BTCDOM2StrategyEngine {
   }
 
   // 计算交易手续费（返回负数，因为是扣除的费用）
-  private calculateTradingFee(amount: number): number {
-    return -(amount * this.params.tradingFeeRate);
+  private calculateTradingFee(amount: number, isSpotTrading: boolean = true): number {
+    const feeRate = isSpotTrading ? this.params.spotTradingFeeRate : this.params.futuresTradingFeeRate;
+    return -(amount * feeRate);
   }
 
   // 计算仓位分配
@@ -376,12 +377,12 @@ class BTCDOM2StrategyEngine {
           // 如果BTC仓位发生变化，计算交易手续费
           const quantityDiff = Math.abs(btcQuantity - previousBtcQuantity);
           if (quantityDiff > 0.0001) { // 避免浮点数精度问题
-            btcTradingFee = this.calculateTradingFee(quantityDiff * btcPrice);
+            btcTradingFee = this.calculateTradingFee(quantityDiff * btcPrice, true); // BTC现货交易
             totalTradingFee += btcTradingFee;
           }
         } else {
           // 第一次开仓，计算手续费
-          btcTradingFee = this.calculateTradingFee(btcAmount);
+          btcTradingFee = this.calculateTradingFee(btcAmount, true); // BTC现货交易
           totalTradingFee += btcTradingFee;
           btcIsNewPosition = true;
         }
@@ -420,7 +421,7 @@ class BTCDOM2StrategyEngine {
         const validPrevPrice = previousSnapshot.btcPosition.currentPrice ?? btcPrice;
 
         const sellAmount = validPrevQuantity * btcPrice;
-        const sellFee = this.calculateTradingFee(sellAmount);
+        const sellFee = this.calculateTradingFee(sellAmount, true); // BTC现货交易
         totalTradingFee += sellFee;
 
         const finalPnl = validPrevQuantity * (btcPrice - validPrevPrice);
@@ -463,7 +464,7 @@ class BTCDOM2StrategyEngine {
             const currentPrice = rankingItem?.futurePriceAtTime || rankingItem?.priceAtTime || prevPosition.currentPrice;
             const priceChange24h = rankingItem?.priceChange24h || 0;
             const sellAmount = prevPosition.quantity * currentPrice;
-            const sellFee = this.calculateTradingFee(sellAmount);
+            const sellFee = this.calculateTradingFee(sellAmount, false); // ALT期货交易
             totalTradingFee += sellFee;
 
             // 计算卖出时的最终盈亏
@@ -564,18 +565,18 @@ class BTCDOM2StrategyEngine {
             const validPrevQuantity = previousShortPosition.quantity ?? 0;
             const quantityDiff = Math.abs(quantity - validPrevQuantity);
             if (quantityDiff > 0.0001) {
-              tradingFee = this.calculateTradingFee(quantityDiff * price);
+              tradingFee = this.calculateTradingFee(quantityDiff * price, false); // ALT期货交易
               totalTradingFee += tradingFee;
             }
           } else {
             // 新增持仓
-            tradingFee = this.calculateTradingFee(allocation);
+            tradingFee = this.calculateTradingFee(allocation, false); // ALT期货交易
             totalTradingFee += tradingFee;
             isNewPosition = true;
           }
         } else {
           // 第一期，所有持仓都是新增的
-          tradingFee = this.calculateTradingFee(allocation);
+          tradingFee = this.calculateTradingFee(allocation, false); // ALT期货交易
           totalTradingFee += tradingFee;
           isNewPosition = true;
         }
@@ -653,7 +654,7 @@ class BTCDOM2StrategyEngine {
           const currentPrice = rankingItem?.futurePriceAtTime || rankingItem?.priceAtTime || prevPosition.currentPrice;
           const priceChange24h = rankingItem?.priceChange24h || 0;
           const sellAmount = prevPosition.quantity * currentPrice;
-          const sellFee = this.calculateTradingFee(sellAmount);
+          const sellFee = this.calculateTradingFee(sellAmount, false); // ALT期货交易
           totalTradingFee += sellFee;
 
           // 计算卖出时的最终盈亏
@@ -711,7 +712,7 @@ class BTCDOM2StrategyEngine {
         const validPrevPrice = previousSnapshot.btcPosition.currentPrice ?? btcPrice;
 
         const sellAmount = validPrevQuantity * btcPrice;
-        const sellFee = this.calculateTradingFee(sellAmount);
+        const sellFee = this.calculateTradingFee(sellAmount, true); // BTC现货交易
         totalTradingFee += sellFee;
 
         const finalPnl = validPrevQuantity * (btcPrice - validPrevPrice);
@@ -751,7 +752,7 @@ class BTCDOM2StrategyEngine {
         let btcTradingFee = 0;
         const quantityDiff = Math.abs(btcQuantity - validPrevBtcQuantity);
         if (quantityDiff > 0.0001) {
-          btcTradingFee = this.calculateTradingFee(quantityDiff * btcPrice);
+          btcTradingFee = this.calculateTradingFee(quantityDiff * btcPrice, true); // BTC现货交易
           totalTradingFee += btcTradingFee;
         }
 
@@ -1203,8 +1204,11 @@ export async function POST(request: NextRequest) {
     }
 
     // 设置默认手续费率
-    if (params.tradingFeeRate === undefined) {
-      params.tradingFeeRate = 0.002;
+    if (params.spotTradingFeeRate === undefined) {
+      params.spotTradingFeeRate = 0.0008; // 0.08%
+    }
+    if (params.futuresTradingFeeRate === undefined) {
+      params.futuresTradingFeeRate = 0.0002; // 0.02%
     }
 
     // 调用后端API获取数据

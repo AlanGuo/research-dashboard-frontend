@@ -36,11 +36,12 @@ export default function BTCDOM2Dashboard() {
     volatilityWeight: 0.1,
     fundingRateWeight: 0.3,
     maxShortPositions: 10,
-    tradingFeeRate: 0.002,
+    spotTradingFeeRate: 0.0008, // 0.08% 现货手续费
+    futuresTradingFeeRate: 0.0002, // 0.02% 期货手续费
     longBtc: true,
     shortAlt: true,
     allocationStrategy: PositionAllocationStrategy.BY_VOLUME,
-    maxSinglePositionRatio: 0.25
+    maxSinglePositionRatio: 0.2
   });
 
   // 数据状态
@@ -119,8 +120,12 @@ export default function BTCDOM2Dashboard() {
       errors.maxShortPositions = '做空标的数量必须在1-50之间';
     }
 
-    if (params.tradingFeeRate < 0 || params.tradingFeeRate > 0.01) {
-      errors.tradingFeeRate = '交易手续费率必须在0-1%之间';
+    if (params.spotTradingFeeRate < 0 || params.spotTradingFeeRate > 0.01) {
+      errors.spotTradingFeeRate = '现货交易手续费率必须在0-1%之间';
+    }
+
+    if (params.futuresTradingFeeRate < 0 || params.futuresTradingFeeRate > 0.01) {
+      errors.futuresTradingFeeRate = '期货交易手续费率必须在0-1%之间';
     }
 
     const startDate = new Date(params.startDate);
@@ -740,6 +745,63 @@ export default function BTCDOM2Dashboard() {
                 {/* 其他配置 */}
                 <div className="space-y-4">
                   <h5 className="text-sm font-medium text-gray-700">其他配置</h5>
+                  
+                  {/* 手续费配置区域 */}
+                  <div className="space-y-3 p-4 rounded-lg border">
+                    <Label className="text-sm font-medium text-gray-700">交易手续费率配置</Label>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* 现货手续费 */}
+                      <div className="space-y-2">
+                        <Label htmlFor="spotTradingFeeRate" className="text-xs font-medium text-blue-700">
+                          现货手续费率 <span className="text-gray-400">(BTC交易使用)</span>
+                        </Label>
+                        <div className="flex items-center space-x-3">
+                          <Input
+                            id="spotTradingFeeRate"
+                            type="number"
+                            step="0.0001"
+                            min="0"
+                            max="0.01"
+                            value={params.spotTradingFeeRate}
+                            onChange={(e) => handleParamChange('spotTradingFeeRate', parseFloat(e.target.value) || 0)}
+                            className="flex-1"
+                            placeholder="0.0008"
+                          />
+                          <span className="text-xs font-medium w-16 text-right bg-blue-50 px-2 py-1 rounded">
+                            {(params.spotTradingFeeRate * 100).toFixed(2)}%
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 期货手续费 */}
+                      <div className="space-y-2">
+                        <Label htmlFor="futuresTradingFeeRate" className="text-xs font-medium text-red-700">
+                          期货手续费率 <span className="text-gray-400">(做空ALT使用)</span>
+                        </Label>
+                        <div className="flex items-center space-x-3">
+                          <Input
+                            id="futuresTradingFeeRate"
+                            type="number"
+                            step="0.0001"
+                            min="0"
+                            max="0.01"
+                            value={params.futuresTradingFeeRate}
+                            onChange={(e) => handleParamChange('futuresTradingFeeRate', parseFloat(e.target.value) || 0)}
+                            className="flex-1"
+                            placeholder="0.0002"
+                          />
+                          <span className="text-xs font-medium w-16 text-right bg-red-50 px-2 py-1 rounded">
+                            {(params.futuresTradingFeeRate * 100).toFixed(2)}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <p className="text-xs text-gray-500">现货手续费通常高于期货手续费</p>
+                  </div>
+
+                  {/* 最多做空标的数量 */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-3">
                       <Label htmlFor="maxShortPositions" className="text-sm font-medium">最多做空标的数量</Label>
@@ -753,29 +815,6 @@ export default function BTCDOM2Dashboard() {
                         placeholder="请输入1-50的数字"
                       />
                       <p className="text-xs text-gray-500">控制同时做空的币种数量</p>
-                    </div>
-
-                    <div className="space-y-3">
-                      <Label htmlFor="tradingFeeRate" className="text-sm font-medium">
-                        交易手续费率 <span className="text-gray-400">(按交易金额收取)</span>
-                      </Label>
-                      <div className="flex items-center space-x-3">
-                        <Input
-                          id="tradingFeeRate"
-                          type="number"
-                          step="0.001"
-                          min="0"
-                          max="0.01"
-                          value={params.tradingFeeRate}
-                          onChange={(e) => handleParamChange('tradingFeeRate', parseFloat(e.target.value) || 0)}
-                          className="flex-1"
-                          placeholder="0.002"
-                        />
-                        <span className="text-sm font-medium w-16 text-right bg-gray-50 px-2 py-1 rounded">
-                          {(params.tradingFeeRate * 100).toFixed(1)}%
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-500">买入卖出时的手续费成本</p>
                     </div>
                   </div>
                 </div>
@@ -865,10 +904,6 @@ export default function BTCDOM2Dashboard() {
                         <p className="text-xs text-gray-500 mt-1">配置资金的{((1 - params.btcRatio) * 100).toFixed(0)}%用于做空山寨币</p>
                       </div>
                     </div>
-                  </div>
-
-                  <div className="text-xs text-gray-500 bg-blue-50 p-3 rounded-lg">
-                    <p><strong>策略说明：</strong>BTCDOM策略通过同时做多BTC和做空ALT币来获得BTC相对强势时的超额收益。</p>
                   </div>
                 </div>
               </div>

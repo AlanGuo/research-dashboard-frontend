@@ -18,7 +18,8 @@ export interface BTCDOM2StrategyParams {
   volatilityWeight: number;   // 波动率权重 (0-1)
   fundingRateWeight: number;  // 资金费率权重 (0-1)
   maxShortPositions: number;  // 最多做空标的数量
-  tradingFeeRate: number;     // 交易手续费率 (默认0.002 = 0.2%)
+  spotTradingFeeRate: number; // 现货交易手续费率 (默认0.0008 = 0.08%)
+  futuresTradingFeeRate: number; // 期货交易手续费率 (默认0.0002 = 0.02%)
   rebalanceMode?: boolean;    // 是否启用重新平衡模式，默认true
   longBtc: boolean;           // 是否做多BTC (默认true)
   shortAlt: boolean;          // 是否做空ALT (默认true)
