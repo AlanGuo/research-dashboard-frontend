@@ -814,7 +814,6 @@ export default function BTCDOM2Dashboard() {
                           </span>
                         </div>
                         <div className="space-y-1">
-                          <p className="text-xs text-blue-700">防止单一币种持仓过于集中的风险控制</p>
                           <p className="text-xs text-blue-600 font-medium">
                             📍 此百分比是相对于分配给ALT做空的资金({((1 - params.btcRatio) * 100).toFixed(0)}%)而言
                           </p>
