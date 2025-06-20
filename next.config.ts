@@ -12,12 +12,10 @@ const nextConfig: NextConfig = {
   // Performance optimizations
   compress: true, // Enable gzip compression
   
-  // API routes optimizations
-  experimental: {
-    serverComponentsExternalPackages: ['mongoose']
-  },
+  // API routes optimizations - updated to use the new option name
+  serverExternalPackages: ['mongoose'],
   
-  // Headers for better caching and compression
+  // Headers for better caching (gzip compression is handled automatically by compress: true)
   async headers() {
     return [
       {
@@ -26,10 +24,6 @@ const nextConfig: NextConfig = {
           {
             key: 'Cache-Control',
             value: 'public, max-age=0, must-revalidate'
-          },
-          {
-            key: 'Content-Encoding',
-            value: 'gzip'
           }
         ]
       }
