@@ -7,7 +7,34 @@ const nextConfig: NextConfig = {
   //   appDir: true
   // },
   // Ensure we're using the correct directory structure
-  distDir: '.next'
+  distDir: '.next',
+  
+  // Performance optimizations
+  compress: true, // Enable gzip compression
+  
+  // API routes optimizations
+  experimental: {
+    serverComponentsExternalPackages: ['mongoose']
+  },
+  
+  // Headers for better caching and compression
+  async headers() {
+    return [
+      {
+        source: '/api/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=0, must-revalidate'
+          },
+          {
+            key: 'Content-Encoding',
+            value: 'gzip'
+          }
+        ]
+      }
+    ];
+  }
 };
 
 export default nextConfig;
