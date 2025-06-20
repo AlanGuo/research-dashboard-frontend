@@ -143,6 +143,8 @@ export interface StrategySnapshot {
   hour: number;                      // 小时数
   btcPrice: number;                  // BTC价格
   btcPriceChange24h: number;         // BTC 24小时价格变化
+  btcdomPrice?: number;              // BTCDOM合约价格
+  btcdomPriceChange24h?: number;     // BTCDOM 24小时价格变化
   
   // 持仓信息
   btcPosition: PositionInfo | null;  // BTC现货持仓
@@ -245,6 +247,7 @@ export interface BTCDOM2ChartData {
   drawdown: number;         // 回撤
   isActive: boolean;        // 策略是否持仓
   btcPrice: number;         // BTC价格
+  btcdomPrice?: number;     // BTCDOM合约价格
 }
 
 // API响应类型

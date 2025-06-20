@@ -530,7 +530,7 @@ class BTCDOM2StrategyEngine {
     previousSnapshot: StrategySnapshot | null,
     previousData: VolumeBacktestDataPoint | null = null
   ): StrategySnapshot {
-    const { timestamp, hour, btcPrice, btcPriceChange24h, rankings, removedSymbols } = dataPoint;
+    const { timestamp, hour, btcPrice, btcPriceChange24h, btcdomPrice, btcdomPriceChange24h, rankings, removedSymbols } = dataPoint;
 
     // 筛选做空候选标的
     const selectionResult = this.selectShortCandidates(rankings, btcPriceChange24h);
@@ -1011,6 +1011,8 @@ class BTCDOM2StrategyEngine {
       hour,
       btcPrice,
       btcPriceChange24h,
+      btcdomPrice,
+      btcdomPriceChange24h,
       btcPosition,
       shortPositions,
       soldPositions,
@@ -1358,7 +1360,8 @@ function generateChartData(snapshots: StrategySnapshot[], params: BTCDOM2Strateg
       cashValue,
       drawdown: -drawdown,
       isActive: snapshot.isActive,
-      btcPrice: snapshot.btcPrice
+      btcPrice: snapshot.btcPrice,
+      btcdomPrice: snapshot.btcdomPrice
     };
   });
 }
