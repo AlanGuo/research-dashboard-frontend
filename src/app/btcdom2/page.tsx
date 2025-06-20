@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 import { Input } from '@/components/ui/input';
@@ -102,9 +102,7 @@ export default function BTCDOM2Dashboard() {
 
     return `${formattedAmount} (${formattedPercent})`;
   };
-  const [parameterErrors, setParameterErrors] = useState<Record<string, string>>({});
-
-  // 验证参数
+  // 验证参数 - 使用 useMemo 缓存验证结果
   const validateParameters = useCallback((params: BTCDOM2StrategyParams): Record<string, string> => {
     const errors: Record<string, string> = {};
 
@@ -150,11 +148,32 @@ export default function BTCDOM2Dashboard() {
     return errors;
   }, []);
 
+  // 使用 useMemo 缓存当前参数的验证结果
+  const parameterErrors = useMemo(() => {
+    return validateParameters(params);
+  }, [
+    params.initialCapital,
+    params.btcRatio,
+    params.priceChangeWeight,
+    params.volumeWeight,
+    params.volatilityWeight,
+    params.fundingRateWeight,
+    params.maxShortPositions,
+    params.spotTradingFeeRate,
+    params.futuresTradingFeeRate,
+    params.startDate,
+    params.endDate,
+    params.longBtc,
+    params.shortAlt,
+    params.allocationStrategy,
+    params.maxSinglePositionRatio,
+    validateParameters
+  ]);
+
   // 执行回测
   const runBacktest = useCallback(async (currentParams?: BTCDOM2StrategyParams) => {
     const paramsToUse = currentParams || params;
     const errors = validateParameters(paramsToUse);
-    setParameterErrors(errors);
 
     if (Object.keys(errors).length > 0) {
       return;
@@ -227,10 +246,6 @@ export default function BTCDOM2Dashboard() {
       [key]: value
     };
     setParams(newParams);
-
-    // 实时验证并更新错误状态
-    const errors = validateParameters(newParams);
-    setParameterErrors(errors);
   };
 
   // 权重调整处理
@@ -242,10 +257,6 @@ export default function BTCDOM2Dashboard() {
     };
 
     setParams(newParams);
-
-    // 实时验证并更新错误状态
-    const errors = validateParameters(newParams);
-    setParameterErrors(errors);
   };
 
   // 标准化权重 - 将所有权重按比例调整使总和为1
@@ -262,10 +273,6 @@ export default function BTCDOM2Dashboard() {
     };
 
     setParams(normalizedParams);
-
-    // 实时验证并更新错误状态
-    const errors = validateParameters(normalizedParams);
-    setParameterErrors(errors);
   };
 
   // 处理优化完成
@@ -301,10 +308,6 @@ export default function BTCDOM2Dashboard() {
     };
 
     setParams(newParams);
-
-    // 验证新参数
-    const errors = validateParameters(newParams);
-    setParameterErrors(errors);
 
     // 提示用户参数已更新
     console.log('参数已更新，建议重新执行回测查看效果');
