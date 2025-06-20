@@ -27,6 +27,9 @@ import { BTCDOM2PositionTable } from '@/components/btcdom2/btcdom2-position-tabl
 import { AlertCircle, Play, Settings, TrendingUp, TrendingDown, Clock, Loader2, Eye, Info, Bitcoin, ArrowDown, Zap } from 'lucide-react';
 
 export default function BTCDOM2Dashboard() {
+  // 常量定义
+  const REBALANCE_HOURS = 8; // 8小时再平衡周期
+
   // 策略参数状态
   const [params, setParams] = useState<BTCDOM2StrategyParams>({
     startDate: '2025-01-01',
@@ -53,7 +56,6 @@ export default function BTCDOM2Dashboard() {
   const [selectedSnapshotIndex, setSelectedSnapshotIndex] = useState<number>(-1); // -1 表示最新
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [granularityHours, setGranularityHours] = useState<number>(8);
 
   // UI状态
   const [showAdvancedSettings, setShowAdvancedSettings] = useState<boolean>(false);
@@ -185,7 +187,6 @@ export default function BTCDOM2Dashboard() {
         const latestSnapshot = markNewPositionsWithData(result.data.snapshots[latestIndex], latestIndex, result.data);
         setCurrentSnapshot(latestSnapshot);
         setSelectedSnapshotIndex(-1); // 重置为最新
-        setGranularityHours(result.data.summary.granularityHours);
       } else {
         throw new Error(result.error || '回测失败');
       }
@@ -466,12 +467,10 @@ export default function BTCDOM2Dashboard() {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">BTCDOM 2.0 策略回测</h1>
           <p className="text-gray-600">
             基于成交量排行榜的BTC+做空ALT策略
-            {granularityHours > 0 && (
-              <span className="ml-2 inline-flex items-center text-sm text-blue-600">
-                <Clock className="w-4 h-4 mr-1" />
-                {granularityHours}小时再平衡
-              </span>
-            )}
+            <span className="ml-2 inline-flex items-center text-sm text-blue-600">
+              <Clock className="w-4 h-4 mr-1" />
+              {REBALANCE_HOURS}小时再平衡
+            </span>
             <span className="ml-2 text-xs text-gray-500">(时间：UTC+0)</span>
           </p>
         </div>
@@ -911,8 +910,7 @@ export default function BTCDOM2Dashboard() {
                     spotTradingFeeRate: params.spotTradingFeeRate,
                     futuresTradingFeeRate: params.futuresTradingFeeRate,
                     longBtc: params.longBtc,
-                    shortAlt: params.shortAlt,
-                    granularityHours: params.granularityHours
+                    shortAlt: params.shortAlt
                   }
                 }}
                 onOptimizationComplete={handleOptimizationComplete}
