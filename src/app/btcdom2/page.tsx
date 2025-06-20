@@ -36,11 +36,11 @@ export default function BTCDOM2Dashboard() {
     endDate: '2025-06-20',
     initialCapital: 10000,
     btcRatio: 0.5,
-    priceChangeWeight: 0.4,
-    volumeWeight: 0.2,
-    volatilityWeight: 0.1,
+    priceChangeWeight: 0.3,
+    volumeWeight: 0.1,
+    volatilityWeight: 0.3,
     fundingRateWeight: 0.3,
-    maxShortPositions: 10,
+    maxShortPositions: 15,
     spotTradingFeeRate: 0.0008, // 0.08% 现货手续费
     futuresTradingFeeRate: 0.0002, // 0.02% 期货手续费
     longBtc: true,
