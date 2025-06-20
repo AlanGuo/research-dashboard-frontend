@@ -151,24 +151,7 @@ export default function BTCDOM2Dashboard() {
   // 使用 useMemo 缓存当前参数的验证结果
   const parameterErrors = useMemo(() => {
     return validateParameters(params);
-  }, [
-    params.initialCapital,
-    params.btcRatio,
-    params.priceChangeWeight,
-    params.volumeWeight,
-    params.volatilityWeight,
-    params.fundingRateWeight,
-    params.maxShortPositions,
-    params.spotTradingFeeRate,
-    params.futuresTradingFeeRate,
-    params.startDate,
-    params.endDate,
-    params.longBtc,
-    params.shortAlt,
-    params.allocationStrategy,
-    params.maxSinglePositionRatio,
-    validateParameters
-  ]);
+  }, [params, validateParameters]);
 
   // 执行回测
   const runBacktest = useCallback(async (currentParams?: BTCDOM2StrategyParams) => {
@@ -311,7 +294,7 @@ export default function BTCDOM2Dashboard() {
 
     // 提示用户参数已更新
     console.log('参数已更新，建议重新执行回测查看效果');
-  }, [params, validateParameters]);
+  }, [params]);
 
   // 处理时间点选择
   const handleSnapshotSelection = (index: number) => {
