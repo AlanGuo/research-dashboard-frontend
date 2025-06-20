@@ -90,6 +90,7 @@ export interface ShortCandidate {
   marketShare: number;        // 市场份额
   priceAtTime?: number;       // 当前时刻现货价格
   futurePriceAtTime?: number; // 期货价格（如果有）
+  futureSymbol?: string;      // 对应的期货交易对symbol（如果与现货不同）
   
   // 评分相关
   priceChangeScore: number;   // 跌幅分数
@@ -104,7 +105,8 @@ export interface ShortCandidate {
 
 // 持仓信息
 export interface PositionInfo {
-  symbol: string;
+  symbol: string;             // 原始交易对symbol（用于数据查找）
+  displaySymbol?: string;     // 显示用的交易对symbol（期货或现货）
   side: 'LONG' | 'SHORT';     // 多头或空头
   amount: number;             // 持仓金额 (USDT)
   quantity: number;           // 持仓数量

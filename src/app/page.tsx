@@ -11,12 +11,12 @@ export default function Home() {
       href: '/gli',
       icon: '📈'
     },
-    {
-      title: 'BTCDOM策略对比',
-      description: '对比自制BTCDOM策略与币安BTCDOM合约的表现',
-      href: '/btcdom-comparison',
-      icon: '₿'
-    },
+    // {
+    //   title: 'BTCDOM策略对比',
+    //   description: '对比自制BTCDOM策略与币安BTCDOM合约的表现',
+    //   href: '/btcdom-comparison',
+    //   icon: '₿'
+    // },
     {
       title: 'BTCDOM2.0',
       description: '基于成交量排行榜和波动率的动态做空策略',

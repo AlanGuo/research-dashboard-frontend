@@ -354,10 +354,10 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                         </div>
                       ) : (
                         <div className="w-6 h-6 bg-gray-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                          {position.symbol.slice(0, 2)}
+                          {(position.displaySymbol || position.symbol).slice(0, 2)}
                         </div>
                       )}
-                      <span className="truncate">{position.symbol}</span>
+                      <span className="truncate">{position.displaySymbol || position.symbol}</span>
                       {position.isNewPosition && !position.isSoldOut && (
                         <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700 border-blue-200">
                           <Plus className="w-3 h-3 mr-1" />

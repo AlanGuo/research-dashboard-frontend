@@ -11,6 +11,8 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import OptimizationPanel from './optimization/OptimizationPanel';
+import { OptimizationResult } from './optimization/types';
 
 import {
   BTCDOM2StrategyParams,
@@ -22,13 +24,13 @@ import {
 } from '@/types/btcdom2';
 import { BTCDOM2Chart } from '@/components/btcdom2/btcdom2-chart';
 import { BTCDOM2PositionTable } from '@/components/btcdom2/btcdom2-position-table';
-import { AlertCircle, Play, Settings, TrendingUp, TrendingDown, Clock, Loader2, Eye, Info, Bitcoin, ArrowDown } from 'lucide-react';
+import { AlertCircle, Play, Settings, TrendingUp, TrendingDown, Clock, Loader2, Eye, Info, Bitcoin, ArrowDown, Zap } from 'lucide-react';
 
 export default function BTCDOM2Dashboard() {
   // 策略参数状态
   const [params, setParams] = useState<BTCDOM2StrategyParams>({
-    startDate: '2025-06-01',
-    endDate: '2025-06-18',
+    startDate: '2025-01-01',
+    endDate: '2025-06-20',
     initialCapital: 10000,
     btcRatio: 0.5,
     priceChangeWeight: 0.4,
@@ -55,6 +57,7 @@ export default function BTCDOM2Dashboard() {
 
   // UI状态
   const [showAdvancedSettings, setShowAdvancedSettings] = useState<boolean>(false);
+  const [showOptimization, setShowOptimization] = useState<boolean>(false);
 
   // 工具函数：格式化时间（使用UTC+0时区）
   const formatPeriodTime = (timestamp: string): string => {
@@ -258,11 +261,53 @@ export default function BTCDOM2Dashboard() {
     };
 
     setParams(normalizedParams);
-    
+
     // 实时验证并更新错误状态
     const errors = validateParameters(normalizedParams);
     setParameterErrors(errors);
   };
+
+  // 处理优化完成
+  const handleOptimizationComplete = useCallback((results: OptimizationResult[]) => {
+    console.log('优化完成，共找到', results.length, '个结果');
+    if (results.length > 0) {
+      console.log('最优结果:', results[0]);
+    }
+  }, []);
+
+  // 处理应用最优参数
+  const handleBestParametersFound = useCallback((bestParams: {
+    priceChangeWeight: number;
+    volumeWeight: number;
+    volatilityWeight: number;
+    fundingRateWeight: number;
+    maxShortPositions: number;
+    maxSinglePositionRatio: number;
+    allocationStrategy: PositionAllocationStrategy;
+  }) => {
+    console.log('应用最优参数:', bestParams);
+    
+    // 更新当前参数
+    const newParams = {
+      ...params,
+      priceChangeWeight: bestParams.priceChangeWeight,
+      volumeWeight: bestParams.volumeWeight,
+      volatilityWeight: bestParams.volatilityWeight,
+      fundingRateWeight: bestParams.fundingRateWeight,
+      maxShortPositions: bestParams.maxShortPositions,
+      maxSinglePositionRatio: bestParams.maxSinglePositionRatio,
+      allocationStrategy: bestParams.allocationStrategy
+    };
+
+    setParams(newParams);
+
+    // 验证新参数
+    const errors = validateParameters(newParams);
+    setParameterErrors(errors);
+
+    // 提示用户参数已更新
+    console.log('参数已更新，建议重新执行回测查看效果');
+  }, [params, validateParameters]);
 
   // 处理时间点选择
   const handleSnapshotSelection = (index: number) => {
@@ -278,7 +323,7 @@ export default function BTCDOM2Dashboard() {
       }
 
       // 标记新增持仓
-      const snapshotWithNewPositions = markNewPositions(selectedSnapshot, index);
+      const snapshotWithNewPositions = markNewPositionsWithData(selectedSnapshot, index, backtestResult);
       setCurrentSnapshot(snapshotWithNewPositions);
     }
   };
@@ -411,134 +456,7 @@ export default function BTCDOM2Dashboard() {
     return updatedSnapshot;
   };
 
-  // 标记新增持仓的函数
-  const markNewPositions = (currentSnapshot: StrategySnapshot, currentIndex: number): StrategySnapshot => {
-    if (!backtestResult) {
-      return currentSnapshot;
-    }
 
-    const actualIndex = currentIndex === -1 ? backtestResult.snapshots.length - 1 : currentIndex;
-
-    // 第1期（index = 0）时，所有持仓都是新增的
-    if (actualIndex === 0) {
-      return {
-        ...currentSnapshot,
-        btcPosition: currentSnapshot.btcPosition ? {
-          ...currentSnapshot.btcPosition,
-          isNewPosition: true,
-          quantityChange: { type: 'new' },
-          priceChange: { type: 'new' }
-        } : null,
-        shortPositions: currentSnapshot.shortPositions.map(pos => ({
-          ...pos,
-          isNewPosition: true,
-          quantityChange: { type: 'new' },
-          priceChange: { type: 'new' }
-        }))
-      };
-    }
-
-    // 获取前一期的快照
-    const previousSnapshot = backtestResult.snapshots[actualIndex - 1];
-
-    // 获取前一期的持仓信息
-    const previousPositions = new Map<string, PositionInfo>();
-    if (previousSnapshot.btcPosition) {
-      previousPositions.set(previousSnapshot.btcPosition.symbol, previousSnapshot.btcPosition);
-    }
-    previousSnapshot.shortPositions.forEach(pos => {
-      previousPositions.set(pos.symbol, pos);
-    });
-
-    // 计算数量变化的辅助函数
-    const getQuantityChange = (currentPos: PositionInfo) => {
-      const previousPos = previousPositions.get(currentPos.symbol);
-
-      if (!previousPos) {
-        return { type: 'new' as const };
-      }
-
-      const currentQty = currentPos.quantity;
-      const previousQty = previousPos.quantity;
-
-      // 使用相对变化百分比来判断，更精确
-      const changePercent = Math.abs((currentQty - previousQty) / previousQty) * 100;
-      const threshold = 0.01; // 0.01% 的变化阈值
-
-      if (changePercent < threshold) {
-        return {
-          type: 'same' as const,
-          previousQuantity: previousQty
-        };
-      } else if (currentQty > previousQty) {
-        return {
-          type: 'increase' as const,
-          previousQuantity: previousQty,
-          changePercent: ((currentQty - previousQty) / previousQty) * 100
-        };
-      } else {
-        return {
-          type: 'decrease' as const,
-          previousQuantity: previousQty,
-          changePercent: ((currentQty - previousQty) / previousQty) * 100
-        };
-      }
-    };
-
-    // 计算价格变化的辅助函数
-    const getPriceChange = (currentPos: PositionInfo) => {
-      const previousPos = previousPositions.get(currentPos.symbol);
-
-      if (!previousPos) {
-        return { type: 'new' as const };
-      }
-
-      const currentPrice = currentPos.currentPrice;
-      const previousPrice = previousPos.currentPrice;
-
-      // 使用相对变化百分比来判断
-      const changePercent = Math.abs((currentPrice - previousPrice) / previousPrice) * 100;
-      const threshold = 0.01; // 0.01% 的变化阈值
-
-      if (changePercent < threshold) {
-        return {
-          type: 'same' as const,
-          previousPrice: previousPrice
-        };
-      } else if (currentPrice > previousPrice) {
-        return {
-          type: 'increase' as const,
-          previousPrice: previousPrice,
-          changePercent: ((currentPrice - previousPrice) / previousPrice) * 100
-        };
-      } else {
-        return {
-          type: 'decrease' as const,
-          previousPrice: previousPrice,
-          changePercent: ((currentPrice - previousPrice) / previousPrice) * 100
-        };
-      }
-    };
-
-    // 标记新增的持仓和数量变化
-    const updatedSnapshot = {
-      ...currentSnapshot,
-      btcPosition: currentSnapshot.btcPosition ? {
-        ...currentSnapshot.btcPosition,
-        isNewPosition: !previousPositions.has(currentSnapshot.btcPosition.symbol),
-        quantityChange: getQuantityChange(currentSnapshot.btcPosition),
-        priceChange: getPriceChange(currentSnapshot.btcPosition)
-      } : null,
-      shortPositions: currentSnapshot.shortPositions.map(pos => ({
-        ...pos,
-        isNewPosition: !previousPositions.has(pos.symbol),
-        quantityChange: getQuantityChange(pos),
-        priceChange: getPriceChange(pos)
-      }))
-    };
-
-    return updatedSnapshot;
-  };
 
   return (
     <div className="container mx-auto p-6 max-w-[1920px]">
@@ -654,8 +572,8 @@ export default function BTCDOM2Dashboard() {
                     <h5 className="text-sm font-medium text-gray-700">做空标的选择权重配置</h5>
                     <div className="flex items-center gap-3">
                       <span className={`text-sm transition-colors duration-200 ${
-                        !isWeightsValid() 
-                          ? 'text-red-600 font-semibold' 
+                        !isWeightsValid()
+                          ? 'text-red-600 font-semibold'
                           : 'text-gray-600'
                       }`}>
                         权重总和: {getWeightSumPercent()}%
@@ -743,83 +661,6 @@ export default function BTCDOM2Dashboard() {
                   </div>
                 </div>
 
-                {/* 其他配置 */}
-                <div className="space-y-4">
-                  <h5 className="text-sm font-medium text-gray-700">其他配置</h5>
-                  
-                  {/* 手续费配置区域 */}
-                  <div className="space-y-3 p-4 rounded-lg border">
-                    <Label className="text-sm font-medium text-gray-700">交易手续费率配置</Label>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* 现货手续费 */}
-                      <div className="space-y-2">
-                        <Label htmlFor="spotTradingFeeRate" className="text-xs font-medium text-blue-700">
-                          现货手续费率 <span className="text-gray-400">(BTC交易使用)</span>
-                        </Label>
-                        <div className="flex items-center space-x-3">
-                          <Input
-                            id="spotTradingFeeRate"
-                            type="number"
-                            step="0.0001"
-                            min="0"
-                            max="0.01"
-                            value={params.spotTradingFeeRate}
-                            onChange={(e) => handleParamChange('spotTradingFeeRate', parseFloat(e.target.value) || 0)}
-                            className="flex-1"
-                            placeholder="0.0008"
-                          />
-                          <span className="text-xs font-medium w-16 text-right bg-blue-50 px-2 py-1 rounded">
-                            {(params.spotTradingFeeRate * 100).toFixed(2)}%
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* 期货手续费 */}
-                      <div className="space-y-2">
-                        <Label htmlFor="futuresTradingFeeRate" className="text-xs font-medium text-red-700">
-                          期货手续费率 <span className="text-gray-400">(做空ALT使用)</span>
-                        </Label>
-                        <div className="flex items-center space-x-3">
-                          <Input
-                            id="futuresTradingFeeRate"
-                            type="number"
-                            step="0.0001"
-                            min="0"
-                            max="0.01"
-                            value={params.futuresTradingFeeRate}
-                            onChange={(e) => handleParamChange('futuresTradingFeeRate', parseFloat(e.target.value) || 0)}
-                            className="flex-1"
-                            placeholder="0.0002"
-                          />
-                          <span className="text-xs font-medium w-16 text-right bg-red-50 px-2 py-1 rounded">
-                            {(params.futuresTradingFeeRate * 100).toFixed(2)}%
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <p className="text-xs text-gray-500">现货手续费通常高于期货手续费</p>
-                  </div>
-
-                  {/* 最多做空标的数量 */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-3">
-                      <Label htmlFor="maxShortPositions" className="text-sm font-medium">最多做空标的数量</Label>
-                      <Input
-                        id="maxShortPositions"
-                        type="number"
-                        min="1"
-                        max="50"
-                        value={params.maxShortPositions}
-                        onChange={(e) => handleParamChange('maxShortPositions', parseInt(e.target.value) || 0)}
-                        placeholder="请输入1-50的数字"
-                      />
-                      <p className="text-xs text-gray-500">控制同时做空的币种数量</p>
-                    </div>
-                  </div>
-                </div>
-
                 {/* 仓位配置策略 */}
                 <div className="space-y-4">
                   <h5 className="text-sm font-medium text-gray-700">仓位分配策略</h5>
@@ -885,6 +726,84 @@ export default function BTCDOM2Dashboard() {
                   </div>
                 </div>
 
+                {/* 最多做空标的数量 */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <Label htmlFor="maxShortPositions" className="text-sm font-medium">最多做空标的数量</Label>
+                    <Input
+                      id="maxShortPositions"
+                      type="number"
+                      min="1"
+                      max="50"
+                      value={params.maxShortPositions}
+                      onChange={(e) => handleParamChange('maxShortPositions', parseInt(e.target.value) || 0)}
+                      placeholder="请输入1-50的数字"
+                    />
+                    <p className="text-xs text-gray-500">控制同时做空的币种数量</p>
+                  </div>
+                </div>
+
+                {/* 其他配置 */}
+                <div className="space-y-4">
+                  <h5 className="text-sm font-medium text-gray-700">其他配置</h5>
+
+                  {/* 手续费配置区域 */}
+                  <div className="space-y-3 p-4 rounded-lg border">
+                    <Label className="text-sm font-medium text-gray-700">交易手续费率配置</Label>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* 现货手续费 */}
+                      <div className="space-y-2">
+                        <Label htmlFor="spotTradingFeeRate" className="text-xs font-medium text-blue-700">
+                          现货手续费率 <span className="text-gray-400">(BTC交易使用)</span>
+                        </Label>
+                        <div className="flex items-center space-x-3">
+                          <Input
+                            id="spotTradingFeeRate"
+                            type="number"
+                            step="0.0001"
+                            min="0"
+                            max="0.01"
+                            value={params.spotTradingFeeRate}
+                            onChange={(e) => handleParamChange('spotTradingFeeRate', parseFloat(e.target.value) || 0)}
+                            className="flex-1"
+                            placeholder="0.0008"
+                          />
+                          <span className="text-xs font-medium w-16 text-right bg-blue-50 px-2 py-1 rounded">
+                            {(params.spotTradingFeeRate * 100).toFixed(2)}%
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* 期货手续费 */}
+                      <div className="space-y-2">
+                        <Label htmlFor="futuresTradingFeeRate" className="text-xs font-medium text-red-700">
+                          期货手续费率 <span className="text-gray-400">(做空ALT使用)</span>
+                        </Label>
+                        <div className="flex items-center space-x-3">
+                          <Input
+                            id="futuresTradingFeeRate"
+                            type="number"
+                            step="0.0001"
+                            min="0"
+                            max="0.01"
+                            value={params.futuresTradingFeeRate}
+                            onChange={(e) => handleParamChange('futuresTradingFeeRate', parseFloat(e.target.value) || 0)}
+                            className="flex-1"
+                            placeholder="0.0002"
+                          />
+                          <span className="text-xs font-medium w-16 text-right bg-red-50 px-2 py-1 rounded">
+                            {(params.futuresTradingFeeRate * 100).toFixed(2)}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-gray-500">现货手续费通常高于期货手续费</p>
+                  </div>
+
+                </div>
+
                 {/* 策略选择 */}
                 <div className="space-y-4 relative">
                   <h5 className="text-sm font-medium text-gray-700">策略组合选择</h5>
@@ -923,38 +842,85 @@ export default function BTCDOM2Dashboard() {
               </div>
             )}
 
-            {/* 执行按钮 */}
-            <div className="flex justify-center pt-4">
-              <div className="text-center">
-                <Button
-                  onClick={handleRunBacktest}
-                  disabled={loading || Object.keys(parameterErrors).length > 0}
-                  className="px-8 py-2"
-                  size="lg"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      执行回测中...
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-4 h-4 mr-2" />
-                      执行回测
-                    </>
-                  )}
-                </Button>
-                {/* 显示所有参数错误 */}
-                {Object.entries(parameterErrors).map(([key, message]) => (
-                  <p key={key} className="text-xs text-red-500 mt-2 flex items-center justify-center gap-1">
-                    <AlertCircle className="w-3 h-3" />
-                    {message}
-                  </p>
-                ))}
+            <div className="flex justify-center gap-4 pt-4">
+                <div className="text-center">
+                  <Button
+                    onClick={handleRunBacktest}
+                    disabled={loading || Object.keys(parameterErrors).length > 0}
+                    className="px-8 py-2"
+                    size="lg"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        执行回测中...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-4 h-4 mr-2" />
+                        执行回测
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <div className="text-center">
+                  <Button
+                    onClick={() => setShowOptimization(!showOptimization)}
+                    disabled={loading}
+                    variant="outline"
+                    className="px-8 py-2"
+                    size="lg"
+                  >
+                    <Zap className="w-4 h-4 mr-2" />
+                    {showOptimization ? '隐藏优化' : '参数优化'}
+                  </Button>
+                </div>
               </div>
-            </div>
+              <div className="flex justify-center pt-2">
+                <div className="text-center">
+                {/* 显示所有参数错误 */}
+                  {Object.entries(parameterErrors).map(([key, message]) => (
+                    <p key={key} className="text-xs text-red-500 mt-2 flex items-center justify-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      {message}
+                    </p>
+                  ))}
+                </div>
+              </div>
+
           </CardContent>
         </Card>
+
+        {/* 参数优化面板 */}
+        {showOptimization && (
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="w-5 h-5" />
+                参数优化工具
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <OptimizationPanel
+                initialConfig={{
+                  baseParams: {
+                    startDate: params.startDate,
+                    endDate: params.endDate,
+                    initialCapital: params.initialCapital,
+                    btcRatio: params.btcRatio,
+                    spotTradingFeeRate: params.spotTradingFeeRate,
+                    futuresTradingFeeRate: params.futuresTradingFeeRate,
+                    longBtc: params.longBtc,
+                    shortAlt: params.shortAlt,
+                    granularityHours: params.granularityHours
+                  }
+                }}
+                onOptimizationComplete={handleOptimizationComplete}
+                onBestParametersFound={handleBestParametersFound}
+              />
+            </CardContent>
+          </Card>
+        )}
 
         {/* 错误显示 */}
         {error && (
@@ -985,12 +951,12 @@ export default function BTCDOM2Dashboard() {
                   {/* 使用后端计算好的盈亏分解数据 */}
                   {(() => {
                     const pnlBreakdown = backtestResult.performance.pnlBreakdown;
-                    
+
                     return (
                       <>
                         {/* 总盈亏 - 突出显示 */}
                         <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
-                          <span className="text-sm font-medium text-gray-700">总盈亏</span>
+                          <span className="font-medium text-gray-700">总盈亏</span>
                           <div className={`text-xl font-bold ${getValueColorClass(pnlBreakdown.totalPnlAmount)}`}>
                             {formatAmountWithPercent(
                               pnlBreakdown.totalPnlAmount,
@@ -1002,7 +968,7 @@ export default function BTCDOM2Dashboard() {
                         {/* 只在选择做多BTC时显示BTC收益率 */}
                         {params.longBtc && (
                           <div className="flex justify-between items-center py-1">
-                            <span className="text-xs text-gray-500 flex items-center gap-1">
+                            <span className="text-gray-500 flex items-center gap-1">
                               <Bitcoin className="w-3 h-3" />
                               BTC做多
                             </span>
@@ -1018,7 +984,7 @@ export default function BTCDOM2Dashboard() {
                         {/* 只在选择做空ALT时显示ALT收益率 */}
                         {params.shortAlt && (
                           <div className="flex justify-between items-center py-1">
-                            <span className="text-xs text-gray-500 flex items-center gap-1">
+                            <span className="text-gray-500 flex items-center gap-1">
                               <ArrowDown className="w-3 h-3" />
                               ALT做空
                             </span>
@@ -1033,7 +999,7 @@ export default function BTCDOM2Dashboard() {
 
                         {/* 手续费盈亏 */}
                         <div className="flex justify-between items-center py-1">
-                          <span className="text-xs text-gray-500">手续费盈亏</span>
+                          <span className="text-gray-500">手续费盈亏</span>
                           <span className={`text-sm font-semibold ${getValueColorClass(pnlBreakdown.tradingFeeAmount)}`}>
                             {formatAmountWithPercent(
                               pnlBreakdown.tradingFeeAmount,
@@ -1046,7 +1012,7 @@ export default function BTCDOM2Dashboard() {
                         {params.shortAlt && (
                           <div className="flex justify-between items-center py-1">
                             <div className="flex items-center gap-1">
-                              <span className="text-xs text-gray-500">资金费率盈亏</span>
+                              <span className="text-gray-500">资金费率盈亏</span>
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <Button variant="ghost" size="sm" className="h-4 w-4 p-0 hover:bg-gray-100">
@@ -1100,7 +1066,7 @@ export default function BTCDOM2Dashboard() {
                 <CardContent className="space-y-3">
                   {/* 最大回撤 - 突出显示 */}
                   <div className="flex justify-between items-center p-3 bg-red-50 rounded-md">
-                    <span className="text-sm font-medium text-gray-700">最大回撤</span>
+                    <span className="font-medium text-gray-700">最大回撤</span>
                     <div className="text-xl font-bold text-red-600">
                       {formatAmountWithPercent(
                         params.initialCapital * backtestResult.performance.maxDrawdown,
@@ -1110,7 +1076,7 @@ export default function BTCDOM2Dashboard() {
                   </div>
                   {/* 年化收益率 */}
                   <div className="flex justify-between items-center py-1">
-                    <span className="text-xs text-gray-500">年化收益率</span>
+                    <span className="text-gray-500">年化收益率</span>
                     <span className={`text-sm font-semibold ${getValueColorClass(backtestResult.performance.annualizedReturn)}`}>
                       {formatPercent(
                         backtestResult.performance.annualizedReturn * 100
@@ -1120,7 +1086,7 @@ export default function BTCDOM2Dashboard() {
                   {/* 夏普比率 */}
                   <div className="flex justify-between items-center py-1">
                     <div className="flex items-center gap-1">
-                      <span className="text-xs text-gray-500">夏普比率</span>
+                      <span className="text-gray-500">夏普比率</span>
                       <Popover>
                         <PopoverTrigger asChild>
                           <Button variant="ghost" size="sm" className="h-4 w-4 p-0 hover:bg-gray-100">
@@ -1150,19 +1116,67 @@ export default function BTCDOM2Dashboard() {
                     </span>
                   </div>
 
-                  {/* 波动率 */}
+                  {/* 卡玛比率 */}
                   <div className="flex justify-between items-center py-1">
-                    <span className="text-xs text-gray-500">波动率</span>
-                    <span className="text-sm font-semibold text-gray-700">
-                      {(backtestResult.performance.volatility * 100).toFixed(2)}%
+                    <div className="flex items-center gap-1">
+                      <span className="text-gray-500">卡玛比率</span>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-4 w-4 p-0 hover:bg-gray-100">
+                            <Info className="h-3 w-3 text-gray-400" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-80 text-sm">
+                          <div className="space-y-2">
+                            <p className="font-medium">卡玛比率 (Calmar Ratio)</p>
+                            <p className="text-gray-600">
+                              卡玛比率 = 年化收益率 ÷ 最大回撤
+                            </p>
+                            <p className="text-gray-600">
+                              用于衡量风险调整后的收益表现。比率越高，说明在承担相同回撤风险下获得了更高的收益。
+                            </p>
+                            <div className="text-xs text-gray-500 space-y-1">
+                              <p>• {'>'}1.0: 优秀表现</p>
+                              <p>• 0.5-1.0: 良好表现</p>
+                              <p>• {'<'}0.5: 需要改进</p>
+                            </div>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    <span className={`text-sm font-semibold ${
+                      backtestResult.performance.calmarRatio >= 0 ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      {backtestResult.performance.calmarRatio.toFixed(2)}
                     </span>
                   </div>
 
-                  {/* 胜率 */}
+                  {/* 波动率 */}
                   <div className="flex justify-between items-center py-1">
-                    <span className="text-xs text-gray-500">胜率</span>
-                    <span className="text-sm font-semibold text-blue-600">
-                      {(backtestResult.performance.winRate * 100).toFixed(1)}%
+                    <div className="flex items-center gap-1">
+                      <span className="text-gray-500">波动率</span>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-4 w-4 p-0 hover:bg-gray-100">
+                            <Info className="h-3 w-3 text-gray-400" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-80 text-sm">
+                          <div className="space-y-2">
+                            <p className="font-medium">年化波动率</p>
+                            <p className="text-gray-600">
+                              衡量策略收益率的变动程度，反映投资风险的大小。
+                            </p>
+                            <div className="text-xs text-gray-500 space-y-1">
+                              <p>• 波动率越高，风险越大</p>
+                              <p>• 波动率越低，收益越稳定</p>
+                            </div>
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    <span className="text-sm font-semibold text-gray-700">
+                      {(backtestResult.performance.volatility * 100).toFixed(2)}%
                     </span>
                   </div>
                 </CardContent>
@@ -1204,12 +1218,8 @@ export default function BTCDOM2Dashboard() {
                       <span className="font-medium">{backtestResult.summary.totalRebalances}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">持仓状态次数</span>
-                      <span className="font-medium text-green-600">{backtestResult.summary.activeRebalances}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">空仓状态次数</span>
-                      <span className="font-medium text-gray-500">{backtestResult.summary.inactiveRebalances}</span>
+                      <span className="text-gray-600">持仓/空仓状态次数</span>
+                      <span className="font-medium">{backtestResult.summary.activeRebalances} / {backtestResult.summary.inactiveRebalances}</span>
                     </div>
                     {/* 只在选择做空ALT时显示平均做空标的数量 */}
                     {params.shortAlt && (
@@ -1235,35 +1245,6 @@ export default function BTCDOM2Dashboard() {
                 <CardContent>
                   <div className="space-y-3">
                     <div className="flex justify-between">
-                      <div className="flex items-center gap-1">
-                        <span className="text-gray-600">波动率</span>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <button className="text-gray-400 hover:text-gray-600">
-                              <Info className="w-3 h-3" />
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-72 text-sm" side="top">
-                            <div className="space-y-2">
-                              <div className="font-medium">年化波动率</div>
-                              <div className="text-gray-600">
-                                衡量策略收益率的变动程度，反映投资风险的大小。
-                              </div>
-                              <div className="text-xs text-gray-500 border-t pt-2">
-                                • 波动率越高，风险越大<br/>
-                                • 波动率越低，收益越稳定
-                              </div>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                      <span className="font-medium">{(backtestResult.performance.volatility * 100).toFixed(2)}%</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">胜率</span>
-                      <span className="font-medium">{(backtestResult.performance.winRate * 100).toFixed(1)}%</span>
-                    </div>
-                    <div className="flex justify-between">
                       <span className="text-gray-600">最佳收益期</span>
                       <div className="text-right">
                         <span className="font-medium text-green-600">
@@ -1272,10 +1253,22 @@ export default function BTCDOM2Dashboard() {
                               第{backtestResult.performance.bestPeriodInfo.period}期 • {formatPeriodTime(backtestResult.performance.bestPeriodInfo.timestamp)}
                             </span>
                           )}
-                          {formatAmountWithPercent(
-                            params.initialCapital * backtestResult.performance.bestPeriod,
-                            backtestResult.performance.bestPeriod * 100
-                          )}
+                          {(() => {
+                            // bestPeriod是期间收益率，需要找到对应期数的实际盈亏金额
+                            const bestPeriodNumber = backtestResult.performance.bestPeriodInfo?.period;
+                            if (bestPeriodNumber && backtestResult.snapshots[bestPeriodNumber - 1]) {
+                              const bestSnapshot = backtestResult.snapshots[bestPeriodNumber - 1];
+                              return formatAmountWithPercent(
+                                bestSnapshot.periodPnl || 0,
+                                (bestSnapshot.periodPnlPercent || 0) * 100
+                              );
+                            }
+                            // 如果找不到对应快照，使用期间收益率计算
+                            return formatAmountWithPercent(
+                              params.initialCapital * backtestResult.performance.bestPeriod,
+                              backtestResult.performance.bestPeriod * 100
+                            );
+                          })()}
                         </span>
                       </div>
                     </div>
@@ -1288,10 +1281,22 @@ export default function BTCDOM2Dashboard() {
                               第{backtestResult.performance.worstPeriodInfo.period}期 • {formatPeriodTime(backtestResult.performance.worstPeriodInfo.timestamp)}
                             </span>
                           )}
-                          {formatAmountWithPercent(
-                            params.initialCapital * backtestResult.performance.worstPeriod,
-                            backtestResult.performance.worstPeriod * 100
-                          )}
+                          {(() => {
+                            // worstPeriod是期间收益率，需要找到对应期数的实际盈亏金额
+                            const worstPeriodNumber = backtestResult.performance.worstPeriodInfo?.period;
+                            if (worstPeriodNumber && backtestResult.snapshots[worstPeriodNumber - 1]) {
+                              const worstSnapshot = backtestResult.snapshots[worstPeriodNumber - 1];
+                              return formatAmountWithPercent(
+                                worstSnapshot.periodPnl || 0,
+                                (worstSnapshot.periodPnlPercent || 0) * 100
+                              );
+                            }
+                            // 如果找不到对应快照，使用期间收益率计算
+                            return formatAmountWithPercent(
+                              params.initialCapital * backtestResult.performance.worstPeriod,
+                              backtestResult.performance.worstPeriod * 100
+                            );
+                          })()}
                         </span>
                       </div>
                     </div>
@@ -1326,35 +1331,6 @@ export default function BTCDOM2Dashboard() {
                           )}
                         </span>
                       </div>
-                    </div>
-                    <div className="flex justify-between">
-                      <div className="flex items-center gap-1">
-                        <span className="text-gray-600">卡玛比率</span>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <button className="text-gray-400 hover:text-gray-600">
-                              <Info className="w-3 h-3" />
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-80 text-sm" side="top">
-                            <div className="space-y-2">
-                              <div className="font-medium">卡玛比率 (Calmar Ratio)</div>
-                              <div className="text-gray-600">
-                                卡玛比率 = 年化收益率 ÷ 最大回撤
-                              </div>
-                              <div className="text-gray-600">
-                                用于衡量风险调整后的收益表现。比率越高，说明在承担相同回撤风险下获得了更高的收益。
-                              </div>
-                              <div className="text-xs text-gray-500 border-t pt-2">
-                                • &gt; 1.0：优秀表现<br/>
-                                • 0.5-1.0：良好表现<br/>
-                                • &lt; 0.5：需要改进
-                              </div>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                      <span className="font-medium">{backtestResult.performance.calmarRatio.toFixed(2)}</span>
                     </div>
                   </div>
                 </CardContent>
@@ -1462,8 +1438,8 @@ export default function BTCDOM2Dashboard() {
 
                       {/* 持仓表格 */}
                       {currentSnapshot && (
-                        <BTCDOM2PositionTable 
-                          snapshot={currentSnapshot} 
+                        <BTCDOM2PositionTable
+                          snapshot={currentSnapshot}
                           params={params}
                           periodNumber={selectedSnapshotIndex === -1 ? backtestResult.snapshots.length : selectedSnapshotIndex + 1}
                           backtestResult={backtestResult}

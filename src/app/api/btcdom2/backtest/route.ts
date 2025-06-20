@@ -270,6 +270,7 @@ class BTCDOM2StrategyEngine {
         marketShare: item.marketShare,
         priceAtTime: item.priceAtTime, // 添加当前时刻现货价格
         futurePriceAtTime: item.futurePriceAtTime, // 添加期货价格
+        futureSymbol: item.futureSymbol, // 添加期货交易对symbol
         priceChangeScore: validPriceChangeScore,
         volumeScore: validVolumeScore,
         volatilityScore: validVolatilityScore,
@@ -586,6 +587,7 @@ class BTCDOM2StrategyEngine {
 
           return {
             symbol: candidate.symbol,
+            displaySymbol: candidate.futureSymbol || candidate.symbol,
             side: 'SHORT',
             amount: allocation,
             quantity,
