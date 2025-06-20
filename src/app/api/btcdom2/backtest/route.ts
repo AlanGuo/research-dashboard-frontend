@@ -1061,7 +1061,7 @@ function calculatePerformanceMetrics(
     periodInfo.push({
       return: periodReturn,
       timestamp: snapshots[i].timestamp,
-      period: i
+      period: i + 1 // 期数从1开始，第i个快照对应第i+1期
     });
   }
 
