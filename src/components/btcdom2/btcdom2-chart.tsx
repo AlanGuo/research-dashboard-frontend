@@ -119,12 +119,6 @@ export function BTCDOM2Chart({ data, params }: BTCDOM2ChartProps) {
                 {data.totalReturnPercent.toFixed(2)}%
               </span>
             </div>
-            <div className="flex justify-between gap-6">
-              <span className="text-gray-600 dark:text-gray-400">BTC收益率:</span>
-              <span className={`font-medium ${data.btcReturnPercent >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                {data.btcReturnPercent.toFixed(2)}%
-              </span>
-            </div>
             {data.btcdomReturnPercent !== null && (
               <div className="flex justify-between gap-6">
                 <span className="text-gray-600 dark:text-gray-400">BTCDOM收益率:</span>
@@ -133,6 +127,12 @@ export function BTCDOM2Chart({ data, params }: BTCDOM2ChartProps) {
                 </span>
               </div>
             )}
+            <div className="flex justify-between gap-6">
+              <span className="text-gray-600 dark:text-gray-400">BTC收益率:</span>
+              <span className={`font-medium ${data.btcReturnPercent >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                {data.btcReturnPercent.toFixed(2)}%
+              </span>
+            </div>
             <div className="flex justify-between gap-6">
               <span className="text-gray-600 dark:text-gray-400">BTC价格:</span>
               <span className="font-medium text-gray-900 dark:text-gray-100">
