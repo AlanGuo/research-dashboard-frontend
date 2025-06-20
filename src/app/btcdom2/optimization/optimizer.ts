@@ -584,6 +584,7 @@ export class ParameterOptimizer {
     ];
     
     // 四舍五入到0.1精度
+    // eslint-disable-next-line prefer-const
     let roundedWeights = rawWeights.map(w => Math.round(w * 10) / 10);
     
     // 确保权重总和为1
@@ -741,6 +742,7 @@ export class ParameterOptimizer {
     }
     
     // 标准化并四舍五入
+    // eslint-disable-next-line prefer-const
     let normalizedWeights = samples.map(s => Math.round((s / sum) * 10) / 10);
     
     // 确保总和为1的最终调整
@@ -756,7 +758,6 @@ export class ParameterOptimizer {
       if (normalizedWeights[maxIndex] < 0) {
         normalizedWeights[maxIndex] = 0;
         // 重新分配剩余权重
-        const remaining = 1;
         const otherIndices = [0, 1, 2, 3].filter(i => i !== maxIndex);
         const remainingSum = otherIndices.reduce((sum, i) => sum + normalizedWeights[i], 0);
         
