@@ -200,9 +200,9 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
   // 获取盈亏颜色
   const getPnlColor = (pnl: number | null) => {
     const validPnl = pnl ?? 0;
-    if (validPnl > 0) return 'text-green-600';
-    if (validPnl < 0) return 'text-red-600';
-    return 'text-gray-600';
+    if (validPnl > 0) return 'text-green-600 dark:text-green-400';
+    if (validPnl < 0) return 'text-red-600 dark:text-red-400';
+    return 'text-gray-600 dark:text-gray-400';
   };
 
   // 合并所有持仓（包括卖出的持仓），根据策略选择过滤
@@ -237,20 +237,20 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
   return (
     <div className="space-y-4">
       {/* 时间和期数信息 */}
-      <div className="p-3 bg-gray-50 rounded-lg">
+      <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
           <div>
-            <span className="text-gray-500">第 {periodNumber || 1} 期: </span>
-            <span className="font-medium">{formatPeriodTime(snapshot.timestamp)}</span>
+            <span className="text-gray-500 dark:text-gray-400">第 {periodNumber || 1} 期: </span>
+            <span className="font-medium text-gray-900 dark:text-white">{formatPeriodTime(snapshot.timestamp)}</span>
           </div>
           <div>
-            <span className="text-gray-500">总盈亏: </span>
+            <span className="text-gray-500 dark:text-gray-400">总盈亏: </span>
             <span className={`font-medium ${getPnlColor(snapshot.totalPnl)}`}>
               {formatAmountWithPercent(snapshot.totalPnl || 0, (snapshot.totalPnlPercent || 0) * 100)}
             </span>
           </div>
           <div>
-            <span className="text-gray-500">BTC累计盈亏: </span>
+            <span className="text-gray-500 dark:text-gray-400">BTC累计盈亏: </span>
             {backtestResult ? (
               (() => {
                 const btcPnl = calculateBtcCumulativePnl();
@@ -261,11 +261,11 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                 );
               })()
             ) : (
-              <span className="font-medium text-gray-400">--</span>
+              <span className="font-medium text-gray-400 dark:text-gray-500">--</span>
             )}
           </div>
           <div>
-            <span className="text-gray-500">做空ALT累计盈亏: </span>
+            <span className="text-gray-500 dark:text-gray-400">做空ALT累计盈亏: </span>
             {backtestResult ? (
               (() => {
                 const altPnl = calculateAltCumulativePnl();
@@ -276,17 +276,17 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                 );
               })()
             ) : (
-              <span className="font-medium text-gray-400">--</span>
+              <span className="font-medium text-gray-400 dark:text-gray-500">--</span>
             )}
           </div>
           <div>
-            <span className="text-gray-500">累计手续费: </span>
+            <span className="text-gray-500 dark:text-gray-400">累计手续费: </span>
             <span className={`font-medium ${getPnlColor(snapshot.accumulatedTradingFee || 0)}`}>
               {formatCurrency(snapshot.accumulatedTradingFee || 0)}
             </span>
           </div>
           <div>
-            <span className="text-gray-500">累计资金费: </span>
+            <span className="text-gray-500 dark:text-gray-400">累计资金费: </span>
             <span className={`font-medium ${getPnlColor(snapshot.accumulatedFundingFee || 0)}`}>
               {formatCurrency(snapshot.accumulatedFundingFee || 0)}
             </span>
@@ -297,30 +297,30 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
       {/* 基本信息 */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-4">
         <div className="text-center">
-          <p className="text-sm text-gray-500">总资产</p>
-          <p className="text-lg font-semibold">{formatCurrency(snapshot.totalValue)}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">总资产</p>
+          <p className="text-lg font-semibold text-gray-900 dark:text-white">{formatCurrency(snapshot.totalValue)}</p>
         </div>
         <div className="text-center">
-          <p className="text-sm text-gray-500">当期盈亏</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">当期盈亏</p>
           <p className={`text-lg font-semibold ${getPnlColor(snapshot.periodPnl || 0)}`}>
             {formatAmountWithPercent(snapshot.periodPnl || 0, (snapshot.periodPnlPercent || 0) * 100)}
           </p>
         </div>
         <div className="text-center">
-          <p className="text-sm text-gray-500">当期手续费</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">当期手续费</p>
           <p className={`text-lg font-semibold ${getPnlColor(snapshot.totalTradingFee || 0)}`}>
             {formatCurrency(snapshot.totalTradingFee || 0)}
           </p>
         </div>
         <div className="text-center">
-          <p className="text-sm text-gray-500">当期资金费</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">当期资金费</p>
           <p className={`text-lg font-semibold ${getPnlColor(snapshot.totalFundingFee || 0)}`}>
             {formatCurrency(snapshot.totalFundingFee || 0)}
           </p>
         </div>
         <div className="text-center">
-          <p className="text-sm text-gray-500">做空标的数</p>
-          <p className="text-lg font-semibold">{snapshot.shortPositions.length}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">做空标的数</p>
+          <p className="text-lg font-semibold text-gray-900 dark:text-white">{snapshot.shortPositions.length}</p>
         </div>
       </div>
 
@@ -353,13 +353,13 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                           ₿
                         </div>
                       ) : (
-                        <div className="w-6 h-6 bg-gray-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                        <div className="w-6 h-6 bg-gray-500 dark:bg-gray-600 rounded-full flex items-center justify-center text-white text-xs font-bold">
                           {(position.displaySymbol || position.symbol).slice(0, 2)}
                         </div>
                       )}
                       <span className="truncate">{position.displaySymbol || position.symbol}</span>
                       {position.isNewPosition && !position.isSoldOut && (
-                        <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700 border-blue-200">
+                        <Badge variant="secondary" className="text-xs bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800">
                           <Plus className="w-3 h-3 mr-1" />
                           新增
                         </Badge>
@@ -396,7 +396,7 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                     <div className="flex flex-col">
                       <span>{formatAmount(position.amount)}</span>
                       {position.type !== 'SOLD' && totalInvestedAmount > 0 && (
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
                           ({((Math.abs(position.amount ?? 0) / Math.max(totalInvestedAmount, 1)) * 100).toFixed(2)}%)
                         </span>
                       )}
@@ -457,57 +457,57 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                   <TableCell className="text-right">
                     {position.side === 'SHORT' ? (
                       <div className="text-right">
-                        <div className={`font-medium ${calculateFundingPnL(position) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        <div className={`font-medium ${calculateFundingPnL(position) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                           {calculateFundingPnL(position) === 0 ? 
-                            <span className="text-gray-400">$0.00</span> : 
+                            <span className="text-gray-400 dark:text-gray-500">$0.00</span> : 
                             formatCurrency(calculateFundingPnL(position))
                           }
                         </div>
-                        <div className="text-xs text-gray-500">
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
                           {position.isNewPosition ? (
                             <div className="flex flex-col">
                               <span>新开仓</span>
                               {getCurrentFundingRate(position) !== 0 && (
-                                <span className={getCurrentFundingRate(position) > 0 ? 'text-green-600' : 'text-red-600'}>
+                                <span className={getCurrentFundingRate(position) > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
                                   费率: {(getCurrentFundingRate(position) * 100).toFixed(2)}%
                                 </span>
                               )}
                             </div>
                           ) : getCurrentFundingRate(position) !== 0 ? (
-                            <span className={getCurrentFundingRate(position) > 0 ? 'text-green-600' : 'text-red-600'}>
+                            <span className={getCurrentFundingRate(position) > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
                               费率: {(getCurrentFundingRate(position) * 100).toFixed(2)}%
                             </span>
                           ) : (
-                            <span className="text-gray-400">无数据</span>
+                            <span className="text-gray-400 dark:text-gray-500">无数据</span>
                           )}
                         </div>
                       </div>
                     ) : (
-                      <span className="text-gray-400">-</span>
+                      <span className="text-gray-400 dark:text-gray-500">-</span>
                     )}
                   </TableCell>
                   <TableCell className="text-right">
                     {/* 优先使用专门的24H价格变化数据 */}
                     {position.priceChange24h !== undefined ? (
                       <span className={`font-medium ${
-                        position.priceChange24h > 0 ? 'text-green-600' : 
-                        position.priceChange24h < 0 ? 'text-red-600' : 
-                        'text-gray-600'
+                        position.priceChange24h > 0 ? 'text-green-600 dark:text-green-400' : 
+                        position.priceChange24h < 0 ? 'text-red-600 dark:text-red-400' : 
+                        'text-gray-600 dark:text-gray-400'
                       }`}>
                         {position.priceChange24h > 0 ? '+' : ''}
                         {position.priceChange24h.toFixed(2)}%
                       </span>
                     ) : position.type === 'BTC' && snapshot.btcPriceChange24h !== undefined ? (
                       <span className={`font-medium ${
-                        snapshot.btcPriceChange24h > 0 ? 'text-green-600' : 
-                        snapshot.btcPriceChange24h < 0 ? 'text-red-600' : 
-                        'text-gray-600'
+                        snapshot.btcPriceChange24h > 0 ? 'text-green-600 dark:text-green-400' : 
+                        snapshot.btcPriceChange24h < 0 ? 'text-red-600 dark:text-red-400' : 
+                        'text-gray-600 dark:text-gray-400'
                       }`}>
                         {snapshot.btcPriceChange24h > 0 ? '+' : ''}
                         {snapshot.btcPriceChange24h.toFixed(2)}%
                       </span>
                     ) : (
-                      <span className="text-gray-400">--</span>
+                      <span className="text-gray-400 dark:text-gray-500">--</span>
                     )}
                   </TableCell>
                   <TableCell className="text-right">
@@ -519,10 +519,10 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                       {position.priceChange?.previousPrice && position.priceChange.previousPrice > 0 && position.currentPrice !== position.priceChange.previousPrice ? (
                         <span className={`text-xs ${
                           position.currentPrice > position.priceChange.previousPrice 
-                            ? 'text-green-600' 
+                            ? 'text-green-600 dark:text-green-400' 
                             : position.currentPrice < position.priceChange.previousPrice 
-                            ? 'text-red-600' 
-                            : 'text-gray-500'
+                            ? 'text-red-600 dark:text-red-400' 
+                            : 'text-gray-500 dark:text-gray-400'
                         }`}>
                           ({position.currentPrice > position.priceChange.previousPrice ? '+' : ''}
                           {(((position.currentPrice - position.priceChange.previousPrice) / position.priceChange.previousPrice) * 100).toFixed(2)}%)
@@ -530,10 +530,10 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                       ) : position.entryPrice && position.entryPrice > 0 && position.currentPrice !== position.entryPrice && !position.isNewPosition ? (
                         <span className={`text-xs ${
                           position.currentPrice > position.entryPrice 
-                            ? 'text-green-600' 
+                            ? 'text-green-600 dark:text-green-400' 
                             : position.currentPrice < position.entryPrice 
-                            ? 'text-red-600' 
-                            : 'text-gray-500'
+                            ? 'text-red-600 dark:text-red-400' 
+                            : 'text-gray-500 dark:text-gray-400'
                         }`}>
                           ({position.currentPrice > position.entryPrice ? '+' : ''}
                           {(((position.currentPrice - position.entryPrice) / position.entryPrice) * 100).toFixed(2)}%)
@@ -569,17 +569,17 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
 
       {/* 现金持仓 */}
       {snapshot.cashPosition > 0 && (
-        <div className="mt-4 p-4 bg-green-50 rounded-lg border border-green-200">
+        <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <DollarSign className="w-5 h-5 text-green-600" />
-              <span className="font-medium text-green-800">现金持仓</span>
+              <DollarSign className="w-5 h-5 text-green-600 dark:text-green-400" />
+              <span className="font-medium text-green-800 dark:text-green-200">现金持仓</span>
             </div>
-            <span className="text-lg font-bold text-green-600">
+            <span className="text-lg font-bold text-green-600 dark:text-green-400">
               {formatCurrency(snapshot.cashPosition)}
             </span>
           </div>
-          <p className="text-sm text-green-700 mt-2">
+          <p className="text-sm text-green-700 dark:text-green-300 mt-2">
             {snapshot.rebalanceReason}
           </p>
         </div>
@@ -613,7 +613,7 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                     <TableRow key={candidate.symbol}>
                       <TableCell className="font-medium">{candidate.symbol}</TableCell>
                       <TableCell className="text-right">{candidate.rank}</TableCell>
-                      <TableCell className={`text-right ${(candidate.priceChange24h ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      <TableCell className={`text-right ${(candidate.priceChange24h ?? 0) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                         {(candidate.priceChange24h ?? 0).toFixed(2)}%
                       </TableCell>
                       <TableCell className="text-right">{(candidate.priceChangeScore ?? 0).toFixed(3)}</TableCell>
@@ -633,26 +633,26 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                           ) : (
                             <div className="space-y-1">
                               {candidate.reason?.includes('涨幅过大') && (
-                                <div className="text-red-600">24h涨幅过大 ({(candidate.priceChange24h ?? 0).toFixed(2)}%)</div>
+                                <div className="text-red-600 dark:text-red-400">24h涨幅过大 ({(candidate.priceChange24h ?? 0).toFixed(2)}%)</div>
                               )}
                               {candidate.reason?.includes('成交量不足') && (
-                                <div className="text-orange-600">成交量不足</div>
+                                <div className="text-orange-600 dark:text-orange-400">成交量不足</div>
                               )}
                               {candidate.reason?.includes('波动率过高') && (
-                                <div className="text-purple-600">波动率过高</div>
+                                <div className="text-purple-600 dark:text-purple-400">波动率过高</div>
                               )}
                               {candidate.reason?.includes('综合分数不足') && (
-                                <div className="text-gray-600">综合分数不足 ({(candidate.totalScore ?? 0).toFixed(3)})</div>
+                                <div className="text-gray-600 dark:text-gray-400">综合分数不足 ({(candidate.totalScore ?? 0).toFixed(3)})</div>
                               )}
                               {candidate.reason?.includes('超出数量限制') && (
-                                <div className="text-blue-600">超出最大做空数量</div>
+                                <div className="text-blue-600 dark:text-blue-400">超出最大做空数量</div>
                               )}
                               {candidate.reason && !candidate.reason.includes('涨幅过大') &&
                                !candidate.reason.includes('成交量不足') &&
                                !candidate.reason.includes('波动率过高') &&
                                !candidate.reason.includes('综合分数不足') &&
                                !candidate.reason.includes('超出数量限制') && (
-                                <div className="text-gray-600">{candidate.reason}</div>
+                                <div className="text-gray-600 dark:text-gray-400">{candidate.reason}</div>
                               )}
                             </div>
                           )}

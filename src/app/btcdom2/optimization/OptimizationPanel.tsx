@@ -11,6 +11,7 @@ import {
 } from './types';
 import { ParameterOptimizer } from './optimizer';
 import { PositionAllocationStrategy } from '@/types/btcdom2';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import OptimizationGuide from './OptimizationGuide';
 
 interface OptimizationPanelProps {
@@ -161,60 +162,113 @@ export default function OptimizationPanel({
   // 渲染优化目标选择
   const renderObjectiveSelector = () => (
     <div className="mb-4">
-      <label className="block text-sm font-medium text-gray-700 mb-2">
+      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
         优化目标
       </label>
-      <select
+      <Select
         value={config.objective}
-        onChange={(e) => setConfig(prev => ({ 
+        onValueChange={(value) => setConfig(prev => ({ 
           ...prev, 
-          objective: e.target.value as OptimizationObjective 
+          objective: value as OptimizationObjective 
         }))}
-        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
       >
-        <option value={OptimizationObjective.MAXIMIZE_TOTAL_RETURN}>最大化总收益率</option>
-        <option value={OptimizationObjective.MAXIMIZE_SHARPE_RATIO}>最大化夏普比率</option>
-        <option value={OptimizationObjective.MAXIMIZE_CALMAR_RATIO}>最大化卡尔玛比率</option>
-        <option value={OptimizationObjective.MINIMIZE_MAX_DRAWDOWN}>最小化最大回撤</option>
-        <option value={OptimizationObjective.MAXIMIZE_RISK_ADJUSTED_RETURN}>最大化风险调整收益</option>
-      </select>
+        <SelectTrigger className="w-full text-left">
+          <SelectValue>
+            {config.objective === OptimizationObjective.MAXIMIZE_TOTAL_RETURN && "最大化总收益率"}
+            {config.objective === OptimizationObjective.MAXIMIZE_SHARPE_RATIO && "最大化夏普比率"}
+            {config.objective === OptimizationObjective.MAXIMIZE_CALMAR_RATIO && "最大化卡尔玛比率"}
+            {config.objective === OptimizationObjective.MINIMIZE_MAX_DRAWDOWN && "最小化最大回撤"}
+            {config.objective === OptimizationObjective.MAXIMIZE_RISK_ADJUSTED_RETURN && "最大化风险调整收益"}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={OptimizationObjective.MAXIMIZE_TOTAL_RETURN}>
+            <div className="flex flex-col">
+              <span>最大化总收益率</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">追求最高的总收益率表现</span>
+            </div>
+          </SelectItem>
+          <SelectItem value={OptimizationObjective.MAXIMIZE_SHARPE_RATIO}>
+            <div className="flex flex-col">
+              <span>最大化夏普比率</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">平衡收益与风险，追求最佳风险调整收益</span>
+            </div>
+          </SelectItem>
+          <SelectItem value={OptimizationObjective.MAXIMIZE_CALMAR_RATIO}>
+            <div className="flex flex-col">
+              <span>最大化卡尔玛比率</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">年化收益率与最大回撤的比值</span>
+            </div>
+          </SelectItem>
+          <SelectItem value={OptimizationObjective.MINIMIZE_MAX_DRAWDOWN}>
+            <div className="flex flex-col">
+              <span>最小化最大回撤</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">追求最小的资产损失</span>
+            </div>
+          </SelectItem>
+          <SelectItem value={OptimizationObjective.MAXIMIZE_RISK_ADJUSTED_RETURN}>
+            <div className="flex flex-col">
+              <span>最大化风险调整收益</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">综合考虑收益率和风险指标</span>
+            </div>
+          </SelectItem>
+        </SelectContent>
+      </Select>
     </div>
   );
 
   // 渲染优化方法选择
   const renderMethodSelector = () => (
     <div className="mb-4">
-      <label className="block text-sm font-medium text-gray-700 mb-2">
+      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
         优化方法
       </label>
-      <select
+      <Select
         value={config.method}
-        onChange={(e) => setConfig(prev => ({ 
+        onValueChange={(value) => setConfig(prev => ({ 
           ...prev, 
-          method: e.target.value as OptimizationMethod 
+          method: value as OptimizationMethod 
         }))}
-        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
       >
-        <option value={OptimizationMethod.GRID_SEARCH}>网格搜索</option>
-        <option value={OptimizationMethod.BAYESIAN_OPTIMIZATION}>贝叶斯优化</option>
-        <option value={OptimizationMethod.HYBRID}>混合方法（推荐）</option>
-      </select>
-      <p className="text-xs text-gray-500 mt-1">
-        {config.method === OptimizationMethod.GRID_SEARCH && '全面搜索所有参数组合，耗时较长但覆盖全面'}
-        {config.method === OptimizationMethod.BAYESIAN_OPTIMIZATION && '智能搜索，速度快但可能错过全局最优'}
-        {config.method === OptimizationMethod.HYBRID && '先粗搜索再精细优化，平衡速度和效果'}
-      </p>
+        <SelectTrigger className="w-full text-left">
+          <SelectValue>
+            {config.method === OptimizationMethod.GRID_SEARCH && "网格搜索"}
+            {config.method === OptimizationMethod.BAYESIAN_OPTIMIZATION && "贝叶斯优化"}
+            {config.method === OptimizationMethod.HYBRID && "混合方法（推荐）"}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={OptimizationMethod.GRID_SEARCH}>
+            <div className="flex flex-col">
+              <span>网格搜索</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">全面搜索所有参数组合，耗时较长但覆盖全面</span>
+            </div>
+          </SelectItem>
+          <SelectItem value={OptimizationMethod.BAYESIAN_OPTIMIZATION}>
+            <div className="flex flex-col">
+              <span>贝叶斯优化</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">智能搜索，速度快但可能错过全局最优</span>
+            </div>
+          </SelectItem>
+          <SelectItem value={OptimizationMethod.HYBRID}>
+            <div className="flex flex-col">
+              <span>混合方法（推荐）</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">先粗搜索再精细优化，平衡速度和效果</span>
+            </div>
+          </SelectItem>
+        </SelectContent>
+      </Select>
     </div>
   );
 
   // 渲染参数范围配置
   const renderParameterRanges = () => (
     <div className="space-y-4">
-      <h4 className="font-medium text-gray-700">参数搜索范围</h4>
+      <h4 className="font-medium text-gray-700 dark:text-gray-300">参数搜索范围</h4>
       
       {/* 做空标的数量范围 */}
       <div>
-        <label className="block text-sm text-gray-600 mb-1">最多做空标的数量</label>
+        <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">最多做空标的数量</label>
         <div className="grid grid-cols-3 gap-2">
           <input
             type="number"
@@ -224,7 +278,7 @@ export default function OptimizationPanel({
               ...prev,
               maxShortPositions: { ...prev.maxShortPositions, min: parseInt(e.target.value) || 5 }
             }))}
-            className="px-2 py-1 border border-gray-300 rounded text-sm"
+            className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
           />
           <input
             type="number"
@@ -234,7 +288,7 @@ export default function OptimizationPanel({
               ...prev,
               maxShortPositions: { ...prev.maxShortPositions, max: parseInt(e.target.value) || 20 }
             }))}
-            className="px-2 py-1 border border-gray-300 rounded text-sm"
+            className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
           />
           <input
             type="number"
@@ -244,14 +298,14 @@ export default function OptimizationPanel({
               ...prev,
               maxShortPositions: { ...prev.maxShortPositions, step: parseInt(e.target.value) || 1 }
             }))}
-            className="px-2 py-1 border border-gray-300 rounded text-sm"
+            className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
           />
         </div>
       </div>
 
       {/* 单币种持仓限制范围 */}
       <div>
-        <label className="block text-sm text-gray-600 mb-1">单币种持仓限制</label>
+        <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">单币种持仓限制</label>
         <div className="grid grid-cols-3 gap-2">
           <input
             type="number"
@@ -262,7 +316,7 @@ export default function OptimizationPanel({
               ...prev,
               maxSinglePositionRatio: { ...prev.maxSinglePositionRatio, min: parseFloat(e.target.value) || 0.1 }
             }))}
-            className="px-2 py-1 border border-gray-300 rounded text-sm"
+            className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
           />
           <input
             type="number"
@@ -273,7 +327,7 @@ export default function OptimizationPanel({
               ...prev,
               maxSinglePositionRatio: { ...prev.maxSinglePositionRatio, max: parseFloat(e.target.value) || 0.3 }
             }))}
-            className="px-2 py-1 border border-gray-300 rounded text-sm"
+            className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
           />
           <input
             type="number"
@@ -284,14 +338,14 @@ export default function OptimizationPanel({
               ...prev,
               maxSinglePositionRatio: { ...prev.maxSinglePositionRatio, step: parseFloat(e.target.value) || 0.05 }
             }))}
-            className="px-2 py-1 border border-gray-300 rounded text-sm"
+            className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
           />
         </div>
       </div>
 
       {/* 仓位分配策略选择 */}
       <div>
-        <label className="block text-sm text-gray-600 mb-1">包含的分配策略</label>
+        <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">包含的分配策略</label>
         <div className="space-y-1">
           {[
             { value: PositionAllocationStrategy.BY_VOLUME, label: '按成交量比例分配' },
@@ -312,7 +366,7 @@ export default function OptimizationPanel({
                 }}
                 className="mr-2"
               />
-              <span className="text-sm">{strategy.label}</span>
+              <span className="text-sm text-gray-700 dark:text-gray-300">{strategy.label}</span>
             </label>
           ))}
         </div>
@@ -325,22 +379,22 @@ export default function OptimizationPanel({
     if (!progress || !isRunning) return null;
 
     return (
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
         <div className="flex justify-between items-center mb-2">
-          <h4 className="font-medium text-blue-800">优化进行中...</h4>
-          <span className="text-sm text-blue-600">
+          <h4 className="font-medium text-blue-800 dark:text-blue-400">优化进行中...</h4>
+          <span className="text-sm text-blue-600 dark:text-blue-400">
             {progress.currentIteration}/{progress.totalIterations}
           </span>
         </div>
         
-        <div className="w-full bg-blue-200 rounded-full h-2 mb-2">
+        <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2 mb-2">
           <div 
-            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+            className="bg-blue-600 dark:bg-blue-400 h-2 rounded-full transition-all duration-300"
             style={{ width: `${(progress.currentIteration / progress.totalIterations) * 100}%` }}
           />
         </div>
         
-        <div className="flex justify-between text-sm text-blue-600">
+        <div className="flex justify-between text-sm text-blue-600 dark:text-blue-400">
           <span>预计剩余: {Math.round(progress.estimatedTimeRemaining / 60)}分钟</span>
           {progress.currentBest && (
             <span>当前最优: {progress.currentBest.objectiveValue.toFixed(4)}</span>
@@ -357,82 +411,82 @@ export default function OptimizationPanel({
     return (
       <div className="mt-6">
         <div className="flex justify-between items-center mb-4">
-          <h4 className="font-medium text-gray-700">优化结果（前10名）</h4>
-          <span className="text-sm text-gray-500">共找到 {results.length} 个有效组合</span>
+          <h4 className="font-medium text-gray-700 dark:text-gray-300">优化结果（前10名）</h4>
+          <span className="text-sm text-gray-500 dark:text-gray-400">共找到 {results.length} 个有效组合</span>
         </div>
         
         <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse border border-gray-300">
+          <table className="w-full text-sm border-collapse border border-gray-300 dark:border-gray-600">
             <thead>
-              <tr className="bg-gray-50">
-                <th className="border border-gray-300 px-2 py-1 text-left">排名</th>
-                <th className="border border-gray-300 px-2 py-1 text-left">目标值</th>
-                <th className="border border-gray-300 px-2 py-1 text-left">总收益率</th>
-                <th className="border border-gray-300 px-2 py-1 text-left">最大回撤</th>
-                <th className="border border-gray-300 px-2 py-1 text-left">夏普比率</th>
-                <th className="border border-gray-300 px-2 py-1 text-left">卡尔玛比率</th>
-                <th className="border border-gray-300 px-2 py-1 text-left">跌幅权重</th>
-                <th className="border border-gray-300 px-2 py-1 text-left">成交量权重</th>
-                <th className="border border-gray-300 px-2 py-1 text-left">波动率权重</th>
-                <th className="border border-gray-300 px-2 py-1 text-left">资金费率权重</th>
-                <th className="border border-gray-300 px-2 py-1 text-left">做空数量</th>
-                <th className="border border-gray-300 px-2 py-1 text-left">持仓限制</th>
-                <th className="border border-gray-300 px-2 py-1 text-left">分配策略</th>
-                <th className="border border-gray-300 px-2 py-1 text-left">操作</th>
+              <tr className="bg-gray-50 dark:bg-gray-800">
+                <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">排名</th>
+                <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">目标值</th>
+                <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">总收益率</th>
+                <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">最大回撤</th>
+                <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">夏普比率</th>
+                <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">卡尔玛比率</th>
+                <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">跌幅权重</th>
+                <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">成交量权重</th>
+                <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">波动率权重</th>
+                <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">资金费率权重</th>
+                <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">做空数量</th>
+                <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">持仓限制</th>
+                <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">分配策略</th>
+                <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">操作</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="bg-white dark:bg-gray-900">
               {results.slice(0, 10).map((result, index) => (
-                <tr key={result.combination.id} className={index === 0 ? 'bg-green-50' : 'hover:bg-gray-50'}>
-                  <td className="border border-gray-300 px-2 py-1">
+                <tr key={result.combination.id} className={index === 0 ? 'bg-green-50 dark:bg-green-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-800'}>
+                  <td className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-gray-900 dark:text-gray-100">
                     {index + 1}
-                    {index === 0 && <span className="ml-1 text-green-600">👑</span>}
+                    {index === 0 && <span className="ml-1 text-green-600 dark:text-green-400">👑</span>}
                   </td>
-                  <td className="border border-gray-300 px-2 py-1 font-mono">
+                  <td className="border border-gray-300 dark:border-gray-600 px-2 py-1 font-mono text-gray-900 dark:text-gray-100">
                     {result.objectiveValue.toFixed(4)}
                   </td>
-                  <td className="border border-gray-300 px-2 py-1">
-                    <span className={result.metrics.totalReturn >= 0 ? 'text-green-600' : 'text-red-600'}>
+                  <td className="border border-gray-300 dark:border-gray-600 px-2 py-1">
+                    <span className={result.metrics.totalReturn >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
                       {(result.metrics.totalReturn * 100).toFixed(2)}%
                     </span>
                   </td>
-                  <td className="border border-gray-300 px-2 py-1">
-                    <span className="text-red-600">
+                  <td className="border border-gray-300 dark:border-gray-600 px-2 py-1">
+                    <span className="text-red-600 dark:text-red-400">
                       {(result.metrics.maxDrawdown * 100).toFixed(2)}%
                     </span>
                   </td>
-                  <td className="border border-gray-300 px-2 py-1">
+                  <td className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-gray-900 dark:text-gray-100">
                     {result.metrics.sharpeRatio.toFixed(3)}
                   </td>
-                  <td className="border border-gray-300 px-2 py-1">
+                  <td className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-gray-900 dark:text-gray-100">
                     {result.metrics.calmarRatio.toFixed(3)}
                   </td>
-                  <td className="border border-gray-300 px-2 py-1">
+                  <td className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-gray-900 dark:text-gray-100">
                     {(result.combination.priceChangeWeight * 100).toFixed(0)}%
                   </td>
-                  <td className="border border-gray-300 px-2 py-1">
+                  <td className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-gray-900 dark:text-gray-100">
                     {(result.combination.volumeWeight * 100).toFixed(0)}%
                   </td>
-                  <td className="border border-gray-300 px-2 py-1">
+                  <td className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-gray-900 dark:text-gray-100">
                     {(result.combination.volatilityWeight * 100).toFixed(0)}%
                   </td>
-                  <td className="border border-gray-300 px-2 py-1">
+                  <td className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-gray-900 dark:text-gray-100">
                     {(result.combination.fundingRateWeight * 100).toFixed(0)}%
                   </td>
-                  <td className="border border-gray-300 px-2 py-1">
+                  <td className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-gray-900 dark:text-gray-100">
                     {result.combination.maxShortPositions}
                   </td>
-                  <td className="border border-gray-300 px-2 py-1">
+                  <td className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-gray-900 dark:text-gray-100">
                     {(result.combination.maxSinglePositionRatio * 100).toFixed(0)}%
                   </td>
-                  <td className="border border-gray-300 px-2 py-1">
+                  <td className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-gray-900 dark:text-gray-100">
                     {result.combination.allocationStrategy === PositionAllocationStrategy.BY_VOLUME ? '成交量' :
                      result.combination.allocationStrategy === PositionAllocationStrategy.BY_COMPOSITE_SCORE ? '综合分数' : '平均'}
                   </td>
-                  <td className="border border-gray-300 px-2 py-1">
+                  <td className="border border-gray-300 dark:border-gray-600 px-2 py-1">
                     <button
                       onClick={() => handleApplyParameters(result)}
-                      className="px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
+                      className="px-2 py-1 bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white text-xs rounded"
                     >
                       应用
                     </button>
@@ -447,18 +501,18 @@ export default function OptimizationPanel({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-lg p-6">
+    <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6 border border-gray-200 dark:border-gray-700">
       <div className="flex justify-between items-center mb-6">
-        <h3 className="text-lg font-semibold text-gray-800">参数优化工具</h3>
+        <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">参数优化工具</h3>
         <div className="flex items-center gap-4">
           {/* 标签页切换 */}
-          <div className="flex bg-gray-100 rounded-lg p-1">
+          <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
             <button
               onClick={() => setActiveTab('optimize')}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                 activeTab === 'optimize' 
-                  ? 'bg-white text-blue-600 shadow-sm' 
-                  : 'text-gray-600 hover:text-gray-800'
+                  ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm' 
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
               }`}
             >
               优化工具
@@ -467,8 +521,8 @@ export default function OptimizationPanel({
               onClick={() => setActiveTab('guide')}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                 activeTab === 'guide' 
-                  ? 'bg-white text-blue-600 shadow-sm' 
-                  : 'text-gray-600 hover:text-gray-800'
+                  ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm' 
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
               }`}
             >
               使用指南
@@ -478,7 +532,7 @@ export default function OptimizationPanel({
           {activeTab === 'optimize' && (
             <button
               onClick={() => setShowAdvanced(!showAdvanced)}
-              className="text-sm text-blue-600 hover:text-blue-800"
+              className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
             >
               {showAdvanced ? '隐藏高级设置' : '显示高级设置'}
             </button>
@@ -499,13 +553,13 @@ export default function OptimizationPanel({
 
           {/* 高级设置 */}
           {showAdvanced && (
-            <div className="border-t pt-4 mb-6">
-              <h4 className="font-medium text-gray-700 mb-4">高级设置</h4>
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mb-6">
+              <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-4">高级设置</h4>
               
               {/* 搜索约束 */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">最大迭代次数</label>
+                  <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">最大迭代次数</label>
                   <input
                     type="number"
                     value={config.constraints.searchConstraints.maxIterations}
@@ -519,11 +573,11 @@ export default function OptimizationPanel({
                         }
                       }
                     }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">超时时间（分钟）</label>
+                  <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">超时时间（分钟）</label>
                   <input
                     type="number"
                     value={config.constraints.searchConstraints.timeoutMinutes}
@@ -537,7 +591,7 @@ export default function OptimizationPanel({
                         }
                       }
                     }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                   />
                 </div>
               </div>
@@ -553,8 +607,8 @@ export default function OptimizationPanel({
               disabled={isRunning}
               className={`px-4 py-2 rounded-md font-medium ${
                 isRunning 
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
+                  ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed' 
+                  : 'bg-blue-600 dark:bg-blue-700 text-white hover:bg-blue-700 dark:hover:bg-blue-800'
               }`}
             >
               {isRunning ? '优化中...' : '开始优化'}
@@ -563,7 +617,7 @@ export default function OptimizationPanel({
             {isRunning && (
               <button
                 onClick={handleStopOptimization}
-                className="px-4 py-2 bg-red-600 text-white rounded-md font-medium hover:bg-red-700"
+                className="px-4 py-2 bg-red-600 dark:bg-red-700 text-white rounded-md font-medium hover:bg-red-700 dark:hover:bg-red-800"
               >
                 停止优化
               </button>
@@ -577,9 +631,9 @@ export default function OptimizationPanel({
           {renderResults()}
 
           {/* 说明文字 */}
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-            <h5 className="font-medium text-gray-700 mb-2">使用说明：</h5>
-            <ul className="text-sm text-gray-600 space-y-1">
+          <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+            <h5 className="font-medium text-gray-700 dark:text-gray-300 mb-2">使用说明：</h5>
+            <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
               <li>• 选择优化目标：根据你的投资偏好选择最重要的指标</li>
               <li>• 设置搜索范围：定义各参数的取值范围，范围越大搜索越全面但时间越长</li>
               <li>• 混合方法推荐：先进行粗搜索找到有潜力区域，再精细优化</li>

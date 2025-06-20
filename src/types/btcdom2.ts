@@ -67,6 +67,8 @@ export interface VolumeBacktestDataPoint {
   hour: number;
   btcPrice: number;           // BTC价格
   btcPriceChange24h: number;  // BTC 24小时价格变化
+  btcdomPrice?: number;       // BTCDOM合约价格
+  btcdomPriceChange24h?: number; // BTCDOM 24小时价格变化
   rankings: RankingItem[];    // 按跌幅排序的排行榜
   removedSymbols?: RankingItem[]; // 上一期有但本期没有的币种
   marketStats: MarketStats;   // 市场统计
