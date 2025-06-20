@@ -98,7 +98,7 @@ function optimizedSelectShortCandidates(
   const stats = computeBatchStats(rankings);
   stats.volatility.spread = Math.max((stats.volatility.max - stats.volatility.min) / 4, 0.01);
   
-  const candidates: any[] = [];
+  const candidates = [];
   let selectedCount = 0;
   
   // 预计算理想波动率

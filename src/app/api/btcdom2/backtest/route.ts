@@ -134,11 +134,22 @@ class BTCDOM2StrategyEngine {
     rankings: RankingItem[],
     btcPriceChange: number
   ): ShortSelectionResult {
+    const startTime = Date.now(); // 性能监控
     const allCandidates: ShortCandidate[] = [];
 
     // 排除BTC本身，处理所有候选标的
     const filteredRankings = rankings.filter(item => item.symbol !== 'BTCUSDT');
     const totalCandidates = filteredRankings.length;
+
+    // 提前终止：如果没有候选标的，直接返回
+    if (totalCandidates === 0) {
+      return {
+        selectedCandidates: [],
+        rejectedCandidates: [],
+        selectionReason: '无可用的候选标的',
+        totalCandidates: 0
+      };
+    }
 
     // 分析波动率范围
     // 获取所有波动率数据用于正态分布计算
@@ -239,8 +250,8 @@ class BTCDOM2StrategyEngine {
         const finalTotalScore = isNaN(totalScore) ? 0 : totalScore;
         reason = `综合评分: ${finalTotalScore.toFixed(3)} (跌幅: ${validPriceChangeScore.toFixed(3)}, 成交量: ${validVolumeScore.toFixed(3)}, 波动率: ${validVolatilityScore.toFixed(3)}, 资金费率: ${validFundingRateScore.toFixed(3)})`;
 
-        // 调试信息：记录分数异常的情况
-        if (isNaN(totalScore) || isNaN(validPriceChangeScore) || isNaN(validVolumeScore) || isNaN(validVolatilityScore) || isNaN(validFundingRateScore)) {
+        // 调试信息：记录分数异常的情况（仅开发环境）
+        if (process.env.NODE_ENV === 'development' && (isNaN(totalScore) || isNaN(validPriceChangeScore) || isNaN(validVolumeScore) || isNaN(validVolatilityScore) || isNaN(validFundingRateScore))) {
           console.warn(`[DEBUG] 分数异常 ${item.symbol}:`, {
             priceChange: item.priceChange24h,
             volatility: item.volatility24h,
@@ -294,6 +305,12 @@ class BTCDOM2StrategyEngine {
     const selectionReason = selectedCandidates.length > 0
       ? `选择了${selectedCandidates.length}个做空标的`
       : '无符合条件的做空标的';
+
+    // 性能监控日志（仅开发环境）
+    const executionTime = Date.now() - startTime;
+    if (process.env.NODE_ENV === 'development' && executionTime > 50) {
+      console.log(`[PERF] selectShortCandidates 耗时: ${executionTime}ms, 候选数: ${totalCandidates}, 符合条件: ${eligibleCandidates.length}`);
+    }
 
     return {
       selectedCandidates,
@@ -1212,6 +1229,12 @@ export async function POST(request: NextRequest) {
 
     const { granularityHours, data } = apiResult;
 
+    // 性能监控开始
+    const backtestStartTime = Date.now();
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[PERF] 开始BTCDOM2回测，数据点数: ${data.length}`);
+    }
+
     // 创建策略引擎
     const strategyEngine = new BTCDOM2StrategyEngine(params);
 
@@ -1225,11 +1248,19 @@ export async function POST(request: NextRequest) {
       const snapshot = strategyEngine.generateSnapshot(dataPoint, previousSnapshot, previousData);
       snapshots.push(snapshot);
       previousSnapshot = snapshot;
+      
+      // 每100个数据点记录一次进度（仅开发环境）
+      if (process.env.NODE_ENV === 'development' && (index + 1) % 100 === 0) {
+        const progress = ((index + 1) / data.length * 100).toFixed(1);
+        const elapsed = Date.now() - backtestStartTime;
+        console.log(`[PERF] 回测进度: ${progress}% (${index + 1}/${data.length}), 耗时: ${elapsed}ms`);
+      }
     }
 
     // 计算性能指标
+    const performanceStartTime = Date.now();
     const performance = calculatePerformanceMetrics(snapshots, params, granularityHours);
-
+    
     // 生成图表数据
     const chartData = generateChartData(snapshots, params);
 
@@ -1237,6 +1268,19 @@ export async function POST(request: NextRequest) {
     const activeRebalances = snapshots.filter(s => s.isActive).length;
     const inactiveRebalances = snapshots.length - activeRebalances;
     const avgShortPositions = snapshots.reduce((sum, s) => sum + s.shortPositions.length, 0) / snapshots.length;
+
+    // 性能监控总结
+    const totalBacktestTime = Date.now() - backtestStartTime;
+    const performanceTime = Date.now() - performanceStartTime;
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[PERF] BTCDOM2回测完成:`);
+      console.log(`  - 数据处理耗时: ${totalBacktestTime - performanceTime}ms`);
+      console.log(`  - 性能计算耗时: ${performanceTime}ms`);
+      console.log(`  - 总耗时: ${totalBacktestTime}ms`);
+      console.log(`  - 平均每个数据点: ${(totalBacktestTime / data.length).toFixed(2)}ms`);
+      console.log(`  - 活跃/非活跃再平衡: ${activeRebalances}/${inactiveRebalances}`);
+    }
 
     const result: BTCDOM2BacktestResult = {
       params,
