@@ -16,6 +16,196 @@ import {
   PositionAllocationStrategy
 } from '@/types/btcdom2';
 
+// 性能优化缓存系统（使用字符串键避免精度问题）
+const FUNDING_RATE_SCORE_CACHE = new Map<string, number>();
+const VOLATILITY_SCORE_CACHE = new Map<string, number>();
+
+// 缓存统计监控
+const CACHE_STATS = {
+  fundingRateHits: 0,
+  fundingRateMisses: 0,
+  volatilityHits: 0,
+  volatilityMisses: 0,
+  lastCleanup: Date.now()
+};
+
+// 内存复用的数组池
+const ARRAY_POOL = {
+  volatilities: [] as number[],
+  priceChanges: [] as number[],
+  fundingRates: [] as number[],
+  tempCandidates: [] as ShortCandidate[]
+};
+
+// 缓存清理和统计功能
+function cleanupCaches() {
+  const now = Date.now();
+  const CLEANUP_INTERVAL = 30 * 60 * 1000; // 30分钟清理一次
+  const MAX_CACHE_SIZE = 10000;
+
+  if (now - CACHE_STATS.lastCleanup > CLEANUP_INTERVAL) {
+    // 清理过大的缓存
+    if (VOLATILITY_SCORE_CACHE.size > MAX_CACHE_SIZE) {
+      const entries = Array.from(VOLATILITY_SCORE_CACHE.entries());
+      VOLATILITY_SCORE_CACHE.clear();
+      // 保留最近使用的一半
+      const recentEntries = entries.slice(-Math.floor(MAX_CACHE_SIZE / 2));
+      recentEntries.forEach(([key, value]) => VOLATILITY_SCORE_CACHE.set(key, value));
+    }
+
+    if (FUNDING_RATE_SCORE_CACHE.size > MAX_CACHE_SIZE) {
+      const entries = Array.from(FUNDING_RATE_SCORE_CACHE.entries());
+      FUNDING_RATE_SCORE_CACHE.clear();
+      const recentEntries = entries.slice(-Math.floor(MAX_CACHE_SIZE / 2));
+      recentEntries.forEach(([key, value]) => FUNDING_RATE_SCORE_CACHE.set(key, value));
+    }
+
+    CACHE_STATS.lastCleanup = now;
+
+    // 开发环境下打印缓存统计
+    if (process.env.NODE_ENV === 'development') {
+      const volatilityTotal = CACHE_STATS.volatilityHits + CACHE_STATS.volatilityMisses;
+      const fundingRateTotal = CACHE_STATS.fundingRateHits + CACHE_STATS.fundingRateMisses;
+      const volatilityHitRate = volatilityTotal > 0 ? (CACHE_STATS.volatilityHits / volatilityTotal * 100).toFixed(1) : 'N/A';
+      const fundingRateHitRate = fundingRateTotal > 0 ? (CACHE_STATS.fundingRateHits / fundingRateTotal * 100).toFixed(1) : 'N/A';
+      console.log(`[CACHE] 定期清理 - 波动率缓存命中率: ${volatilityHitRate}%, 资金费率缓存命中率: ${fundingRateHitRate}%`);
+    }
+  }
+}
+
+// 高精度资金费率分数计算（带缓存）
+function fastFundingRateScore(fundingRate: number): number {
+  // 使用高精度字符串作为键，避免浮点数精度问题
+  const key = fundingRate.toFixed(8); // 保留8位小数精度
+
+  if (FUNDING_RATE_SCORE_CACHE.has(key)) {
+    CACHE_STATS.fundingRateHits++;
+    return FUNDING_RATE_SCORE_CACHE.get(key)!;
+  }
+
+  CACHE_STATS.fundingRateMisses++;
+
+  // 原始计算逻辑，确保与未优化版本完全一致
+  const fundingRatePercent = fundingRate * 100;
+  const score = Math.max(0, Math.min(1, (fundingRatePercent + 2) / 4));
+
+  // 缓存计算结果
+  FUNDING_RATE_SCORE_CACHE.set(key, score);
+  return score;
+}
+
+// 高精度波动率分数计算（带缓存）
+function fastVolatilityScore(volatility: number, idealVolatility: number, volatilitySpread: number): number {
+  // 使用高精度字符串组合作为键
+  const key = `${volatility.toFixed(8)}_${idealVolatility.toFixed(8)}_${volatilitySpread.toFixed(8)}`;
+
+  if (VOLATILITY_SCORE_CACHE.has(key)) {
+    CACHE_STATS.volatilityHits++;
+    return VOLATILITY_SCORE_CACHE.get(key)!;
+  }
+
+  CACHE_STATS.volatilityMisses++;
+
+  // 原始计算逻辑，确保与未优化版本完全一致
+  const score = volatilitySpread > 0
+    ? Math.exp(-Math.pow(volatility - idealVolatility, 2) / (2 * Math.pow(volatilitySpread, 2)))
+    : 1;
+
+  VOLATILITY_SCORE_CACHE.set(key, score);
+  return score;
+}
+
+// 批量统计计算接口
+interface BatchStats {
+  filteredRankings: RankingItem[];
+  totalCandidates: number;
+  volatility: {
+    min: number;
+    max: number;
+    avg: number;
+    spread: number;
+  };
+  priceChange: {
+    maxAbsoluteDecline: number;
+    hasDeclines: boolean;
+    min: number;
+    max: number;
+  };
+}
+
+// 批量统计计算优化
+function computeBatchStats(rankings: RankingItem[]): BatchStats {
+  const filteredRankings = rankings.filter(item => item.symbol !== 'BTCUSDT');
+
+  // 复用数组，避免重复分配内存
+  ARRAY_POOL.volatilities.length = 0;
+  ARRAY_POOL.priceChanges.length = 0;
+  ARRAY_POOL.fundingRates.length = 0;
+
+  let minVolatility = Infinity;
+  let maxVolatility = -Infinity;
+  let volSum = 0;
+  let volCount = 0;
+  let minPriceChange = Infinity;
+  let maxPriceChange = -Infinity;
+  let maxAbsoluteDecline = 0;
+  let hasDeclines = false;
+
+  // 单次遍历计算所有统计数据，避免多次遍历
+  for (const item of filteredRankings) {
+    const vol = item.volatility24h;
+    if (!isNaN(vol) && isFinite(vol)) {
+      ARRAY_POOL.volatilities.push(vol);
+      minVolatility = Math.min(minVolatility, vol);
+      maxVolatility = Math.max(maxVolatility, vol);
+      volSum += vol;
+      volCount++;
+    }
+
+    const priceChange = item.priceChange24h;
+    ARRAY_POOL.priceChanges.push(priceChange);
+    minPriceChange = Math.min(minPriceChange, priceChange);
+    maxPriceChange = Math.max(maxPriceChange, priceChange);
+
+    if (priceChange < 0) {
+      hasDeclines = true;
+      maxAbsoluteDecline = Math.max(maxAbsoluteDecline, Math.abs(priceChange));
+    }
+
+    if (item.fundingRateHistory && item.fundingRateHistory.length > 0) {
+      const latestFunding = item.fundingRateHistory[item.fundingRateHistory.length - 1];
+      if (latestFunding && !isNaN(latestFunding.fundingRate) && isFinite(latestFunding.fundingRate)) {
+        ARRAY_POOL.fundingRates.push(latestFunding.fundingRate);
+      }
+    }
+  }
+
+  return {
+    filteredRankings,
+    totalCandidates: filteredRankings.length,
+    volatility: {
+      min: volCount > 0 ? minVolatility : 0,
+      max: volCount > 0 ? maxVolatility : 0,
+      avg: volCount > 0 ? volSum / volCount : 0,
+      spread: 0 // 将在后面计算
+    },
+    priceChange: {
+      maxAbsoluteDecline,
+      hasDeclines,
+      min: minPriceChange === Infinity ? 0 : minPriceChange,
+      max: maxPriceChange === -Infinity ? 0 : maxPriceChange
+    }
+  };
+}
+
+
+
+
+
+
+
+
+
 // 策略引擎类
 class BTCDOM2StrategyEngine {
   private params: BTCDOM2StrategyParams;
@@ -135,14 +325,15 @@ class BTCDOM2StrategyEngine {
     btcPriceChange: number
   ): ShortSelectionResult {
     const startTime = Date.now(); // 性能监控
-    const allCandidates: ShortCandidate[] = [];
 
-    // 排除BTC本身，处理所有候选标的
-    const filteredRankings = rankings.filter(item => item.symbol !== 'BTCUSDT');
-    const totalCandidates = filteredRankings.length;
+    // 定期清理缓存
+    cleanupCaches();
+
+    // 使用优化的批量统计计算
+    const stats = computeBatchStats(rankings);
 
     // 提前终止：如果没有候选标的，直接返回
-    if (totalCandidates === 0) {
+    if (stats.totalCandidates === 0) {
       return {
         selectedCandidates: [],
         rejectedCandidates: [],
@@ -151,127 +342,87 @@ class BTCDOM2StrategyEngine {
       };
     }
 
-    // 分析波动率范围
-    // 获取所有波动率数据用于正态分布计算
-    const allVolatilities = filteredRankings.map(item => item.volatility24h).filter(vol => !isNaN(vol) && isFinite(vol));
-    const minVolatility = allVolatilities.length > 0 ? Math.min(...allVolatilities) : 0;
-    const maxVolatility = allVolatilities.length > 0 ? Math.max(...allVolatilities) : 0;
-    const avgVolatility = allVolatilities.length > 0 ? allVolatilities.reduce((sum, vol) => sum + vol, 0) / allVolatilities.length : 0;
+    // 计算波动率spread
+    stats.volatility.spread = Math.max((stats.volatility.max - stats.volatility.min) / 4, 0.01);
 
-    // 动态设置理想波动率中心值为平均值，标准差为范围的1/4
-    const idealVolatility = avgVolatility;
-    const volatilitySpread = Math.max((maxVolatility - minVolatility) / 4, 0.01); // 至少0.01防止除零
+    let selectedCount = 0;
 
-    // 预先计算跌幅分数的最大值，避免除零问题
-    const maxAbsoluteDecline = Math.max(...filteredRankings.map(r => Math.abs(Math.min(r.priceChange24h, 0))));
-    const hasDeclines = maxAbsoluteDecline > 0;
+    // 预计算理想波动率
+    const idealVolatility = stats.volatility.avg;
+    const volatilitySpread = stats.volatility.spread;
 
-    // 分析资金费率范围用于评分计算
-    const allFundingRates: number[] = [];
-    filteredRankings.forEach(item => {
-      if (item.fundingRateHistory && item.fundingRateHistory.length > 0) {
-        // 获取最近的资金费率
-        const latestFunding = item.fundingRateHistory[item.fundingRateHistory.length - 1];
-        if (latestFunding && !isNaN(latestFunding.fundingRate) && isFinite(latestFunding.fundingRate)) {
-          allFundingRates.push(latestFunding.fundingRate);
-        }
-      }
+    // 预排序优化：按价格变化预筛选，避免处理明显不符合条件的项
+    const preFilteredItems = stats.filteredRankings.filter(item => {
+      const priceChange = isNaN(item.priceChange24h) ? 0 : item.priceChange24h;
+      return priceChange < btcPriceChange;
     });
 
-    const minFundingRate = allFundingRates.length > 0 ? Math.min(...allFundingRates) : 0;
-    const maxFundingRate = allFundingRates.length > 0 ? Math.max(...allFundingRates) : 0;
-    const fundingRateRange = maxFundingRate - minFundingRate;
+    // 如果预筛选后没有符合条件的候选者，快速返回
+    if (preFilteredItems.length === 0) {
+      const rejectedCandidates = stats.filteredRankings.map(item => ({
+        symbol: item.symbol,
+        rank: item.rank,
+        priceChange24h: isNaN(item.priceChange24h) ? 0 : item.priceChange24h,
+        volume24h: item.volume24h,
+        quoteVolume24h: item.quoteVolume24h,
+        volatility24h: item.volatility24h,
+        marketShare: item.marketShare,
+        priceAtTime: item.priceAtTime,
+        futurePriceAtTime: item.futurePriceAtTime,
+        futureSymbol: item.futureSymbol,
+        priceChangeScore: 0,
+        volumeScore: 0,
+        volatilityScore: 0,
+        fundingRateScore: 0,
+        totalScore: 0,
+        eligible: false,
+        reason: `涨跌幅 ${item.priceChange24h.toFixed(2)}% 不低于BTC ${btcPriceChange.toFixed(2)}%`
+      }));
 
-    filteredRankings.forEach((item) => {
+      return {
+        selectedCandidates: [],
+        rejectedCandidates,
+        totalCandidates: stats.filteredRankings.length,
+        selectionReason: '无符合价格条件的候选标的'
+      };
+    }
+
+    // 复用候选者数组
+    ARRAY_POOL.tempCandidates.length = 0;
+
+    for (const item of preFilteredItems) {
       const priceChange = isNaN(item.priceChange24h) ? 0 : item.priceChange24h;
 
-      // 计算跌幅分数：跌幅越大分数越高（负值变正值，绝对值越大分数越高）
-      let priceChangeScore = 0;
-      if (hasDeclines) {
-        priceChangeScore = Math.abs(Math.min(priceChange, 0)) / maxAbsoluteDecline;
-      } else {
-        // 如果没有下跌的币种，按照跌幅相对大小排序（越接近0分数越高）
-        const minChange = Math.min(...filteredRankings.map(r => r.priceChange24h));
-        const maxChange = Math.max(...filteredRankings.map(r => r.priceChange24h));
-        if (maxChange > minChange) {
-          priceChangeScore = 1 - (priceChange - minChange) / (maxChange - minChange);
-        } else {
-          priceChangeScore = 1; // 所有币种涨跌幅相同，给相同分数
-        }
-      }
+      // 计算各项分数（使用优化的计算方法）
+      const priceChangeScore = stats.priceChange.hasDeclines
+        ? Math.abs(Math.min(priceChange, 0)) / stats.priceChange.maxAbsoluteDecline
+        : (stats.priceChange.max > stats.priceChange.min
+            ? 1 - (priceChange - stats.priceChange.min) / (stats.priceChange.max - stats.priceChange.min)
+            : 1);
 
-      // 计算成交量分数：成交量排名越靠前（数字越小），分数越高
-      const volumeScore = (totalCandidates - item.rank + 1) / totalCandidates;
+      const volumeScore = (stats.totalCandidates - item.rank + 1) / stats.totalCandidates;
 
-      // 计算波动率分数：使用正态分布，适中得分最高
-      let volatilityScore = 0;
-      const validVolatility = isNaN(item.volatility24h) || !isFinite(item.volatility24h) ? avgVolatility : item.volatility24h;
-      if (volatilitySpread > 0) {
-        volatilityScore = Math.exp(-Math.pow(validVolatility - idealVolatility, 2) / (2 * Math.pow(volatilitySpread, 2)));
-      } else {
-        volatilityScore = 1; // 如果波动率标准差为0，给所有币种相同分数
-      }
+      const validVolatility = isNaN(item.volatility24h) || !isFinite(item.volatility24h) ? idealVolatility : item.volatility24h;
+      const volatilityScore = fastVolatilityScore(validVolatility, idealVolatility, volatilitySpread);
 
-      // 计算资金费率分数：资金费率为正对空头有利，正的越多越有利
-      // -2% 得0分，2% 得满分，线性映射到0-1分数
-      let fundingRateScore = 0;
+
+      let fundingRateScore = 0.5;
       if (item.fundingRateHistory && item.fundingRateHistory.length > 0) {
         const latestFunding = item.fundingRateHistory[item.fundingRateHistory.length - 1];
         if (latestFunding && !isNaN(latestFunding.fundingRate) && isFinite(latestFunding.fundingRate)) {
-          const fundingRatePercent = latestFunding.fundingRate * 100; // 转换为百分比
-          // -2% -> 0分, 2% -> 1分, 线性映射
-          fundingRateScore = Math.max(0, Math.min(1, (fundingRatePercent + 2) / 4));
-        } else {
-          fundingRateScore = 0.5; // 无效资金费率，给中等分数
-        }
-      } else {
-        fundingRateScore = 0.5; // 无资金费率历史，给中等分数
-      }
-
-      // 计算综合分数，确保所有分数都是有效数字
-      const validPriceChangeScore = isNaN(priceChangeScore) ? 0 : priceChangeScore;
-      const validVolumeScore = isNaN(volumeScore) ? 0 : volumeScore;
-      const validVolatilityScore = isNaN(volatilityScore) ? 0 : volatilityScore;
-      const validFundingRateScore = isNaN(fundingRateScore) ? 0.5 : fundingRateScore;
-
-      const totalScore = validPriceChangeScore * this.params.priceChangeWeight +
-                        validVolumeScore * this.params.volumeWeight +
-                        validVolatilityScore * this.params.volatilityWeight +
-                        validFundingRateScore * this.params.fundingRateWeight;
-
-      // 判断是否符合做空条件
-      let eligible = true;
-      let reason = '';
-
-      if (priceChange >= btcPriceChange) {
-        eligible = false;
-        reason = `涨跌幅 ${priceChange.toFixed(2)}% 不低于BTC ${btcPriceChange.toFixed(2)}%`;
-      } else {
-        const finalTotalScore = isNaN(totalScore) ? 0 : totalScore;
-        reason = `综合评分: ${finalTotalScore.toFixed(3)} (跌幅: ${validPriceChangeScore.toFixed(3)}, 成交量: ${validVolumeScore.toFixed(3)}, 波动率: ${validVolatilityScore.toFixed(3)}, 资金费率: ${validFundingRateScore.toFixed(3)})`;
-
-        // 调试信息：记录分数异常的情况（仅开发环境）
-        if (process.env.NODE_ENV === 'development' && (isNaN(totalScore) || isNaN(validPriceChangeScore) || isNaN(validVolumeScore) || isNaN(validVolatilityScore) || isNaN(validFundingRateScore))) {
-          console.warn(`[DEBUG] 分数异常 ${item.symbol}:`, {
-            priceChange: item.priceChange24h,
-            volatility: item.volatility24h,
-            rank: item.rank,
-            priceChangeScore: validPriceChangeScore,
-            volumeScore: validVolumeScore,
-            volatilityScore: validVolatilityScore,
-            fundingRateScore: validFundingRateScore,
-            totalScore: finalTotalScore,
-            maxAbsoluteDecline,
-            hasDeclines,
-            idealVolatility,
-            volatilitySpread,
-            fundingRateRange,
-            latestFundingRate: item.fundingRateHistory && item.fundingRateHistory.length > 0 ? item.fundingRateHistory[item.fundingRateHistory.length - 1]?.fundingRate : 'N/A'
-          });
+          fundingRateScore = fastFundingRateScore(latestFunding.fundingRate);
         }
       }
 
-      allCandidates.push({
+      const totalScore = priceChangeScore * this.params.priceChangeWeight +
+                        volumeScore * this.params.volumeWeight +
+                        volatilityScore * this.params.volatilityWeight +
+                        fundingRateScore * this.params.fundingRateWeight;
+
+      const finalTotalScore = isNaN(totalScore) ? 0 : totalScore;
+
+      // 创建候选者对象，复用数组池
+      const candidate: ShortCandidate = {
         symbol: item.symbol,
         rank: item.rank,
         priceChange24h: priceChange,
@@ -279,43 +430,96 @@ class BTCDOM2StrategyEngine {
         quoteVolume24h: item.quoteVolume24h,
         volatility24h: item.volatility24h,
         marketShare: item.marketShare,
-        priceAtTime: item.priceAtTime, // 添加当前时刻现货价格
-        futurePriceAtTime: item.futurePriceAtTime, // 添加期货价格
-        futureSymbol: item.futureSymbol, // 添加期货交易对symbol
-        priceChangeScore: validPriceChangeScore,
-        volumeScore: validVolumeScore,
-        volatilityScore: validVolatilityScore,
-        fundingRateScore: validFundingRateScore,
-        totalScore: isNaN(totalScore) ? 0 : totalScore,
-        eligible,
-        reason
-      });
-    });
+        priceAtTime: item.priceAtTime,
+        futurePriceAtTime: item.futurePriceAtTime,
+        futureSymbol: item.futureSymbol,
+        priceChangeScore,
+        volumeScore,
+        volatilityScore,
+        fundingRateScore,
+        totalScore: finalTotalScore,
+        eligible: true,
+        reason: `综合评分: ${finalTotalScore.toFixed(3)}`
+      };
 
-    // 按综合分数排序
-    allCandidates.sort((a, b) => b.totalScore - a.totalScore);
+      // 调试信息：记录分数异常的情况（仅开发环境）
+      if (process.env.NODE_ENV === 'development' && (isNaN(totalScore) || isNaN(priceChangeScore) || isNaN(volumeScore) || isNaN(volatilityScore) || isNaN(fundingRateScore))) {
+        console.warn(`[DEBUG] 分数异常 ${item.symbol}:`, {
+          priceChange: item.priceChange24h,
+          volatility: item.volatility24h,
+          rank: item.rank,
+          scores: { priceChangeScore, volumeScore, volatilityScore, fundingRateScore, totalScore: finalTotalScore }
+        });
+      }
 
-    // 分离符合条件和不符合条件的候选标的
-    const eligibleCandidates = allCandidates.filter(c => c.eligible);
-    const rejectedCandidates = allCandidates.filter(c => !c.eligible);
+      ARRAY_POOL.tempCandidates.push(candidate);
+      selectedCount++;
 
-    // 选择前N个符合条件的标的
-    const selectedCandidates = eligibleCandidates.slice(0, this.params.maxShortPositions);
+      // 提前终止：如果已经有足够多的候选者，可以提前排序并选择
+      if (selectedCount >= this.params.maxShortPositions * 2) { // 减少倍数，提高效率
+        break;
+      }
+    }
 
-    const selectionReason = selectedCandidates.length > 0
-      ? `选择了${selectedCandidates.length}个做空标的`
+    // 在temp数组中排序，避免额外的过滤操作
+    ARRAY_POOL.tempCandidates.sort((a, b) => b.totalScore - a.totalScore);
+
+    // 创建最终结果，只复制需要的数量
+    const eligibleCandidates = [...ARRAY_POOL.tempCandidates];
+
+    // 添加被拒绝的候选者（价格不符合条件的）
+    const rejectedCandidates: ShortCandidate[] = [];
+    for (const item of stats.filteredRankings) {
+      const priceChange = isNaN(item.priceChange24h) ? 0 : item.priceChange24h;
+      if (priceChange >= btcPriceChange) {
+        rejectedCandidates.push({
+          symbol: item.symbol,
+          rank: item.rank,
+          priceChange24h: priceChange,
+          volume24h: item.volume24h,
+          quoteVolume24h: item.quoteVolume24h,
+          volatility24h: item.volatility24h,
+          marketShare: item.marketShare,
+          priceAtTime: item.priceAtTime,
+          futurePriceAtTime: item.futurePriceAtTime,
+          futureSymbol: item.futureSymbol,
+          priceChangeScore: 0,
+          volumeScore: 0,
+          volatilityScore: 0,
+          fundingRateScore: 0,
+          totalScore: 0,
+          eligible: false,
+          reason: `涨跌幅 ${priceChange.toFixed(2)}% 不低于BTC ${btcPriceChange.toFixed(2)}%`
+        });
+      }
+    }
+
+    // 只对符合条件的候选者排序
+    eligibleCandidates.sort((a, b) => b.totalScore - a.totalScore);
+
+    const finalSelectedCandidates = eligibleCandidates.slice(0, this.params.maxShortPositions);
+
+    const selectionReason = finalSelectedCandidates.length > 0
+      ? `选择了${finalSelectedCandidates.length}个做空标的`
       : '无符合条件的做空标的';
 
     // 性能监控日志（仅开发环境）
     const executionTime = Date.now() - startTime;
-    if (process.env.NODE_ENV === 'development' && executionTime > 50) {
-      console.log(`[PERF] selectShortCandidates 耗时: ${executionTime}ms, 候选数: ${totalCandidates}, 符合条件: ${eligibleCandidates.length}`);
+    if (process.env.NODE_ENV === 'development' && executionTime > 20) {
+      const volatilityTotal = CACHE_STATS.volatilityHits + CACHE_STATS.volatilityMisses;
+      const fundingRateTotal = CACHE_STATS.fundingRateHits + CACHE_STATS.fundingRateMisses;
+      const volatilityHitRate = volatilityTotal > 0 ? (CACHE_STATS.volatilityHits / volatilityTotal * 100).toFixed(1) : 'N/A';
+      const fundingRateHitRate = fundingRateTotal > 0 ? (CACHE_STATS.fundingRateHits / fundingRateTotal * 100).toFixed(1) : 'N/A';
+
+      console.log(`[PERF] selectShortCandidates 耗时: ${executionTime}ms, 总候选数: ${stats.totalCandidates}, 预筛选后: ${selectedCount}, 最终选择: ${finalSelectedCandidates.length}`);
+      console.log(`[CACHE] 波动率缓存命中率: ${volatilityHitRate}%, 资金费率缓存命中率: ${fundingRateHitRate}%`);
+      console.log(`[CACHE] 缓存大小 - 波动率: ${VOLATILITY_SCORE_CACHE.size}, 资金费率: ${FUNDING_RATE_SCORE_CACHE.size}`);
     }
 
     return {
-      selectedCandidates,
+      selectedCandidates: finalSelectedCandidates,
       rejectedCandidates,
-      totalCandidates: allCandidates.length,
+      totalCandidates: eligibleCandidates.length + rejectedCandidates.length,
       selectionReason
     };
   }
@@ -1159,6 +1363,8 @@ function generateChartData(snapshots: StrategySnapshot[], params: BTCDOM2Strateg
   });
 }
 
+
+
 export async function POST(request: NextRequest) {
   try {
     const rawParams = await request.json();
@@ -1248,7 +1454,7 @@ export async function POST(request: NextRequest) {
       const snapshot = strategyEngine.generateSnapshot(dataPoint, previousSnapshot, previousData);
       snapshots.push(snapshot);
       previousSnapshot = snapshot;
-      
+
       // 每100个数据点记录一次进度（仅开发环境）
       if (process.env.NODE_ENV === 'development' && (index + 1) % 100 === 0) {
         const progress = ((index + 1) / data.length * 100).toFixed(1);
@@ -1260,7 +1466,7 @@ export async function POST(request: NextRequest) {
     // 计算性能指标
     const performanceStartTime = Date.now();
     const performance = calculatePerformanceMetrics(snapshots, params, granularityHours);
-    
+
     // 生成图表数据
     const chartData = generateChartData(snapshots, params);
 
@@ -1272,7 +1478,7 @@ export async function POST(request: NextRequest) {
     // 性能监控总结
     const totalBacktestTime = Date.now() - backtestStartTime;
     const performanceTime = Date.now() - performanceStartTime;
-    
+
     if (process.env.NODE_ENV === 'development') {
       console.log(`[PERF] BTCDOM2回测完成:`);
       console.log(`  - 数据处理耗时: ${totalBacktestTime - performanceTime}ms`);
