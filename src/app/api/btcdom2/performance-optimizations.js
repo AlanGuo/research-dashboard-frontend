@@ -4,7 +4,7 @@
  */
 
 // 优化1: 移除生产环境的调试日志
-const isProduction = process.env.NODE_ENV === 'production';
+// const isProduction = process.env.NODE_ENV === 'production';
 
 // 优化2: 预计算常用数学函数
 const VOLATILITY_SCORE_CACHE = new Map();
