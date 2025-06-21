@@ -8,7 +8,12 @@ import {
   ParameterRange,
   ParameterValidationResult
 } from './types';
-import { PositionAllocationStrategy, BTCDOM2StrategyParams } from '@/types/btcdom2';
+import { 
+  PositionAllocationStrategy, 
+  BTCDOM2StrategyParams, 
+  BTCDOM2ApiResponse, 
+  BTCDOM2BacktestResult 
+} from '@/types/btcdom2';
 
 export class ParameterOptimizer {
   private static readonly MAX_RESULTS_TO_KEEP = 10; // 只保留最优的10个结果
@@ -476,7 +481,7 @@ export class ParameterOptimizer {
   private async callOptimizeAPIWithRetry(
     params: BTCDOM2StrategyParams, 
     combinationId: string
-  ): Promise<any> {
+  ): Promise<BTCDOM2ApiResponse<BTCDOM2BacktestResult> | null> {
     let lastError: Error | null = null;
     
     for (let attempt = 1; attempt <= ParameterOptimizer.RETRY_ATTEMPTS; attempt++) {
