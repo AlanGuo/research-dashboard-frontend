@@ -36,10 +36,10 @@ export default function BTCDOM2Dashboard() {
     endDate: '2025-06-21',
     initialCapital: 10000,
     btcRatio: 0.5,
-    priceChangeWeight: 0.15,
+    priceChangeWeight: 0.22,
     volumeWeight: 0.05,
-    volatilityWeight: 0.1,
-    fundingRateWeight: 0.7,
+    volatilityWeight: 0.13,
+    fundingRateWeight: 0.6,
     maxShortPositions: 5,
     spotTradingFeeRate: 0.0008, // 0.08% 现货手续费
     futuresTradingFeeRate: 0.0002, // 0.02% 期货手续费
@@ -273,7 +273,7 @@ export default function BTCDOM2Dashboard() {
     allocationStrategy: PositionAllocationStrategy;
   }) => {
     console.log('应用最优参数:', bestParams);
-    
+
     // 更新当前参数
     const newParams = {
       ...params,

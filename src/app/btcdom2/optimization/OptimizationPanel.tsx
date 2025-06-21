@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { 
-  OptimizationConfig, 
-  OptimizationResult, 
+import {
+  OptimizationConfig,
+  OptimizationResult,
   ParameterRange,
   OptimizationProgress,
   AllocationStrategyMode
@@ -27,17 +27,17 @@ interface OptimizationPanelProps {
   }) => void;
 }
 
-export default function OptimizationPanel({ 
-  initialConfig, 
+export default function OptimizationPanel({
+  initialConfig,
   onOptimizationComplete,
-  onBestParametersFound 
+  onBestParametersFound
 }: OptimizationPanelProps) {
   // 环境检查：只在开发环境下启用
   const isDevelopment = process.env.NODE_ENV === 'development';
-  
+
   // 优化器实例
   const [optimizer] = useState(() => new ParameterOptimizer());
-  
+
   // 优化配置状态
   const [config, setConfig] = useState<OptimizationConfig>({
     baseParams: {
@@ -83,13 +83,13 @@ export default function OptimizationPanel({
     setParameterRange(prev => {
       const newRange = {
         ...prev,
-        allocationStrategy: config.allocationStrategyMode === 'random' 
+        allocationStrategy: config.allocationStrategyMode === 'random'
           ? [
               PositionAllocationStrategy.BY_VOLUME,
               PositionAllocationStrategy.BY_COMPOSITE_SCORE,
               PositionAllocationStrategy.EQUAL_ALLOCATION
             ]
-          : config.fixedAllocationStrategy 
+          : config.fixedAllocationStrategy
             ? [config.fixedAllocationStrategy]
             : [PositionAllocationStrategy.BY_COMPOSITE_SCORE]
       };
@@ -126,7 +126,7 @@ export default function OptimizationPanel({
       optimizer.cancelOptimization();
       // 清理优化器资源
       optimizer.dispose();
-      
+
       if (process.env.NODE_ENV === 'development') {
         console.log('OptimizationPanel 资源已清理');
       }
@@ -143,11 +143,11 @@ export default function OptimizationPanel({
 
     try {
       const results = await optimizer.startOptimization(config, parameterRange);
-      
+
       if (results.length > 0) {
         setResults(results);
         onOptimizationComplete?.(results);
-        
+
         // 自动应用最优参数
         if (results[0] && onBestParametersFound) {
           const bestParams = results[0].combination;
@@ -160,7 +160,7 @@ export default function OptimizationPanel({
             allocationStrategy: bestParams.allocationStrategy
           });
         }
-        
+
         console.log(`优化完成，获得 ${results.length} 个有效结果`);
       } else {
         console.warn('优化完成，但未获得有效结果。可能所有参数组合都不满足约束条件。');
@@ -201,8 +201,8 @@ export default function OptimizationPanel({
       </label>
       <Select
         value={config.objective}
-        onValueChange={(value) => setConfig(prev => ({ 
-          ...prev, 
+        onValueChange={(value) => setConfig(prev => ({
+          ...prev,
           objective: value as 'totalReturn' | 'sharpe' | 'calmar' | 'maxDrawdown' | 'composite'
         }))}
       >
@@ -210,7 +210,7 @@ export default function OptimizationPanel({
           <SelectValue>
             {config.objective === 'maxDrawdown' && "最小化最大回撤"}
             {config.objective === 'composite' && "最大化风险调整收益"}
-            {config.objective === 'calmar' && "最大化卡尔玛比率"}
+            {config.objective === 'calmar' && "最大化卡玛比率"}
             {config.objective === 'sharpe' && "最大化夏普比率"}
             {config.objective === 'totalReturn' && "最大化总收益率"}
           </SelectValue>
@@ -230,7 +230,7 @@ export default function OptimizationPanel({
           </SelectItem>
           <SelectItem value="calmar">
             <div className="flex flex-col">
-              <span>最大化卡尔玛比率</span>
+              <span>最大化卡玛比率</span>
               <span className="text-xs text-gray-500 dark:text-gray-400">年化收益率与最大回撤的比值</span>
             </div>
           </SelectItem>
@@ -259,8 +259,8 @@ export default function OptimizationPanel({
       </label>
       <Select
         value={config.allocationStrategyMode}
-        onValueChange={(value) => setConfig(prev => ({ 
-          ...prev, 
+        onValueChange={(value) => setConfig(prev => ({
+          ...prev,
           allocationStrategyMode: value as AllocationStrategyMode
         }))}
       >
@@ -285,7 +285,7 @@ export default function OptimizationPanel({
           </SelectItem>
         </SelectContent>
       </Select>
-      
+
       {/* 当选择固定策略时，显示策略选择器 */}
       {config.allocationStrategyMode === 'fixed' && (
         <div className="mt-3">
@@ -294,8 +294,8 @@ export default function OptimizationPanel({
           </label>
           <Select
             value={config.fixedAllocationStrategy || PositionAllocationStrategy.BY_COMPOSITE_SCORE}
-            onValueChange={(value) => setConfig(prev => ({ 
-              ...prev, 
+            onValueChange={(value) => setConfig(prev => ({
+              ...prev,
               fixedAllocationStrategy: value as PositionAllocationStrategy
             }))}
           >
@@ -340,8 +340,8 @@ export default function OptimizationPanel({
       </label>
       <Select
         value={config.method}
-        onValueChange={(value) => setConfig(prev => ({ 
-          ...prev, 
+        onValueChange={(value) => setConfig(prev => ({
+          ...prev,
           method: value as 'grid' | 'bayesian' | 'hybrid'
         }))}
       >
@@ -380,7 +380,7 @@ export default function OptimizationPanel({
   const renderParameterRanges = () => (
     <div className="space-y-4">
       <h4 className="font-medium text-gray-700 dark:text-gray-300">参数搜索范围</h4>
-      
+
       {/* 做空标的数量范围 */}
       <div>
         <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">最多做空标的数量</label>
@@ -484,20 +484,20 @@ export default function OptimizationPanel({
             {progress.currentIteration}/{progress.totalIterations}
           </span>
         </div>
-        
+
         <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2 mb-2">
-          <div 
+          <div
             className="bg-blue-600 dark:bg-blue-400 h-2 rounded-full transition-all duration-300"
             style={{ width: `${(progress.currentIteration / progress.totalIterations) * 100}%` }}
           />
         </div>
-        
+
         <div className="flex justify-between text-sm text-blue-600 dark:text-blue-400">
           <span>预计剩余: {Math.round(progress.estimatedTimeRemaining / 60)}分钟</span>
           {progress.currentBest && (
             <span>当前最优: {
-              config.objective === 'maxDrawdown' ? 
-                `${(Math.abs(progress.currentBest.objectiveValue) * 100).toFixed(2)}%` : 
+              config.objective === 'maxDrawdown' ?
+                `${(Math.abs(progress.currentBest.objectiveValue) * 100).toFixed(2)}%` :
                 progress.currentBest.objectiveValue.toFixed(4)
             }</span>
           )}
@@ -516,7 +516,7 @@ export default function OptimizationPanel({
           <h4 className="font-medium text-gray-700 dark:text-gray-300">优化结果（前10名）</h4>
           <span className="text-sm text-gray-500 dark:text-gray-400">共找到 {results.length} 个有效组合</span>
         </div>
-        
+
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse border border-gray-300 dark:border-gray-600">
             <thead>
@@ -526,7 +526,7 @@ export default function OptimizationPanel({
                 <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">总收益率</th>
                 <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">最大回撤</th>
                 <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">夏普比率</th>
-                <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">卡尔玛比率</th>
+                <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">卡玛比率</th>
                 <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">跌幅权重</th>
                 <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">成交量权重</th>
                 <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">波动率权重</th>
@@ -545,8 +545,8 @@ export default function OptimizationPanel({
                     {index === 0 && <span className="ml-1 text-green-600 dark:text-green-400">👑</span>}
                   </td>
                   <td className="border border-gray-300 dark:border-gray-600 px-2 py-1 font-mono text-gray-900 dark:text-gray-100">
-                    {config.objective === 'maxDrawdown' ? 
-                      `${(Math.abs(result.objectiveValue) * 100).toFixed(2)}%` : 
+                    {config.objective === 'maxDrawdown' ?
+                      `${(Math.abs(result.objectiveValue) * 100).toFixed(2)}%` :
                       result.objectiveValue.toFixed(4)
                     }
                   </td>
@@ -630,8 +630,8 @@ export default function OptimizationPanel({
             <button
               onClick={() => setActiveTab('optimize')}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeTab === 'optimize' 
-                  ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm' 
+                activeTab === 'optimize'
+                  ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
               }`}
             >
@@ -640,15 +640,15 @@ export default function OptimizationPanel({
             <button
               onClick={() => setActiveTab('guide')}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                activeTab === 'guide' 
-                  ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm' 
+                activeTab === 'guide'
+                  ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
               }`}
             >
               使用指南
             </button>
           </div>
-          
+
           {activeTab === 'optimize' && (
             <button
               onClick={() => setShowAdvanced(!showAdvanced)}
@@ -678,7 +678,7 @@ export default function OptimizationPanel({
           {showAdvanced && (
             <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mb-6">
               <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-4">高级设置</h4>
-              
+
               {/* 搜索约束 */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
@@ -717,14 +717,14 @@ export default function OptimizationPanel({
               onClick={handleStartOptimization}
               disabled={isRunning}
               className={`px-4 py-2 rounded-md font-medium ${
-                isRunning 
-                  ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed' 
+                isRunning
+                  ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
                   : 'bg-blue-600 dark:bg-blue-700 text-white hover:bg-blue-700 dark:hover:bg-blue-800'
               }`}
             >
               {isRunning ? '优化中...' : '开始优化'}
             </button>
-            
+
             {isRunning && (
               <button
                 onClick={handleStopOptimization}
