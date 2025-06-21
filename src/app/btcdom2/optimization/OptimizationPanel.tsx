@@ -49,7 +49,7 @@ export default function OptimizationPanel({
       shortAlt: true,
       granularityHours: 8
     },
-    objective: OptimizationObjective.MAXIMIZE_TOTAL_RETURN,
+    objective: OptimizationObjective.MINIMIZE_MAX_DRAWDOWN,
     method: OptimizationMethod.HYBRID,
     constraints: {
       weightConstraints: {
@@ -174,32 +174,14 @@ export default function OptimizationPanel({
       >
         <SelectTrigger className="w-full text-left">
           <SelectValue>
-            {config.objective === OptimizationObjective.MAXIMIZE_TOTAL_RETURN && "最大化总收益率"}
-            {config.objective === OptimizationObjective.MAXIMIZE_SHARPE_RATIO && "最大化夏普比率"}
-            {config.objective === OptimizationObjective.MAXIMIZE_CALMAR_RATIO && "最大化卡尔玛比率"}
             {config.objective === OptimizationObjective.MINIMIZE_MAX_DRAWDOWN && "最小化最大回撤"}
             {config.objective === OptimizationObjective.MAXIMIZE_RISK_ADJUSTED_RETURN && "最大化风险调整收益"}
+            {config.objective === OptimizationObjective.MAXIMIZE_CALMAR_RATIO && "最大化卡尔玛比率"}
+            {config.objective === OptimizationObjective.MAXIMIZE_SHARPE_RATIO && "最大化夏普比率"}
+            {config.objective === OptimizationObjective.MAXIMIZE_TOTAL_RETURN && "最大化总收益率"}
           </SelectValue>
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={OptimizationObjective.MAXIMIZE_TOTAL_RETURN}>
-            <div className="flex flex-col">
-              <span>最大化总收益率</span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">追求最高的总收益率表现</span>
-            </div>
-          </SelectItem>
-          <SelectItem value={OptimizationObjective.MAXIMIZE_SHARPE_RATIO}>
-            <div className="flex flex-col">
-              <span>最大化夏普比率</span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">平衡收益与风险，追求最佳风险调整收益</span>
-            </div>
-          </SelectItem>
-          <SelectItem value={OptimizationObjective.MAXIMIZE_CALMAR_RATIO}>
-            <div className="flex flex-col">
-              <span>最大化卡尔玛比率</span>
-              <span className="text-xs text-gray-500 dark:text-gray-400">年化收益率与最大回撤的比值</span>
-            </div>
-          </SelectItem>
           <SelectItem value={OptimizationObjective.MINIMIZE_MAX_DRAWDOWN}>
             <div className="flex flex-col">
               <span>最小化最大回撤</span>
@@ -210,6 +192,24 @@ export default function OptimizationPanel({
             <div className="flex flex-col">
               <span>最大化风险调整收益</span>
               <span className="text-xs text-gray-500 dark:text-gray-400">综合考虑收益率和风险指标</span>
+            </div>
+          </SelectItem>
+          <SelectItem value={OptimizationObjective.MAXIMIZE_CALMAR_RATIO}>
+            <div className="flex flex-col">
+              <span>最大化卡尔玛比率</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">年化收益率与最大回撤的比值</span>
+            </div>
+          </SelectItem>
+          <SelectItem value={OptimizationObjective.MAXIMIZE_SHARPE_RATIO}>
+            <div className="flex flex-col">
+              <span>最大化夏普比率</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">平衡收益与风险，追求最佳风险调整收益</span>
+            </div>
+          </SelectItem>
+          <SelectItem value={OptimizationObjective.MAXIMIZE_TOTAL_RETURN}>
+            <div className="flex flex-col">
+              <span>最大化总收益率</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">追求最高的总收益率表现</span>
             </div>
           </SelectItem>
         </SelectContent>
