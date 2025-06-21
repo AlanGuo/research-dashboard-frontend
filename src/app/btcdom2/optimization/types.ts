@@ -30,8 +30,7 @@ export interface OptimizationConfig {
   // 固定的仓位配置策略（当 allocationStrategyMode 为 'fixed' 时使用）
   fixedAllocationStrategy?: PositionAllocationStrategy;
   
-  // 固定的单币种最大持仓比例（当使用按综合分数分配策略时）
-  fixedMaxSinglePositionRatio?: number;
+
   
   // 优化参数
   maxIterations?: number;
@@ -61,7 +60,6 @@ export interface ParameterRange {
   
   // 策略参数范围
   maxShortPositions: { min: number; max: number; step?: number; };
-  maxSinglePositionRatio: { min: number; max: number; step?: number; };
   
   // 配置策略
   allocationStrategy?: PositionAllocationStrategy[];
@@ -99,7 +97,6 @@ export interface ParameterCombination {
   volatilityWeight: number;
   fundingRateWeight: number;
   maxShortPositions: number;
-  maxSinglePositionRatio: number;
   allocationStrategy: PositionAllocationStrategy;
 }
 

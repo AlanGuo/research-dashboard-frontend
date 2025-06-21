@@ -230,10 +230,7 @@ export default function OptimizationGuide() {
                 <span className="text-gray-700 dark:text-gray-300">最多做空数量:</span>
                 <span className="font-mono text-gray-600 dark:text-gray-400">8-15个</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-700 dark:text-gray-300">单币种持仓限制:</span>
-                <span className="font-mono text-gray-600 dark:text-gray-400">15%-25%</span>
-              </div>
+
               <div className="flex justify-between">
                 <span className="text-gray-700 dark:text-gray-300">分配策略:</span>
                 <span className="text-gray-600 dark:text-gray-400">建议包含所有3种</span>

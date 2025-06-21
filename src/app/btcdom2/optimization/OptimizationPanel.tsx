@@ -23,7 +23,6 @@ interface OptimizationPanelProps {
     volatilityWeight: number;
     fundingRateWeight: number;
     maxShortPositions: number;
-    maxSinglePositionRatio: number;
     allocationStrategy: PositionAllocationStrategy;
   }) => void;
 }
@@ -56,7 +55,7 @@ export default function OptimizationPanel({
     method: 'hybrid',
     allocationStrategyMode: 'random',
     fixedAllocationStrategy: PositionAllocationStrategy.BY_COMPOSITE_SCORE,
-    fixedMaxSinglePositionRatio: 0.2,
+
     maxIterations: 300,
     timeLimit: 3600,
     ...initialConfig
@@ -71,7 +70,7 @@ export default function OptimizationPanel({
       fundingRateWeight: { min: 0, max: 1, step: 0.1 }
     },
     maxShortPositions: { min: 5, max: 20, step: 1 },
-    maxSinglePositionRatio: { min: 0.05, max: 0.3, step: 0.05 },
+
     allocationStrategy: [
       PositionAllocationStrategy.BY_VOLUME,
       PositionAllocationStrategy.BY_COMPOSITE_SCORE,
@@ -95,20 +94,11 @@ export default function OptimizationPanel({
             : [PositionAllocationStrategy.BY_COMPOSITE_SCORE]
       };
 
-      // 如果是固定策略且使用按综合分数分配，并且设置了固定比例，则更新单币种持仓比例范围
-      if (config.allocationStrategyMode === 'fixed' && 
-          config.fixedAllocationStrategy === PositionAllocationStrategy.BY_COMPOSITE_SCORE &&
-          config.fixedMaxSinglePositionRatio) {
-        newRange.maxSinglePositionRatio = {
-          min: config.fixedMaxSinglePositionRatio,
-          max: config.fixedMaxSinglePositionRatio,
-          step: 0.01
-        };
-      }
+
 
       return newRange;
     });
-  }, [config.allocationStrategyMode, config.fixedAllocationStrategy, config.fixedMaxSinglePositionRatio]);
+  }, [config.allocationStrategyMode, config.fixedAllocationStrategy]);
 
   // 任务状态
   const [progress, setProgress] = useState<OptimizationProgress | null>(null);
@@ -167,7 +157,6 @@ export default function OptimizationPanel({
             volatilityWeight: bestParams.volatilityWeight,
             fundingRateWeight: bestParams.fundingRateWeight,
             maxShortPositions: bestParams.maxShortPositions,
-            maxSinglePositionRatio: bestParams.maxSinglePositionRatio,
             allocationStrategy: bestParams.allocationStrategy
           });
         }
@@ -199,7 +188,6 @@ export default function OptimizationPanel({
         volatilityWeight: params.volatilityWeight,
         fundingRateWeight: params.fundingRateWeight,
         maxShortPositions: params.maxShortPositions,
-        maxSinglePositionRatio: params.maxSinglePositionRatio,
         allocationStrategy: params.allocationStrategy
       });
     }
@@ -328,7 +316,7 @@ export default function OptimizationPanel({
               <SelectItem value={PositionAllocationStrategy.BY_COMPOSITE_SCORE}>
                 <div className="flex flex-col">
                   <span>按综合分数分配</span>
-                  <span className="text-xs text-gray-500 dark:text-gray-400">根据综合评分分配仓位，可设置单币种最大持仓比例</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">根据综合评分分配仓位</span>
                 </div>
               </SelectItem>
               <SelectItem value={PositionAllocationStrategy.EQUAL_ALLOCATION}>
@@ -342,35 +330,10 @@ export default function OptimizationPanel({
         </div>
       )}
       
-      {/* 按综合分数分配时的单币种持仓比例配置 */}
       {config.allocationStrategyMode === 'fixed' && 
        config.fixedAllocationStrategy === PositionAllocationStrategy.BY_COMPOSITE_SCORE && (
         <div className="mt-3">
-          <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
-            单币种最大持仓比例
-          </label>
-          <div className="grid grid-cols-3 gap-2">
-            <input
-              type="number"
-              step="0.01"
-              placeholder="固定值"
-              value={config.fixedMaxSinglePositionRatio || 0.2}
-              onChange={(e) => setConfig(prev => ({ 
-                ...prev, 
-                fixedMaxSinglePositionRatio: parseFloat(e.target.value) || 0.2
-              }))}
-              className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-            />
-            <div className="col-span-2 flex items-center">
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                当前值：{((config.fixedMaxSinglePositionRatio || 0.2) * 100).toFixed(0)}% 
-                （范围：5%-50%）
-              </span>
-            </div>
-          </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            限制单个币种在总做空仓位中的最大占比，避免过度集中风险
-          </p>
+
         </div>
       )}
     </div>
@@ -462,45 +425,8 @@ export default function OptimizationPanel({
         </div>
       </div>
 
-      {/* 单币种持仓限制范围 */}
-      <div>
-        <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">单币种持仓限制</label>
-        <div className="grid grid-cols-3 gap-2">
-          <input
-            type="number"
-            step="0.01"
-            placeholder="最小值"
-            value={parameterRange.maxSinglePositionRatio.min}
-            onChange={(e) => setParameterRange(prev => ({
-              ...prev,
-              maxSinglePositionRatio: { ...prev.maxSinglePositionRatio, min: parseFloat(e.target.value) || 0.1 }
-            }))}
-            className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-          />
-          <input
-            type="number"
-            step="0.01"
-            placeholder="最大值"
-            value={parameterRange.maxSinglePositionRatio.max}
-            onChange={(e) => setParameterRange(prev => ({
-              ...prev,
-              maxSinglePositionRatio: { ...prev.maxSinglePositionRatio, max: parseFloat(e.target.value) || 0.3 }
-            }))}
-            className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-          />
-          <input
-            type="number"
-            step="0.01"
-            placeholder="步长"
-            value={parameterRange.maxSinglePositionRatio.step}
-            onChange={(e) => setParameterRange(prev => ({
-              ...prev,
-              maxSinglePositionRatio: { ...prev.maxSinglePositionRatio, step: parseFloat(e.target.value) || 0.05 }
-            }))}
-            className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-          />
-        </div>
-      </div>
+
+
 
       {/* 仓位分配策略选择 - 只在随机模式下显示 */}
       {config.allocationStrategyMode === 'random' && (
@@ -542,17 +468,11 @@ export default function OptimizationPanel({
             {config.fixedAllocationStrategy === PositionAllocationStrategy.BY_COMPOSITE_SCORE && "按综合分数分配"}
             {config.fixedAllocationStrategy === PositionAllocationStrategy.EQUAL_ALLOCATION && "平均分配"}
             </strong>
-            {config.fixedAllocationStrategy === PositionAllocationStrategy.BY_COMPOSITE_SCORE && 
-             config.fixedMaxSinglePositionRatio && (
-              <span>，单币种最大持仓比例：<strong>{(config.fixedMaxSinglePositionRatio * 100).toFixed(0)}%</strong></span>
-            )}
+
           </p>
           <p className="text-xs text-blue-600 dark:text-blue-300 mt-1">
             优化将专注于其他参数的调整，不会变更仓位分配策略
-            {config.fixedAllocationStrategy === PositionAllocationStrategy.BY_COMPOSITE_SCORE && 
-             config.fixedMaxSinglePositionRatio && 
-             "和单币种持仓比例"
-            }
+
           </p>
         </div>
       )}
@@ -619,9 +539,9 @@ export default function OptimizationPanel({
                 <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">波动率权重</th>
                 <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">资金费率权重</th>
                 <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">做空数量</th>
-                <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">持仓限制</th>
+
                 <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">分配策略</th>
-                <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">操作</th>
+
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-900">
@@ -668,9 +588,7 @@ export default function OptimizationPanel({
                   <td className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-gray-900 dark:text-gray-100">
                     {result.combination.maxShortPositions}
                   </td>
-                  <td className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-gray-900 dark:text-gray-100">
-                    {(result.combination.maxSinglePositionRatio * 100).toFixed(0)}%
-                  </td>
+
                   <td className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-gray-900 dark:text-gray-100">
                     {result.combination.allocationStrategy === PositionAllocationStrategy.BY_VOLUME ? '成交量' :
                      result.combination.allocationStrategy === PositionAllocationStrategy.BY_COMPOSITE_SCORE ? '综合分数' : '平均'}

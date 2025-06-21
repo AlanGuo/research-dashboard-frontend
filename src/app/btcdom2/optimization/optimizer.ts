@@ -373,7 +373,6 @@ export class ParameterOptimizer {
       volatilityWeight: combination.volatilityWeight,
       fundingRateWeight: combination.fundingRateWeight,
       maxShortPositions: combination.maxShortPositions,
-      maxSinglePositionRatio: combination.maxSinglePositionRatio,
       allocationStrategy: combination.allocationStrategy,
       // 确保必要的字段有默认值
       granularityHours: config.baseParams.granularityHours || 8
@@ -556,28 +555,19 @@ export class ParameterOptimizer {
       range.maxShortPositions.step || 1
     );
 
-    const maxSinglePositionRatioValues = this.generateRange(
-      range.maxSinglePositionRatio.min,
-      range.maxSinglePositionRatio.max,
-      range.maxSinglePositionRatio.step || 0.05
-    );
-
     const allocationStrategies = range.allocationStrategy || [PositionAllocationStrategy.EQUAL_ALLOCATION];
 
     let id = 1;
 
     for (const weights of weightCombinations) {
       for (const maxShortPositions of maxShortPositionsValues) {
-        for (const maxSinglePositionRatio of maxSinglePositionRatioValues) {
-          for (const allocationStrategy of allocationStrategies) {
-            combinations.push({
-              id: `combo_${id++}`,
-              ...weights,
-              maxShortPositions,
-              maxSinglePositionRatio,
-              allocationStrategy: allocationStrategy as PositionAllocationStrategy
-            });
-          }
+        for (const allocationStrategy of allocationStrategies) {
+          combinations.push({
+            id: `combo_${id++}`,
+            ...weights,
+            maxShortPositions,
+            allocationStrategy: allocationStrategy as PositionAllocationStrategy
+          });
         }
       }
     }
@@ -650,12 +640,6 @@ export class ParameterOptimizer {
       range.maxShortPositions.max
     ];
 
-    const maxSinglePositionRatioValues = [
-      range.maxSinglePositionRatio.min,
-      (range.maxSinglePositionRatio.min + range.maxSinglePositionRatio.max) / 2,
-      range.maxSinglePositionRatio.max
-    ];
-
     const allocationStrategies = range.allocationStrategy || [PositionAllocationStrategy.EQUAL_ALLOCATION];
 
     let id = 1;
@@ -663,20 +647,17 @@ export class ParameterOptimizer {
     // 生成所有组合
     for (const weights of coarseWeightCombinations) {
       for (const maxShortPositions of maxShortPositionsValues) {
-        for (const maxSinglePositionRatio of maxSinglePositionRatioValues) {
-          for (const allocationStrategy of allocationStrategies) {
-            if (combinations.length >= maxCombinations) {
-              return combinations;
-            }
-
-            combinations.push({
-              id: `coarse_${id++}`,
-              ...weights,
-              maxShortPositions,
-              maxSinglePositionRatio,
-              allocationStrategy: allocationStrategy as PositionAllocationStrategy
-            });
+        for (const allocationStrategy of allocationStrategies) {
+          if (combinations.length >= maxCombinations) {
+            return combinations;
           }
+
+          combinations.push({
+            id: `coarse_${id++}`,
+            ...weights,
+            maxShortPositions,
+            allocationStrategy: allocationStrategy as PositionAllocationStrategy
+          });
         }
       }
     }
@@ -697,9 +678,7 @@ export class ParameterOptimizer {
       range.maxShortPositions.min
     );
 
-    const maxSinglePositionRatio =
-      Math.random() * (range.maxSinglePositionRatio.max - range.maxSinglePositionRatio.min) +
-      range.maxSinglePositionRatio.min;
+
 
     const allocationStrategies = range.allocationStrategy || [PositionAllocationStrategy.EQUAL_ALLOCATION];
     const allocationStrategy = allocationStrategies[
@@ -710,7 +689,6 @@ export class ParameterOptimizer {
       id: `random_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       ...weights,
       maxShortPositions,
-      maxSinglePositionRatio: Number(maxSinglePositionRatio.toFixed(3)),
       allocationStrategy
     };
   }
@@ -836,19 +814,10 @@ export class ParameterOptimizer {
       )
     );
 
-    const maxSinglePositionRatio = Math.max(
-      range.maxSinglePositionRatio.min,
-      Math.min(
-        range.maxSinglePositionRatio.max,
-        baseCombination.maxSinglePositionRatio + (Math.random() - 0.5) * 0.2
-      )
-    );
-
     return {
       id: `perturbed_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       ...perturbedWeights,
       maxShortPositions,
-      maxSinglePositionRatio: Number(maxSinglePositionRatio.toFixed(3)),
       allocationStrategy: baseCombination.allocationStrategy
     };
   }
@@ -1045,9 +1014,7 @@ export class ParameterOptimizer {
       errors.push(`最多做空标的数量必须在1-50之间，当前为 ${combination.maxShortPositions}`);
     }
 
-    if (combination.maxSinglePositionRatio < 0.01 || combination.maxSinglePositionRatio > 1) {
-      errors.push(`单币种持仓限制必须在0.01-1之间，当前为 ${combination.maxSinglePositionRatio}`);
-    }
+
 
     // 发出警告
     if (combination.priceChangeWeight < 0.1) {
@@ -1171,7 +1138,6 @@ export class ParameterOptimizer {
       mutationRate: 0.1,
       allocationStrategyMode: 'fixed',
       fixedAllocationStrategy: PositionAllocationStrategy.BY_COMPOSITE_SCORE,
-      fixedMaxSinglePositionRatio: 0.2,
       baseParams: {
         startDate: '2025-01-01',
         endDate: '2025-06-20',

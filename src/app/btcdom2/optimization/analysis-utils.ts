@@ -17,8 +17,7 @@ export class OptimizationAnalyzer {
       { key: 'volumeWeight', name: '成交量权重' },
       { key: 'volatilityWeight', name: '波动率权重' },
       { key: 'fundingRateWeight', name: '资金费率权重' },
-      { key: 'maxShortPositions', name: '最多做空数量' },
-      { key: 'maxSinglePositionRatio', name: '单币种限制' }
+      { key: 'maxShortPositions', name: '最多做空数量' }
     ];
 
     return parameters.map(param => {
@@ -226,7 +225,7 @@ export class OptimizationAnalyzer {
     const headers = [
       '排名', '总收益率', '夏普比率', '最大回撤', '卡尔玛比率',
       '跌幅权重', '成交量权重', '波动率权重', '资金费率权重',
-      '最多做空数量', '单币种限制', '分配策略', '目标函数值'
+      '最多做空数量', '分配策略', '目标函数值'
     ];
 
     const rows = results.map((result, index) => [
@@ -240,7 +239,6 @@ export class OptimizationAnalyzer {
       (result.combination.volatilityWeight * 100).toFixed(0) + '%',
       (result.combination.fundingRateWeight * 100).toFixed(0) + '%',
       result.combination.maxShortPositions,
-      (result.combination.maxSinglePositionRatio * 100).toFixed(0) + '%',
       this.formatAllocationStrategy(result.combination.allocationStrategy),
       result.objectiveValue.toFixed(4)
     ]);
@@ -256,8 +254,7 @@ export class OptimizationAnalyzer {
       volumeWeight: combination.volumeWeight,
       volatilityWeight: combination.volatilityWeight,
       fundingRateWeight: combination.fundingRateWeight,
-      maxShortPositions: combination.maxShortPositions,
-      maxSinglePositionRatio: combination.maxSinglePositionRatio
+      maxShortPositions: combination.maxShortPositions
     };
     return paramMap[key] || 0;
   }

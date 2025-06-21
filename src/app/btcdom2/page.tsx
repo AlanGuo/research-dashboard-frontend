@@ -45,8 +45,7 @@ export default function BTCDOM2Dashboard() {
     futuresTradingFeeRate: 0.0002, // 0.02% 期货手续费
     longBtc: true,
     shortAlt: true,
-    allocationStrategy: PositionAllocationStrategy.BY_VOLUME,
-    maxSinglePositionRatio: 0.2
+    allocationStrategy: PositionAllocationStrategy.BY_VOLUME
   });
 
   // 数据状态
@@ -141,9 +140,7 @@ export default function BTCDOM2Dashboard() {
       errors.strategySelection = '至少需要选择一种策略：做多BTC或做空ALT';
     }
 
-    if (params.allocationStrategy === PositionAllocationStrategy.BY_COMPOSITE_SCORE && params.maxSinglePositionRatio < 0.01) {
-      errors.maxSinglePositionRatio = '单币种最高持仓限制不能低于1%';
-    }
+
 
     return errors;
   }, []);
@@ -273,7 +270,6 @@ export default function BTCDOM2Dashboard() {
     volatilityWeight: number;
     fundingRateWeight: number;
     maxShortPositions: number;
-    maxSinglePositionRatio: number;
     allocationStrategy: PositionAllocationStrategy;
   }) => {
     console.log('应用最优参数:', bestParams);
@@ -286,7 +282,6 @@ export default function BTCDOM2Dashboard() {
       volatilityWeight: bestParams.volatilityWeight,
       fundingRateWeight: bestParams.fundingRateWeight,
       maxShortPositions: bestParams.maxShortPositions,
-      maxSinglePositionRatio: bestParams.maxSinglePositionRatio,
       allocationStrategy: bestParams.allocationStrategy
     };
 
@@ -684,31 +679,7 @@ export default function BTCDOM2Dashboard() {
                       </SelectContent>
                     </Select>
 
-                    {params.allocationStrategy === PositionAllocationStrategy.BY_COMPOSITE_SCORE && (
-                      <div className="space-y-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                        <Label className="text-sm font-medium text-blue-900 dark:text-blue-400">单币种最高持仓限制</Label>
-                        <div className="flex items-center space-x-3">
-                          <Slider
-                            value={[params.maxSinglePositionRatio * 100]}
-                            onValueChange={(value) => handleParamChange('maxSinglePositionRatio', value[0] / 100)}
-                            max={50}
-                            step={1}
-                            className="flex-1"
-                          />
-                          <span className="text-sm font-medium w-12 text-right bg-white dark:bg-gray-700 px-2 py-1 rounded">
-                            {(params.maxSinglePositionRatio * 100).toFixed(0)}%
-                          </span>
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">
-                            📍 此百分比是相对于分配给ALT做空的资金({((1 - params.btcRatio) * 100).toFixed(0)}%)而言
-                          </p>
-                          <p className="text-xs text-gray-600 dark:text-gray-400">
-                            例如：ALT做空资金 {params.initialCapital > 0 ? `$${(params.initialCapital * (1 - params.btcRatio)).toLocaleString()}` : 'X'}，单币种最多 {params.initialCapital > 0 ? `$${(params.initialCapital * (1 - params.btcRatio) * params.maxSinglePositionRatio).toLocaleString()}` : `X × ${(params.maxSinglePositionRatio * 100).toFixed(0)}%`}
-                          </p>
-                        </div>
-                      </div>
-                    )}
+
                   </div>
                 </div>
 

@@ -249,14 +249,11 @@ class BTCDOM2StrategyEngine {
       case PositionAllocationStrategy.BY_COMPOSITE_SCORE:
         // 按综合分数分配权重
         const totalScore = candidates.reduce((sum, c) => sum + (c.totalScore || 0), 0);
-        const maxSingleAllocation = validTotalAmount * this.params.maxSinglePositionRatio;
 
         if (totalScore > 0) {
           candidates.forEach(candidate => {
             const validScore = candidate.totalScore || 0;
-            let allocation = validTotalAmount * (validScore / totalScore);
-            // 限制单个币种最大持仓
-            allocation = Math.min(allocation, maxSingleAllocation);
+            const allocation = validTotalAmount * (validScore / totalScore);
             allocations.push(isNaN(allocation) ? 0 : allocation);
           });
         } else {
@@ -265,27 +262,6 @@ class BTCDOM2StrategyEngine {
           candidates.forEach(() => {
             allocations.push(equalAmount);
           });
-        }
-
-        // 如果有剩余资金（由于单币种限制），按比例重新分配给未达到上限的币种
-        const totalAllocated = allocations.reduce((sum, a) => sum + a, 0);
-        const remaining = validTotalAmount - totalAllocated;
-        if (remaining > 0) {
-          const availableForReallocation = candidates.map((candidate, index) => {
-            const currentAllocation = allocations[index] || 0;
-            const maxPossible = maxSingleAllocation;
-            return Math.max(0, maxPossible - currentAllocation);
-          });
-          const totalAvailable = availableForReallocation.reduce((sum, a) => sum + a, 0);
-
-          if (totalAvailable > 0) {
-            availableForReallocation.forEach((available, index) => {
-              if (available > 0) {
-                const additionalAllocation = remaining * (available / totalAvailable);
-                allocations[index] = (allocations[index] || 0) + (isNaN(additionalAllocation) ? 0 : additionalAllocation);
-              }
-            });
-          }
         }
         break;
 
@@ -1401,7 +1377,7 @@ export async function POST(request: NextRequest) {
       volatilityWeight: rawParams.volatilityWeight !== undefined ? rawParams.volatilityWeight : 0.1,
       fundingRateWeight: rawParams.fundingRateWeight !== undefined ? rawParams.fundingRateWeight : 0.3,
       allocationStrategy: rawParams.allocationStrategy !== undefined ? rawParams.allocationStrategy : PositionAllocationStrategy.BY_VOLUME,
-      maxSinglePositionRatio: rawParams.maxSinglePositionRatio !== undefined ? rawParams.maxSinglePositionRatio : 0.25,
+
     };
 
     // 检查是否为优化模式（跳过图表数据生成以提升性能）
