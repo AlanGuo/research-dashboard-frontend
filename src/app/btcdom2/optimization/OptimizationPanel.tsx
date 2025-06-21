@@ -4,14 +4,13 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { 
   OptimizationConfig, 
   OptimizationResult, 
-  OptimizationObjective,
-  OptimizationMethod,
   ParameterRange,
   OptimizationProgress 
 } from './types';
 import { ParameterOptimizer } from './optimizer';
 import { PositionAllocationStrategy } from '@/types/btcdom2';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import OptimizationGuide from './OptimizationGuide';
 
 interface OptimizationPanelProps {
@@ -49,19 +48,10 @@ export default function OptimizationPanel({
       shortAlt: true,
       granularityHours: 8
     },
-    objective: OptimizationObjective.MINIMIZE_MAX_DRAWDOWN,
-    method: OptimizationMethod.HYBRID,
-    constraints: {
-      weightConstraints: {
-        sumToOne: true,
-        minWeight: 0,
-        maxWeight: 1
-      },
-      searchConstraints: {
-        maxIterations: 100,
-        timeoutMinutes: 60
-      }
-    },
+    objective: 'maxDrawdown',
+    method: 'hybrid',
+    maxIterations: 100,
+    timeLimit: 3600,
     ...initialConfig
   });
 
@@ -74,8 +64,8 @@ export default function OptimizationPanel({
       fundingRateWeight: { min: 0, max: 1, step: 0.1 }
     },
     maxShortPositions: { min: 5, max: 20, step: 1 },
-    maxSinglePositionRatio: { min: 0.1, max: 0.3, step: 0.05 },
-    allocationStrategies: [
+    maxSinglePositionRatio: { min: 0.05, max: 0.3, step: 0.05 },
+    allocationStrategy: [
       PositionAllocationStrategy.BY_VOLUME,
       PositionAllocationStrategy.BY_COMPOSITE_SCORE,
       PositionAllocationStrategy.EQUAL_ALLOCATION
@@ -98,7 +88,26 @@ export default function OptimizationPanel({
       if (progress.currentBest && progress.recentResults.length > 0) {
         setResults(progress.recentResults);
       }
+      
+      // 显示进度信息，包括跳过的无效组合
+      if (progress.status === 'running') {
+        console.log(`优化进度: ${progress.currentIteration}/${progress.totalIterations} (${progress.resourceUsage.memoryUsage.toFixed(1)}MB)`);
+      }
     });
+  }, [optimizer]);
+
+  // 组件卸载时清理资源
+  useEffect(() => {
+    return () => {
+      // 取消正在进行的优化
+      optimizer.cancelOptimization();
+      // 清理优化器资源
+      optimizer.dispose();
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('OptimizationPanel 资源已清理');
+      }
+    };
   }, [optimizer]);
 
   // 开始优化
@@ -106,19 +115,19 @@ export default function OptimizationPanel({
     if (isRunning) return;
 
     setIsRunning(true);
-    setResults([]);
     setProgress(null);
+    setResults([]);
 
     try {
-      const task = await optimizer.startOptimization(config, parameterRange);
+      const results = await optimizer.startOptimization(config, parameterRange);
       
-      if (task.results.length > 0) {
-        setResults(task.results);
-        onOptimizationComplete?.(task.results);
+      if (results.length > 0) {
+        setResults(results);
+        onOptimizationComplete?.(results);
         
         // 自动应用最优参数
-        if (task.results[0] && onBestParametersFound) {
-          const bestParams = task.results[0].combination;
+        if (results[0] && onBestParametersFound) {
+          const bestParams = results[0].combination;
           onBestParametersFound({
             priceChangeWeight: bestParams.priceChangeWeight,
             volumeWeight: bestParams.volumeWeight,
@@ -129,6 +138,10 @@ export default function OptimizationPanel({
             allocationStrategy: bestParams.allocationStrategy
           });
         }
+        
+        console.log(`优化完成，获得 ${results.length} 个有效结果`);
+      } else {
+        console.warn('优化完成，但未获得有效结果。可能所有参数组合都不满足约束条件。');
       }
     } catch (error) {
       console.error('优化过程出错:', error);
@@ -169,44 +182,44 @@ export default function OptimizationPanel({
         value={config.objective}
         onValueChange={(value) => setConfig(prev => ({ 
           ...prev, 
-          objective: value as OptimizationObjective 
+          objective: value as 'totalReturn' | 'sharpe' | 'calmar' | 'maxDrawdown' | 'composite'
         }))}
       >
         <SelectTrigger className="w-full text-left">
           <SelectValue>
-            {config.objective === OptimizationObjective.MINIMIZE_MAX_DRAWDOWN && "最小化最大回撤"}
-            {config.objective === OptimizationObjective.MAXIMIZE_RISK_ADJUSTED_RETURN && "最大化风险调整收益"}
-            {config.objective === OptimizationObjective.MAXIMIZE_CALMAR_RATIO && "最大化卡尔玛比率"}
-            {config.objective === OptimizationObjective.MAXIMIZE_SHARPE_RATIO && "最大化夏普比率"}
-            {config.objective === OptimizationObjective.MAXIMIZE_TOTAL_RETURN && "最大化总收益率"}
+            {config.objective === 'maxDrawdown' && "最小化最大回撤"}
+            {config.objective === 'composite' && "最大化风险调整收益"}
+            {config.objective === 'calmar' && "最大化卡尔玛比率"}
+            {config.objective === 'sharpe' && "最大化夏普比率"}
+            {config.objective === 'totalReturn' && "最大化总收益率"}
           </SelectValue>
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={OptimizationObjective.MINIMIZE_MAX_DRAWDOWN}>
+          <SelectItem value="maxDrawdown">
             <div className="flex flex-col">
               <span>最小化最大回撤</span>
               <span className="text-xs text-gray-500 dark:text-gray-400">追求最小的资产损失</span>
             </div>
           </SelectItem>
-          <SelectItem value={OptimizationObjective.MAXIMIZE_RISK_ADJUSTED_RETURN}>
+          <SelectItem value="composite">
             <div className="flex flex-col">
               <span>最大化风险调整收益</span>
               <span className="text-xs text-gray-500 dark:text-gray-400">综合考虑收益率和风险指标</span>
             </div>
           </SelectItem>
-          <SelectItem value={OptimizationObjective.MAXIMIZE_CALMAR_RATIO}>
+          <SelectItem value="calmar">
             <div className="flex flex-col">
               <span>最大化卡尔玛比率</span>
               <span className="text-xs text-gray-500 dark:text-gray-400">年化收益率与最大回撤的比值</span>
             </div>
           </SelectItem>
-          <SelectItem value={OptimizationObjective.MAXIMIZE_SHARPE_RATIO}>
+          <SelectItem value="sharpe">
             <div className="flex flex-col">
               <span>最大化夏普比率</span>
               <span className="text-xs text-gray-500 dark:text-gray-400">平衡收益与风险，追求最佳风险调整收益</span>
             </div>
           </SelectItem>
-          <SelectItem value={OptimizationObjective.MAXIMIZE_TOTAL_RETURN}>
+          <SelectItem value="totalReturn">
             <div className="flex flex-col">
               <span>最大化总收益率</span>
               <span className="text-xs text-gray-500 dark:text-gray-400">追求最高的总收益率表现</span>
@@ -227,30 +240,30 @@ export default function OptimizationPanel({
         value={config.method}
         onValueChange={(value) => setConfig(prev => ({ 
           ...prev, 
-          method: value as OptimizationMethod 
+          method: value as 'grid' | 'bayesian' | 'hybrid'
         }))}
       >
         <SelectTrigger className="w-full text-left">
           <SelectValue>
-            {config.method === OptimizationMethod.GRID_SEARCH && "网格搜索"}
-            {config.method === OptimizationMethod.BAYESIAN_OPTIMIZATION && "贝叶斯优化"}
-            {config.method === OptimizationMethod.HYBRID && "混合方法（推荐）"}
+            {config.method === 'grid' && "网格搜索"}
+            {config.method === 'bayesian' && "贝叶斯优化"}
+            {config.method === 'hybrid' && "混合方法"}
           </SelectValue>
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={OptimizationMethod.GRID_SEARCH}>
+          <SelectItem value="grid">
             <div className="flex flex-col">
               <span>网格搜索</span>
               <span className="text-xs text-gray-500 dark:text-gray-400">全面搜索所有参数组合，耗时较长但覆盖全面</span>
             </div>
           </SelectItem>
-          <SelectItem value={OptimizationMethod.BAYESIAN_OPTIMIZATION}>
+          <SelectItem value="bayesian">
             <div className="flex flex-col">
               <span>贝叶斯优化</span>
               <span className="text-xs text-gray-500 dark:text-gray-400">智能搜索，速度快但可能错过全局最优</span>
             </div>
           </SelectItem>
-          <SelectItem value={OptimizationMethod.HYBRID}>
+          <SelectItem value="hybrid">
             <div className="flex flex-col">
               <span>混合方法（推荐）</span>
               <span className="text-xs text-gray-500 dark:text-gray-400">先粗搜索再精细优化，平衡速度和效果</span>
@@ -355,13 +368,13 @@ export default function OptimizationPanel({
             <label key={strategy.value} className="flex items-center">
               <input
                 type="checkbox"
-                checked={parameterRange.allocationStrategies.includes(strategy.value)}
+                checked={parameterRange.allocationStrategy?.includes(strategy.value) || false}
                 onChange={(e) => {
                   setParameterRange(prev => ({
                     ...prev,
-                    allocationStrategies: e.target.checked
-                      ? [...prev.allocationStrategies, strategy.value]
-                      : prev.allocationStrategies.filter(s => s !== strategy.value)
+                    allocationStrategy: e.target.checked
+                      ? [...(prev.allocationStrategy || []), strategy.value]
+                      : (prev.allocationStrategy || []).filter(s => s !== strategy.value)
                   }));
                 }}
                 className="mr-2"
@@ -397,7 +410,11 @@ export default function OptimizationPanel({
         <div className="flex justify-between text-sm text-blue-600 dark:text-blue-400">
           <span>预计剩余: {Math.round(progress.estimatedTimeRemaining / 60)}分钟</span>
           {progress.currentBest && (
-            <span>当前最优: {progress.currentBest.objectiveValue.toFixed(4)}</span>
+            <span>当前最优: {
+              config.objective === 'maxDrawdown' ? 
+                `${(Math.abs(progress.currentBest.objectiveValue) * 100).toFixed(2)}%` : 
+                progress.currentBest.objectiveValue.toFixed(4)
+            }</span>
           )}
         </div>
       </div>
@@ -443,7 +460,10 @@ export default function OptimizationPanel({
                     {index === 0 && <span className="ml-1 text-green-600 dark:text-green-400">👑</span>}
                   </td>
                   <td className="border border-gray-300 dark:border-gray-600 px-2 py-1 font-mono text-gray-900 dark:text-gray-100">
-                    {result.objectiveValue.toFixed(4)}
+                    {config.objective === 'maxDrawdown' ? 
+                      `${(Math.abs(result.objectiveValue) * 100).toFixed(2)}%` : 
+                      result.objectiveValue.toFixed(4)
+                    }
                   </td>
                   <td className="border border-gray-300 dark:border-gray-600 px-2 py-1">
                     <span className={result.metrics.totalReturn >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
@@ -560,38 +580,26 @@ export default function OptimizationPanel({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
                   <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">最大迭代次数</label>
-                  <input
+                  <Input
                     type="number"
-                    value={config.constraints.searchConstraints.maxIterations}
+                    value={config.maxIterations || 100}
                     onChange={(e) => setConfig(prev => ({
                       ...prev,
-                      constraints: {
-                        ...prev.constraints,
-                        searchConstraints: {
-                          ...prev.constraints.searchConstraints,
-                          maxIterations: parseInt(e.target.value) || 100
-                        }
-                      }
+                      maxIterations: parseInt(e.target.value) || 100
                     }))}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                    className="w-full"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">超时时间（分钟）</label>
-                  <input
+                  <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">超时时间(分钟)</label>
+                  <Input
                     type="number"
-                    value={config.constraints.searchConstraints.timeoutMinutes}
+                    value={(config.timeLimit || 3600) / 60}
                     onChange={(e) => setConfig(prev => ({
                       ...prev,
-                      constraints: {
-                        ...prev.constraints,
-                        searchConstraints: {
-                          ...prev.constraints.searchConstraints,
-                          timeoutMinutes: parseInt(e.target.value) || 60
-                        }
-                      }
+                      timeLimit: (parseInt(e.target.value) || 60) * 60
                     }))}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                    className="w-full"
                   />
                 </div>
               </div>

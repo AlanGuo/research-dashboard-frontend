@@ -1,20 +1,19 @@
 import {
   OptimizationConfig,
-  OptimizationTask,
   OptimizationResult,
-  OptimizationStatus,
-  OptimizationObjective,
-  OptimizationMethod,
-  ParameterRange,
-  ParameterCombination,
-
+  OptimizationTask,
   OptimizationProgress,
-  ParameterValidationResult,
-  OptimizationReport
+  OptimizationReport,
+  ParameterCombination,
+  ParameterRange,
+  OptimizationObjective,
+
+  ParameterValidationResult
 } from './types';
 import { PositionAllocationStrategy, BTCDOM2StrategyParams, BTCDOM2BacktestResult } from '@/types/btcdom2';
 
 export class ParameterOptimizer {
+  private static readonly MAX_RESULTS_TO_KEEP = 10; // 只保留最优的10个结果
   private currentTask: OptimizationTask | null = null;
   private progressCallback?: (progress: OptimizationProgress) => void;
   private abortController?: AbortController;
@@ -32,58 +31,76 @@ export class ParameterOptimizer {
   async startOptimization(
     config: OptimizationConfig,
     parameterRange: ParameterRange
-  ): Promise<OptimizationTask> {
+  ): Promise<OptimizationResult[]> {
+    // 取消之前的任务
+    this.cancelOptimization();
+
+    // 创建新的AbortController
+    this.abortController = new AbortController();
+
     // 创建新任务
-    const task: OptimizationTask = {
+    this.currentTask = {
       id: this.generateTaskId(),
       config,
       parameterRange,
-      status: OptimizationStatus.PENDING,
-      progress: { current: 0, total: 0, percentage: 0 },
+      status: 'running',
       results: [],
-      startTime: new Date()
+      progress: {
+        current: 0,
+        total: 0,
+        percentage: 0
+      },
+      startTime: Date.now(),
+      endTime: null
     };
 
-    this.currentTask = task;
-    this.abortController = new AbortController();
-
     try {
-      task.status = OptimizationStatus.RUNNING;
-      await this.executeOptimization(task);
-      task.status = OptimizationStatus.COMPLETED;
-      task.endTime = new Date();
-    } catch (error) {
-      task.status = OptimizationStatus.FAILED;
-      task.error = error instanceof Error ? error.message : '未知错误';
-      task.endTime = new Date();
-    }
+      // 根据方法执行不同的优化策略
+      await this.executeOptimization();
 
-    return task;
+      this.currentTask.status = 'completed';
+      this.currentTask.endTime = Date.now();
+
+      return this.currentTask.results;
+    } catch (error) {
+      if (this.currentTask) {
+        this.currentTask.status = 'failed';
+        this.currentTask.endTime = Date.now();
+      }
+      throw error;
+    }
   }
 
   /**
-   * 取消当前优化任务
+   * 取消优化任务
    */
   cancelOptimization() {
-    if (this.currentTask && this.abortController) {
+    if (this.abortController) {
       this.abortController.abort();
-      this.currentTask.status = OptimizationStatus.CANCELLED;
-      this.currentTask.endTime = new Date();
+    }
+
+    if (this.currentTask) {
+      this.currentTask.status = 'cancelled';
+      this.currentTask.endTime = Date.now();
     }
   }
 
   /**
    * 执行优化
    */
-  private async executeOptimization(task: OptimizationTask) {
+  private async executeOptimization() {
+    if (!this.currentTask) return;
+
+    const task = this.currentTask;
+
     switch (task.config.method) {
-      case OptimizationMethod.GRID_SEARCH:
+      case 'grid':
         await this.executeGridSearch(task);
         break;
-      case OptimizationMethod.BAYESIAN_OPTIMIZATION:
+      case 'bayesian':
         await this.executeBayesianOptimization(task);
         break;
-      case OptimizationMethod.HYBRID:
+      case 'hybrid':
         await this.executeHybridOptimization(task);
         break;
       default:
@@ -95,94 +112,108 @@ export class ParameterOptimizer {
    * 执行网格搜索
    */
   private async executeGridSearch(task: OptimizationTask) {
-    const combinations = this.generateGridCombinations(task.parameterRange);
-    task.progress.total = combinations.length;
+    const allCombinations = this.generateGridCombinations(task.parameterRange);
 
-    console.log(`开始网格搜索，共 ${combinations.length} 个参数组合`);
+    console.log(`网格搜索: 总组合 ${allCombinations.length}`);
 
-    for (let i = 0; i < combinations.length; i++) {
+    task.progress.total = allCombinations.length;
+    task.progress.current = 0;
+
+    let validEvaluations = 0;
+
+    for (let i = 0; i < allCombinations.length; i++) {
       if (this.abortController?.signal.aborted) {
         throw new Error('优化被用户取消');
       }
 
-      const combination = combinations[i];
-      
+      const combination = allCombinations[i];
+
       try {
         const result = await this.evaluateCombination(combination, task.config);
-        task.results.push(result);
-        
-        // 按目标值排序，保持最优结果在前
-        task.results.sort((a, b) => this.compareResults(a, b, task.config.objective));
-        
+
+        if (result !== null) {
+          this.updateTaskResults(task, result);
+          validEvaluations++;
+          console.log(`网格搜索: ${validEvaluations}个有效结果, 当前处理: ${i + 1}/${allCombinations.length}`);
+        } else {
+          console.log(`网格搜索: 跳过无效组合 ${i + 1}, 继续处理`);
+        }
+
         // 更新进度
         task.progress.current = i + 1;
         task.progress.percentage = Math.round((task.progress.current / task.progress.total) * 100);
-        
-        // 发送进度更新
+
+        // 通知进度更新
         this.notifyProgress(task);
-        
-        console.log(`完成第 ${i + 1}/${combinations.length} 个组合，目标值: ${result.objectiveValue.toFixed(4)}`);
-        
-        // 添加延迟以避免过度请求
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
       } catch (error) {
-        console.warn(`参数组合 ${combination.id} 评估失败:`, error);
-        // 继续下一个组合
+        console.error(`组合 ${i + 1} 评估失败:`, error);
+        // 继续处理下一个组合，但仍然更新进度
+        task.progress.current = i + 1;
+        task.progress.percentage = Math.round((task.progress.current / task.progress.total) * 100);
+        this.notifyProgress(task);
       }
     }
   }
 
   /**
-   * 执行贝叶斯优化（简化版本）
+   * 执行贝叶斯优化
    */
   private async executeBayesianOptimization(task: OptimizationTask) {
-    // 这里实现一个简化的贝叶斯优化
-    // 在实际项目中，可能需要使用专门的贝叶斯优化库
-    
-    const maxIterations = task.config.constraints.searchConstraints.maxIterations;
-    const initialSamples = Math.min(10, maxIterations * 0.2); // 初始随机采样20%
-    
+    const maxIterations = task.config.maxIterations || 50;
+    const initialSamples = Math.min(10, maxIterations);
+
     task.progress.total = maxIterations;
-    
-    // 阶段1：随机采样初始点
-    console.log(`贝叶斯优化：随机采样 ${initialSamples} 个初始点`);
-    for (let i = 0; i < initialSamples; i++) {
+    task.progress.current = 0;
+
+    let validEvaluations = 0;
+
+    // 第一阶段：随机采样
+    while (validEvaluations < initialSamples) {
       if (this.abortController?.signal.aborted) {
         throw new Error('优化被用户取消');
       }
-      
+
       const randomCombination = this.generateRandomCombination(task.parameterRange);
       const result = await this.evaluateCombination(randomCombination, task.config);
-      task.results.push(result);
-      
-      task.progress.current = i + 1;
-      task.progress.percentage = Math.round((task.progress.current / task.progress.total) * 100);
-      this.notifyProgress(task);
-      
-      await new Promise(resolve => setTimeout(resolve, 100));
+
+      if (result !== null) {
+        this.updateTaskResults(task, result);
+        validEvaluations++;
+        console.log(`初始采样: ${validEvaluations}/${initialSamples}, 目标值: ${result.objectiveValue.toFixed(4)}`);
+
+        // 更新进度
+        task.progress.current = validEvaluations;
+        task.progress.percentage = Math.round((task.progress.current / task.progress.total) * 100);
+
+        this.notifyProgress(task);
+      } else {
+        console.log(`初始采样: 跳过无效组合，继续生成`);
+      }
     }
-    
-    // 阶段2：基于已有结果进行智能搜索
-    console.log(`贝叶斯优化：智能搜索剩余 ${maxIterations - initialSamples} 个点`);
-    for (let i = initialSamples; i < maxIterations; i++) {
+
+    // 第二阶段：基于采集函数的优化
+    while (validEvaluations < maxIterations) {
       if (this.abortController?.signal.aborted) {
         throw new Error('优化被用户取消');
       }
-      
+
       // 简化的采集函数：在最优结果附近进行搜索
       const nextCombination = this.selectNextCombination(task.results, task.parameterRange);
       const result = await this.evaluateCombination(nextCombination, task.config);
-      task.results.push(result);
-      
-      // 排序结果
-      task.results.sort((a, b) => this.compareResults(a, b, task.config.objective));
-      
-      task.progress.current = i + 1;
-      task.progress.percentage = Math.round((task.progress.current / task.progress.total) * 100);
-      this.notifyProgress(task);
-      
-      await new Promise(resolve => setTimeout(resolve, 100));
+
+      if (result !== null) {
+        this.updateTaskResults(task, result);
+        validEvaluations++;
+        console.log(`贝叶斯优化: ${validEvaluations}/${maxIterations}, 目标值: ${result.objectiveValue.toFixed(4)}`);
+
+        // 更新进度
+        task.progress.current = validEvaluations;
+        task.progress.percentage = Math.round((task.progress.current / task.progress.total) * 100);
+
+        this.notifyProgress(task);
+      } else {
+        console.log(`贝叶斯优化: 跳过无效组合，继续生成`);
+      }
     }
   }
 
@@ -190,78 +221,138 @@ export class ParameterOptimizer {
    * 执行混合优化
    */
   private async executeHybridOptimization(task: OptimizationTask) {
-    // 阶段1：粗糙网格搜索（探索）
-    console.log('混合优化阶段1：粗糙网格搜索');
-    const coarseGrid = this.generateCoarseGridCombinations(task.parameterRange);
-    console.log(`生成了 ${coarseGrid.length} 个粗糙网格组合`);
-    
-    const phase1Total = Math.min(coarseGrid.length, 50); // 限制第一阶段的搜索数量
-    console.log(`阶段1将测试 ${phase1Total} 个组合`);
-    
-    task.progress.total = phase1Total + task.config.constraints.searchConstraints.maxIterations;
-    
-    for (let i = 0; i < phase1Total; i++) {
+    const maxIterations = task.config.maxIterations || 100;
+    const phase1Target = Math.floor(maxIterations * 0.3); // 30%用于粗粒度网格搜索
+    const phase2Target = maxIterations - phase1Target; // 70%用于精细化搜索
+
+    task.progress.total = maxIterations;
+    task.progress.current = 0;
+
+    console.log(`混合优化开始: 阶段1(粗粒度网格): ${phase1Target}次, 阶段2(精细化): ${phase2Target}次`);
+
+    // 第一阶段：粗粒度网格搜索
+    const allCoarseCombinations = this.generateCoarseGridCombinations(task.parameterRange, phase1Target * 2);
+
+    console.log(`生成粗粒度网格组合: 总共 ${allCoarseCombinations.length}个`);
+
+    let validEvaluations = 0;
+    let combinationIndex = 0;
+
+    // 第一阶段：确保得到足够的有效评估
+    while (validEvaluations < phase1Target && combinationIndex < allCoarseCombinations.length) {
       if (this.abortController?.signal.aborted) {
         throw new Error('优化被用户取消');
       }
-      
-      const combination = coarseGrid[i];
-      console.log(`测试组合 ${i + 1}/${phase1Total}:`, combination);
-      
+
+      const combination = allCoarseCombinations[combinationIndex];
+      combinationIndex++;
+
       try {
         const result = await this.evaluateCombination(combination, task.config);
-        task.results.push(result);
-        console.log(`组合 ${i + 1} 完成，目标值: ${result.objectiveValue.toFixed(4)}`);
+
+        if (result !== null) {
+          this.updateTaskResults(task, result);
+          validEvaluations++;
+          console.log(`阶段1组合 ${validEvaluations} 完成，目标值: ${result.objectiveValue.toFixed(4)}`);
+
+          // 更新进度
+          task.progress.current = validEvaluations;
+          task.progress.percentage = Math.round((task.progress.current / task.progress.total) * 100);
+
+          this.notifyProgress(task);
+
+          // 每10个组合输出一次状态
+          if (validEvaluations % 10 === 0) {
+            const bestSoFar = task.results.length > 0 ? task.results[0].objectiveValue : 0;
+            console.log(`阶段1进度: ${validEvaluations}/${phase1Target}, 当前最佳: ${bestSoFar.toFixed(4)}`);
+          }
+        } else {
+          console.log(`阶段1: 跳过无效组合 ${combinationIndex}, 继续处理`);
+        }
       } catch (error) {
-        console.error(`组合 ${i + 1} 评估失败:`, error);
-        // 继续下一个组合而不是中断整个过程
-        continue;
+        console.error(`阶段1组合评估失败:`, error);
       }
-      
-      task.progress.current = i + 1;
-      task.progress.percentage = Math.round((task.progress.current / task.progress.total) * 100);
-      this.notifyProgress(task);
-      
-      await new Promise(resolve => setTimeout(resolve, 100));
     }
-    
-    // 排序第一阶段结果
-    task.results.sort((a, b) => this.compareResults(a, b, task.config.objective));
-    
-    // 阶段2：在有希望的区域进行精细搜索
-    console.log('混合优化阶段2：精细搜索');
-    const remainingIterations = task.config.constraints.searchConstraints.maxIterations;
-    
-    for (let i = 0; i < remainingIterations; i++) {
+
+    // 如果第一阶段没有达到目标，用随机组合补充
+    while (validEvaluations < phase1Target) {
       if (this.abortController?.signal.aborted) {
         throw new Error('优化被用户取消');
       }
-      
+
+      const randomCombination = this.generateRandomCombination(task.parameterRange);
+      const result = await this.evaluateCombination(randomCombination, task.config);
+
+      if (result !== null) {
+        this.updateTaskResults(task, result);
+        validEvaluations++;
+        console.log(`阶段1补充: ${validEvaluations}/${phase1Target}, 目标值: ${result.objectiveValue.toFixed(4)}`);
+
+        // 更新进度
+        task.progress.current = validEvaluations;
+        task.progress.percentage = Math.round((task.progress.current / task.progress.total) * 100);
+
+        this.notifyProgress(task);
+      } else {
+        console.log(`阶段1补充: 跳过无效随机组合，继续生成`);
+      }
+    }
+
+    console.log(`阶段1完成，共完成 ${validEvaluations} 个有效评估`);
+
+    // 第二阶段：在最优结果附近进行精细化搜索
+    while (validEvaluations < maxIterations) {
+      if (this.abortController?.signal.aborted) {
+        throw new Error('优化被用户取消');
+      }
+
       const nextCombination = this.selectNextCombination(task.results, task.parameterRange);
       const result = await this.evaluateCombination(nextCombination, task.config);
-      task.results.push(result);
-      
-      task.results.sort((a, b) => this.compareResults(a, b, task.config.objective));
-      
-      task.progress.current = phase1Total + i + 1;
-      task.progress.percentage = Math.round((task.progress.current / task.progress.total) * 100);
-      this.notifyProgress(task);
-      
-      await new Promise(resolve => setTimeout(resolve, 100));
+
+      if (result !== null) {
+        this.updateTaskResults(task, result);
+        validEvaluations++;
+
+        // 更新进度
+        task.progress.current = validEvaluations;
+        task.progress.percentage = Math.round((task.progress.current / task.progress.total) * 100);
+
+        this.notifyProgress(task);
+
+        if ((validEvaluations - phase1Target) % 10 === 0) {
+          const bestSoFar = task.results.length > 0 ? task.results[0].objectiveValue : 0;
+          console.log(`阶段2进度: ${validEvaluations - phase1Target}/${phase2Target}, 当前最佳: ${bestSoFar.toFixed(4)}`);
+        }
+      } else {
+        console.log(`阶段2跳过无效组合，继续生成`);
+      }
     }
+
+    console.log(`混合优化完成，总共完成 ${validEvaluations} 个有效评估`);
   }
 
   /**
    * 评估参数组合
+   * 
+   * 内存优化策略：
+   * 1. 不保存完整的 BTCDOM2BacktestResult 对象
+   * 2. 立即提取必要的性能指标
+   * 3. 显式清理对大型数据的引用
+   * 4. 只返回精简的 OptimizationResult
    */
   private async evaluateCombination(
     combination: ParameterCombination,
     config: OptimizationConfig
-  ): Promise<OptimizationResult> {
+  ): Promise<OptimizationResult | null> {
     const startTime = Date.now();
-    
-    console.log('开始评估组合:', combination.id);
-    
+
+    // 预验证参数组合，避免无效的API调用
+    const validation = this.validateParameters(combination);
+    if (validation.errors.length > 0) {
+      console.log(`跳过无效参数组合 ${combination.id}:`, validation.errors);
+      return null;
+    }
+
     // 构建完整的策略参数
     const strategyParams: BTCDOM2StrategyParams = {
       ...config.baseParams,
@@ -275,102 +366,97 @@ export class ParameterOptimizer {
       // 确保必要的字段有默认值
       granularityHours: config.baseParams.granularityHours || 8
     };
-    
+
     console.log('调用回测API，参数:', strategyParams);
-    
+
     // 调用回测API
     const response = await fetch('/api/btcdom2/backtest', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(strategyParams)
     });
-    
+
     console.log('API响应状态:', response.status, response.statusText);
-    
+    console.log('开始调用回测API...');
+
     if (!response.ok) {
       const errorText = await response.text();
       console.error('API响应错误:', errorText);
-      throw new Error(`回测API调用失败: ${response.statusText}`);
+      return null; // 返回null而不是抛出错误
     }
-    
+
     const apiResponse = await response.json();
     console.log('API响应结构:', {
       success: apiResponse.success,
       hasData: !!apiResponse.data,
       error: apiResponse.error
     });
-    
+
     // 检查API响应格式
     if (!apiResponse.success || !apiResponse.data) {
-      throw new Error(`回测API返回错误: ${apiResponse.error || '未知错误'}`);
+      console.warn(`回测API返回错误，跳过此组合: ${apiResponse.error || '未知错误'}`);
+      return null;
     }
-    
-    const backtestResult: BTCDOM2BacktestResult = apiResponse.data;
+
+    const backtestData = apiResponse.data;
     const executionTime = Date.now() - startTime;
-    
+
     console.log(`组合 ${combination.id} API调用完成，耗时: ${executionTime}ms`);
-    
-    // 计算目标函数值
-    const objectiveValue = this.calculateObjectiveValue(backtestResult, config.objective);
-    
-    // 计算额外指标
-    const metrics = this.calculateMetrics(backtestResult);
-    
+
+    // 立即提取性能指标，不保存完整的回测结果对象
+    const performance = backtestData.performance;
+    if (!performance) {
+      console.warn(`回测结果缺少性能指标，跳过此组合`);
+      return null;
+    }
+
+    // 计算目标函数值（直接使用性能数据，不创建完整的 backtestResult 对象）
+    let objectiveValue: number;
+    switch (config.objective) {
+      case 'totalReturn':
+        objectiveValue = performance.totalReturn;
+        break;
+      case 'sharpe':
+        objectiveValue = performance.sharpeRatio || 0;
+        break;
+      case 'calmar':
+        objectiveValue = performance.calmarRatio || 0;
+        break;
+      case 'maxDrawdown':
+        objectiveValue = performance.maxDrawdown;
+        break;
+      case 'composite':
+        objectiveValue = (performance.sharpeRatio || 0) * 0.4 +
+               performance.totalReturn * 0.3 -
+               performance.maxDrawdown * 0.3;
+        break;
+      default:
+        objectiveValue = performance.sharpeRatio || 0;
+        break;
+    }
+
+    // 只保存必要的性能指标
+    const essentialMetrics = {
+      totalReturn: performance.totalReturn || 0,
+      sharpeRatio: performance.sharpeRatio || 0,
+      maxDrawdown: performance.maxDrawdown || 0,
+      calmarRatio: performance.calmarRatio || 0,
+      winRate: performance.winRate || 0,
+    };
+
+    // 显式清理对大型数据的引用
+    if (backtestData.snapshots) {
+      backtestData.snapshots = null;
+    }
+    if (backtestData.chartData) {
+      backtestData.chartData = null;
+    }
+
     return {
       combination,
-      backtestResult,
+      metrics: essentialMetrics,
       objectiveValue,
-      metrics,
       executionTime
-    };
-  }
-
-  /**
-   * 计算目标函数值
-   */
-  private calculateObjectiveValue(
-    result: BTCDOM2BacktestResult,
-    objective: OptimizationObjective
-  ): number {
-    const performance = result.performance;
-    
-    switch (objective) {
-      case OptimizationObjective.MAXIMIZE_TOTAL_RETURN:
-        return performance.totalReturn;
-        
-      case OptimizationObjective.MAXIMIZE_SHARPE_RATIO:
-        return performance.sharpeRatio || 0;
-        
-      case OptimizationObjective.MAXIMIZE_CALMAR_RATIO:
-        return performance.calmarRatio || 0;
-        
-      case OptimizationObjective.MINIMIZE_MAX_DRAWDOWN:
-        return -performance.maxDrawdown; // 负号因为要最小化
-        
-      case OptimizationObjective.MAXIMIZE_RISK_ADJUSTED_RETURN:
-        // 风险调整收益 = 总收益 / 最大回撤
-        return performance.maxDrawdown > 0 
-          ? performance.totalReturn / performance.maxDrawdown 
-          : performance.totalReturn;
-          
-      default:
-        return performance.totalReturn;
-    }
-  }
-
-  /**
-   * 计算额外指标
-   */
-  private calculateMetrics(result: BTCDOM2BacktestResult) {
-    const performance = result.performance;
-    
-    return {
-      totalReturn: performance.totalReturn,
-      sharpeRatio: performance.sharpeRatio || 0,
-      calmarRatio: performance.calmarRatio || 0,
-      maxDrawdown: performance.maxDrawdown,
-      volatility: performance.volatility || 0,
-      winRate: performance.winRate || 0
     };
   }
 
@@ -379,159 +465,142 @@ export class ParameterOptimizer {
    */
   private generateGridCombinations(range: ParameterRange): ParameterCombination[] {
     const combinations: ParameterCombination[] = [];
-    
-    // 生成权重组合（确保总和为1）
+
+    // 生成权重组合
     const weightCombinations = this.generateWeightCombinations();
-    
-    // 生成其他参数组合
+
+    // 生成其他参数的组合
     const maxShortPositionsValues = this.generateRange(
       range.maxShortPositions.min,
       range.maxShortPositions.max,
-      range.maxShortPositions.step
+      range.maxShortPositions.step || 1
     );
-    
+
     const maxSinglePositionRatioValues = this.generateRange(
       range.maxSinglePositionRatio.min,
       range.maxSinglePositionRatio.max,
-      range.maxSinglePositionRatio.step
+      range.maxSinglePositionRatio.step || 0.05
     );
-    
-    // 组合所有参数
+
+    const allocationStrategies = range.allocationStrategy || [PositionAllocationStrategy.EQUAL_ALLOCATION];
+
     let id = 1;
+
     for (const weights of weightCombinations) {
       for (const maxShortPositions of maxShortPositionsValues) {
         for (const maxSinglePositionRatio of maxSinglePositionRatioValues) {
-          for (const allocationStrategy of range.allocationStrategies) {
+          for (const allocationStrategy of allocationStrategies) {
             combinations.push({
-              id: `grid_${id++}`,
+              id: `combo_${id++}`,
               ...weights,
               maxShortPositions,
               maxSinglePositionRatio,
-              allocationStrategy
+              allocationStrategy: allocationStrategy as PositionAllocationStrategy
             });
           }
         }
       }
     }
-    
+
     return combinations;
   }
 
   /**
-   * 生成权重组合（确保总和为1）
+   * 生成权重组合
    */
   private generateWeightCombinations() {
-    const combinations: Array<{
-      priceChangeWeight: number;
-      volumeWeight: number;
-      volatilityWeight: number;
-      fundingRateWeight: number;
-    }> = [];
-    
+    const combinations = [];
     const step = 0.1; // 10%步长
-    
-    for (let pc = 0; pc <= 1; pc += step) {
-      for (let vol = 0; vol <= 1 - pc; vol += step) {
-        for (let vlt = 0; vlt <= 1 - pc - vol; vlt += step) {
-          const fr = 1 - pc - vol - vlt;
-          
-          // 检查权重是否在有效范围内
-          if (fr >= 0 && fr <= 1 && Math.abs(pc + vol + vlt + fr - 1) < 0.001) {
+
+    for (let pc = 0.1; pc <= 0.7; pc += step) {
+      for (let vol = 0.1; vol <= 0.5; vol += step) {
+        for (let vlt = 0.1; vlt <= 0.4; vlt += step) {
+          const funding = 1 - pc - vol - vlt;
+
+          // 检查资金费率权重是否在合理范围内
+          if (funding >= 0.1 && funding <= 0.6) {
+            // 确保权重总和严格等于1
+            const normalizedFunding = 1 - pc - vol - vlt;
+
             combinations.push({
-              priceChangeWeight: Math.round(pc * 10) / 10,
-              volumeWeight: Math.round(vol * 10) / 10,
-              volatilityWeight: Math.round(vlt * 10) / 10,
-              fundingRateWeight: Math.round(fr * 10) / 10
+              priceChangeWeight: Number(pc.toFixed(3)),
+              volumeWeight: Number(vol.toFixed(3)),
+              volatilityWeight: Number(vlt.toFixed(3)),
+              fundingRateWeight: Number(normalizedFunding.toFixed(3))
             });
           }
         }
       }
     }
-    
+
     return combinations;
   }
 
   /**
-   * 生成粗糙网格组合（用于混合优化第一阶段）
+   * 生成粗粒度网格组合
    */
-  private generateCoarseGridCombinations(range: ParameterRange): ParameterCombination[] {
-    // 使用更大的步长生成粗糙网格
-    const coarseWeightStep = 0.2; // 20%步长
+  private generateCoarseGridCombinations(range: ParameterRange, maxCombinations: number): ParameterCombination[] {
     const combinations: ParameterCombination[] = [];
-    
-    console.log('开始生成粗糙网格组合...');
-    console.log('参数范围:', range);
-    
-    let id = 1;
-    for (let pc = 0; pc <= 1; pc += coarseWeightStep) {
-      for (let vol = 0; vol <= 1 - pc; vol += coarseWeightStep) {
-        for (let vlt = 0; vlt <= 1 - pc - vol; vlt += coarseWeightStep) {
-          const fr = 1 - pc - vol - vlt;
-          
-          // 检查权重是否在有效范围内并且总和为1
-          if (fr >= 0 && fr <= 1 && Math.abs(pc + vol + vlt + fr - 1) < 0.001) {
-            // 只使用中等值的其他参数
-            const maxShortPositions = Math.round((range.maxShortPositions.min + range.maxShortPositions.max) / 2);
-            const maxSinglePositionRatio = (range.maxSinglePositionRatio.min + range.maxSinglePositionRatio.max) / 2;
-            
-            for (const allocationStrategy of range.allocationStrategies) {
-              const combination = {
-                id: `coarse_${id++}`,
-                priceChangeWeight: Math.round(pc * 10) / 10,
-                volumeWeight: Math.round(vol * 10) / 10,
-                volatilityWeight: Math.round(vlt * 10) / 10,
-                fundingRateWeight: Math.round(fr * 10) / 10,
-                maxShortPositions,
-                maxSinglePositionRatio: Math.round(maxSinglePositionRatio * 100) / 100,
-                allocationStrategy
-              };
-              
-              // 验证权重总和
-              const weightSum = combination.priceChangeWeight + combination.volumeWeight + 
-                               combination.volatilityWeight + combination.fundingRateWeight;
-              
-              // 如果权重总和不等于1，进行微调
-              if (Math.abs(weightSum - 1) > 0.001) {
-                const diff = 1 - weightSum;
-                // 调整资金费率权重（通常最灵活）
-                combination.fundingRateWeight = Math.round((combination.fundingRateWeight + diff) * 10) / 10;
-                
-                // 确保调整后的权重非负
-                if (combination.fundingRateWeight < 0) {
-                  combination.fundingRateWeight = 0;
-                  // 重新计算并分配到最大的权重上
-                  const newSum = combination.priceChangeWeight + combination.volumeWeight + combination.volatilityWeight;
-                  const remaining = 1 - newSum;
-                  const weights = [combination.priceChangeWeight, combination.volumeWeight, combination.volatilityWeight];
-                  const maxIndex = weights.indexOf(Math.max(...weights));
-                  
-                  if (maxIndex === 0) {
-                    combination.priceChangeWeight = Math.round((combination.priceChangeWeight + remaining) * 10) / 10;
-                  } else if (maxIndex === 1) {
-                    combination.volumeWeight = Math.round((combination.volumeWeight + remaining) * 10) / 10;
-                  } else {
-                    combination.volatilityWeight = Math.round((combination.volatilityWeight + remaining) * 10) / 10;
-                  }
-                }
-              }
-              
-              combinations.push(combination);
-            }
+
+    // 粗粒度权重组合（更大的步长）
+    const coarseWeightCombinations = [];
+    const step = 0.2; // 20%步长，更粗粒度
+
+    for (let pc = 0.2; pc <= 0.6; pc += step) {
+      for (let vol = 0.1; vol <= 0.3; vol += step) {
+        for (let vlt = 0.1; vlt <= 0.3; vlt += step) {
+          const funding = 1 - pc - vol - vlt;
+
+          if (funding >= 0.2 && funding <= 0.6 && Math.abs(pc + vol + vlt + funding - 1) < 0.001) {
+            coarseWeightCombinations.push({
+              priceChangeWeight: Number(pc.toFixed(1)),
+              volumeWeight: Number(vol.toFixed(1)),
+              volatilityWeight: Number(vlt.toFixed(1)),
+              fundingRateWeight: Number(funding.toFixed(1))
+            });
           }
         }
       }
     }
-    
-    console.log(`粗糙网格生成完成，共 ${combinations.length} 个组合`);
-    
-    // 验证所有组合的权重总和
-    combinations.forEach((combo, index) => {
-      const sum = combo.priceChangeWeight + combo.volumeWeight + combo.volatilityWeight + combo.fundingRateWeight;
-      if (Math.abs(sum - 1) > 0.001) {
-        console.warn(`组合 ${index + 1} 权重总和异常: ${sum}`, combo);
+
+    // 其他参数的粗粒度值
+    const maxShortPositionsValues = [
+      range.maxShortPositions.min,
+      Math.floor((range.maxShortPositions.min + range.maxShortPositions.max) / 2),
+      range.maxShortPositions.max
+    ];
+
+    const maxSinglePositionRatioValues = [
+      range.maxSinglePositionRatio.min,
+      (range.maxSinglePositionRatio.min + range.maxSinglePositionRatio.max) / 2,
+      range.maxSinglePositionRatio.max
+    ];
+
+    const allocationStrategies = range.allocationStrategy || [PositionAllocationStrategy.EQUAL_ALLOCATION];
+
+    let id = 1;
+
+    // 生成所有组合
+    for (const weights of coarseWeightCombinations) {
+      for (const maxShortPositions of maxShortPositionsValues) {
+        for (const maxSinglePositionRatio of maxSinglePositionRatioValues) {
+          for (const allocationStrategy of allocationStrategies) {
+            if (combinations.length >= maxCombinations) {
+              return combinations;
+            }
+
+            combinations.push({
+              id: `coarse_${id++}`,
+              ...weights,
+              maxShortPositions,
+              maxSinglePositionRatio,
+              allocationStrategy: allocationStrategy as PositionAllocationStrategy
+            });
+          }
+        }
       }
-    });
-    
+    }
+
     return combinations;
   }
 
@@ -539,89 +608,121 @@ export class ParameterOptimizer {
    * 生成随机参数组合
    */
   private generateRandomCombination(range: ParameterRange): ParameterCombination {
-    // 随机生成权重（确保总和为1）
+    // 生成随机权重
     const weights = this.generateRandomWeights();
-    
-    // 随机生成其他参数
-    const maxShortPositions = Math.round(
-      range.maxShortPositions.min + 
-      Math.random() * (range.maxShortPositions.max - range.maxShortPositions.min)
+
+    // 生成其他随机参数
+    const maxShortPositions = Math.floor(
+      Math.random() * (range.maxShortPositions.max - range.maxShortPositions.min + 1) +
+      range.maxShortPositions.min
     );
-    
-    const maxSinglePositionRatio = Math.round(
-      (range.maxSinglePositionRatio.min + 
-       Math.random() * (range.maxSinglePositionRatio.max - range.maxSinglePositionRatio.min)) * 100
-    ) / 100;
-    
-    const allocationStrategy = range.allocationStrategies[
-      Math.floor(Math.random() * range.allocationStrategies.length)
+
+    const maxSinglePositionRatio =
+      Math.random() * (range.maxSinglePositionRatio.max - range.maxSinglePositionRatio.min) +
+      range.maxSinglePositionRatio.min;
+
+    const allocationStrategies = range.allocationStrategy || [PositionAllocationStrategy.EQUAL_ALLOCATION];
+    const allocationStrategy = allocationStrategies[
+      Math.floor(Math.random() * allocationStrategies.length)
     ];
-    
+
     return {
       id: `random_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       ...weights,
       maxShortPositions,
-      maxSinglePositionRatio,
+      maxSinglePositionRatio: Number(maxSinglePositionRatio.toFixed(3)),
       allocationStrategy
     };
   }
 
   /**
-   * 随机生成权重（总和为1）
+   * 生成随机权重
    */
   private generateRandomWeights() {
-    // 使用Dirichlet分布的简化版本
-    const alpha = [1, 1, 1, 1]; // 均匀分布参数
-    const samples = alpha.map(() => -Math.log(Math.random()));
-    const sum = samples.reduce((a, b) => a + b, 0);
-    
-    // 先计算原始权重
-    const rawWeights = [
-      samples[0] / sum,
-      samples[1] / sum,
-      samples[2] / sum,
-      samples[3] / sum
-    ];
-    
-    // 四舍五入到0.1精度
-    // eslint-disable-next-line prefer-const
-    let roundedWeights = rawWeights.map(w => Math.round(w * 10) / 10);
-    
-    // 确保权重总和为1
-    const currentSum = roundedWeights.reduce((a, b) => a + b, 0);
-    const diff = 1 - currentSum;
-    
-    // 如果有差异，调整最大的权重
-    if (Math.abs(diff) > 0.001) {
-      const maxIndex = roundedWeights.indexOf(Math.max(...roundedWeights));
-      roundedWeights[maxIndex] = Math.round((roundedWeights[maxIndex] + diff) * 10) / 10;
-      
-      // 确保调整后的权重不为负
-      if (roundedWeights[maxIndex] < 0) {
-        roundedWeights[maxIndex] = 0;
-        // 重新分配权重
-        const remaining = 1 - roundedWeights.reduce((sum, w, i) => i === maxIndex ? sum : sum + w, 0);
-        const nonZeroCount = roundedWeights.filter((w, i) => i !== maxIndex && w > 0).length;
-        if (nonZeroCount > 0) {
-          roundedWeights.forEach((w, i) => {
-            if (i !== maxIndex && w > 0) {
-              roundedWeights[i] = Math.round((remaining / nonZeroCount) * 10) / 10;
-            }
-          });
-        }
-      }
+    // 使用狄利克雷分布生成随机权重
+    const alpha = [2, 1.5, 1, 2.5]; // 偏好参数，影响权重分布
+    const samples = [];
+
+    // 生成伽马分布样本
+    for (let i = 0; i < alpha.length; i++) {
+      samples.push(this.generateGammaSample(alpha[i], 1));
     }
-    
+
+    // 归一化
+    const sum = samples.reduce((a, b) => a + b, 0);
+    const weights = samples.map(s => s / sum);
+
+    // 确保权重在合理范围内
+    const minWeight = 0.05;
+    const maxWeight = 0.7;
+
+    const adjustedWeights = weights.map(w => {
+      if (w < minWeight) return minWeight;
+      if (w > maxWeight) return maxWeight;
+      return w;
+    });
+
+    // 重新归一化，确保总和严格等于1
+    const adjustedSum = adjustedWeights.reduce((a, b) => a + b, 0);
+    const normalizedWeights = adjustedWeights.map(w => w / adjustedSum);
+
+    // 最终检查和调整，确保总和为1
+    const finalSum = normalizedWeights.reduce((a, b) => a + b, 0);
+    const diff = 1 - finalSum;
+    normalizedWeights[0] += diff; // 将差值加到第一个权重上
+
     return {
-      priceChangeWeight: roundedWeights[0],
-      volumeWeight: roundedWeights[1],
-      volatilityWeight: roundedWeights[2],
-      fundingRateWeight: roundedWeights[3]
+      priceChangeWeight: Number(normalizedWeights[0].toFixed(3)),
+      volumeWeight: Number(normalizedWeights[1].toFixed(3)),
+      volatilityWeight: Number(normalizedWeights[2].toFixed(3)),
+      fundingRateWeight: Number(normalizedWeights[3].toFixed(3))
     };
   }
 
   /**
-   * 选择下一个搜索点（贝叶斯优化的简化采集函数）
+   * 生成伽马分布样本（简化版）
+   */
+  private generateGammaSample(alpha: number, beta: number): number {
+    // 简化的伽马分布采样
+    if (alpha < 1) {
+      return this.generateGammaSample(alpha + 1, beta) * Math.pow(Math.random(), 1 / alpha);
+    }
+
+    const d = alpha - 1 / 3;
+    const c = 1 / Math.sqrt(9 * d);
+
+    while (true) {
+      let x, v;
+      do {
+        x = this.generateNormalSample();
+        v = 1 + c * x;
+      } while (v <= 0);
+
+      v = v * v * v;
+      const u = Math.random();
+
+      if (u < 1 - 0.0331 * (x * x) * (x * x)) {
+        return d * v / beta;
+      }
+
+      if (Math.log(u) < 0.5 * x * x + d * (1 - v + Math.log(v))) {
+        return d * v / beta;
+      }
+    }
+  }
+
+  /**
+   * 生成标准正态分布样本
+   */
+  private generateNormalSample(): number {
+    // Box-Muller变换
+    const u1 = Math.random();
+    const u2 = Math.random();
+    return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+  }
+
+  /**
+   * 在现有结果基础上选择下一个参数组合
    */
   private selectNextCombination(
     existingResults: OptimizationResult[],
@@ -630,40 +731,22 @@ export class ParameterOptimizer {
     if (existingResults.length === 0) {
       return this.generateRandomCombination(range);
     }
-    
+
     // 获取前几个最优结果
     const topResults = existingResults.slice(0, Math.min(3, existingResults.length));
-    
+
     // 在最优结果附近进行扰动搜索
     const baseResult = topResults[Math.floor(Math.random() * topResults.length)];
     const baseCombination = baseResult.combination;
-    
-    // 生成扰动
-    const perturbationScale = 0.1; // 10%的扰动幅度
-    
-    // 扰动权重
-    const perturbedWeights = this.perturbWeights(
-      {
-        priceChangeWeight: baseCombination.priceChangeWeight,
-        volumeWeight: baseCombination.volumeWeight,
-        volatilityWeight: baseCombination.volatilityWeight,
-        fundingRateWeight: baseCombination.fundingRateWeight
-      },
-      perturbationScale
-    );
-    
-    // 验证权重总和
-    const weightSum = perturbedWeights.priceChangeWeight + perturbedWeights.volumeWeight + 
-                     perturbedWeights.volatilityWeight + perturbedWeights.fundingRateWeight;
-    
-    console.log('贝叶斯优化扰动权重:', perturbedWeights, '总和:', weightSum);
-    
-    // 如果权重总和不为1，重新生成一个随机组合
-    if (Math.abs(weightSum - 1) > 0.001) {
-      console.warn('权重总和异常，重新生成随机组合');
-      return this.generateRandomCombination(range);
-    }
-    
+
+    // 生成扰动参数
+    const perturbedWeights = this.perturbWeights({
+      priceChangeWeight: baseCombination.priceChangeWeight,
+      volumeWeight: baseCombination.volumeWeight,
+      volatilityWeight: baseCombination.volatilityWeight,
+      fundingRateWeight: baseCombination.fundingRateWeight
+    });
+
     // 扰动其他参数
     const maxShortPositions = Math.max(
       range.maxShortPositions.min,
@@ -672,158 +755,105 @@ export class ParameterOptimizer {
         Math.round(baseCombination.maxShortPositions + (Math.random() - 0.5) * 4)
       )
     );
-    
+
     const maxSinglePositionRatio = Math.max(
       range.maxSinglePositionRatio.min,
       Math.min(
         range.maxSinglePositionRatio.max,
-        Math.round((baseCombination.maxSinglePositionRatio + (Math.random() - 0.5) * 0.1) * 100) / 100
+        baseCombination.maxSinglePositionRatio + (Math.random() - 0.5) * 0.2
       )
     );
-    
-    // 随机选择配置策略
-    const allocationStrategy = Math.random() < 0.7 
-      ? baseCombination.allocationStrategy 
-      : range.allocationStrategies[Math.floor(Math.random() * range.allocationStrategies.length)];
-    
-    const finalCombination = {
-      id: `bayesian_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+
+    return {
+      id: `perturbed_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       ...perturbedWeights,
       maxShortPositions,
-      maxSinglePositionRatio,
-      allocationStrategy
+      maxSinglePositionRatio: Number(maxSinglePositionRatio.toFixed(3)),
+      allocationStrategy: baseCombination.allocationStrategy
     };
-    
-    // 最终验证
-    const finalSum = finalCombination.priceChangeWeight + finalCombination.volumeWeight + 
-                    finalCombination.volatilityWeight + finalCombination.fundingRateWeight;
-    console.log('最终组合权重总和:', finalSum, finalCombination);
-    
-    return finalCombination;
   }
 
   /**
-   * 扰动权重（保持总和为1）
+   * 扰动权重参数
    */
-  private perturbWeights(
-    weights: {
-      priceChangeWeight: number;
-      volumeWeight: number;
-      volatilityWeight: number;
-      fundingRateWeight: number;
-    },
-    scale: number
-  ) {
-    // 使用Dirichlet扰动方法，确保权重总和为1
-    const baseWeights = [weights.priceChangeWeight, weights.volumeWeight, weights.volatilityWeight, weights.fundingRateWeight];
-    
-    // 转换为Dirichlet参数（加上小的扰动）
-    const alpha = baseWeights.map(w => Math.max(0.1, w * 10 + (Math.random() - 0.5) * scale * 10));
-    
-    // 生成Dirichlet分布样本
-    const samples = alpha.map(a => {
-      // 使用Gamma分布近似
-      let sample = 0;
-      for (let i = 0; i < Math.round(a); i++) {
-        sample += -Math.log(Math.random());
-      }
-      return sample;
-    });
-    
-    const sum = samples.reduce((a, b) => a + b, 0);
-    if (sum === 0) {
-      // fallback to uniform distribution
-      return {
-        priceChangeWeight: 0.25,
-        volumeWeight: 0.25,
-        volatilityWeight: 0.25,
-        fundingRateWeight: 0.25
-      };
-    }
-    
-    // 标准化并四舍五入
-    // eslint-disable-next-line prefer-const
-    let normalizedWeights = samples.map(s => Math.round((s / sum) * 10) / 10);
-    
-    // 确保总和为1的最终调整
-    const currentSum = normalizedWeights.reduce((a, b) => a + b, 0);
-    const diff = Math.round((1 - currentSum) * 10) / 10;
-    
-    if (Math.abs(diff) > 0) {
-      // 找到最大的权重进行调整
-      const maxIndex = normalizedWeights.indexOf(Math.max(...normalizedWeights));
-      normalizedWeights[maxIndex] = Math.round((normalizedWeights[maxIndex] + diff) * 10) / 10;
-      
-      // 确保调整后的权重不为负
-      if (normalizedWeights[maxIndex] < 0) {
-        normalizedWeights[maxIndex] = 0;
-        // 重新分配剩余权重
-        const otherIndices = [0, 1, 2, 3].filter(i => i !== maxIndex);
-        const remainingSum = otherIndices.reduce((sum, i) => sum + normalizedWeights[i], 0);
-        
-        if (remainingSum > 0) {
-          otherIndices.forEach(i => {
-            normalizedWeights[i] = Math.round((normalizedWeights[i] / remainingSum) * 10) / 10;
-          });
-        } else {
-          // 平均分配给其他权重
-          otherIndices.forEach(i => {
-            normalizedWeights[i] = Math.round((1 / otherIndices.length) * 10) / 10;
-          });
-        }
-        
-        // 最终微调
-        const finalSum = normalizedWeights.reduce((a, b) => a + b, 0);
-        const finalDiff = Math.round((1 - finalSum) * 10) / 10;
-        if (Math.abs(finalDiff) > 0) {
-          const adjustIndex = otherIndices[0];
-          normalizedWeights[adjustIndex] = Math.round((normalizedWeights[adjustIndex] + finalDiff) * 10) / 10;
-        }
-      }
-    }
-    
+  private perturbWeights(baseWeights: {
+    priceChangeWeight: number;
+    volumeWeight: number;
+    volatilityWeight: number;
+    fundingRateWeight: number;
+  }) {
+    // 生成扰动向量
+    const perturbation = [
+      (Math.random() - 0.5) * 0.2, // ±10%的扰动
+      (Math.random() - 0.5) * 0.2,
+      (Math.random() - 0.5) * 0.2,
+      (Math.random() - 0.5) * 0.2
+    ];
+
+    // 应用扰动
+    let newWeights = [
+      baseWeights.priceChangeWeight + perturbation[0],
+      baseWeights.volumeWeight + perturbation[1],
+      baseWeights.volatilityWeight + perturbation[2],
+      baseWeights.fundingRateWeight + perturbation[3]
+    ];
+
+    // 确保权重为正
+    newWeights = newWeights.map(w => Math.max(0.05, w));
+
+    // 归一化
+    const sum = newWeights.reduce((a, b) => a + b, 0);
+    newWeights = newWeights.map(w => w / sum);
+
+    // 确保权重在合理范围内
+    const maxWeight = 0.7;
+    newWeights = newWeights.map(w => Math.min(maxWeight, w));
+
+    // 重新归一化，确保总和严格等于1
+    const finalSum = newWeights.reduce((a, b) => a + b, 0);
+    const normalizedWeights = newWeights.map(w => w / finalSum);
+
+    // 最终检查和调整
+    const checkSum = normalizedWeights.reduce((a, b) => a + b, 0);
+    const diff = 1 - checkSum;
+    normalizedWeights[0] += diff; // 将差值加到第一个权重上
+
     return {
-      priceChangeWeight: normalizedWeights[0],
-      volumeWeight: normalizedWeights[1],
-      volatilityWeight: normalizedWeights[2],
-      fundingRateWeight: normalizedWeights[3]
+      priceChangeWeight: Number(normalizedWeights[0].toFixed(3)),
+      volumeWeight: Number(normalizedWeights[1].toFixed(3)),
+      volatilityWeight: Number(normalizedWeights[2].toFixed(3)),
+      fundingRateWeight: Number(normalizedWeights[3].toFixed(3))
     };
   }
 
   /**
-   * 比较两个结果（用于排序）
+   * 比较两个优化结果
    */
-  private compareResults(
-    a: OptimizationResult,
-    b: OptimizationResult,
-    objective: OptimizationObjective
-  ): number {
-    // 对于最大化目标，返回 b - a（降序）
-    // 对于最小化目标，返回 a - b（升序）
-    if (objective === OptimizationObjective.MINIMIZE_MAX_DRAWDOWN) {
-      return a.objectiveValue - b.objectiveValue;
-    } else {
-      return b.objectiveValue - a.objectiveValue;
-    }
+  private compareResults(a: OptimizationResult, b: OptimizationResult): number {
+    // 降序排列，目标值越大越好
+    return b.objectiveValue - a.objectiveValue;
   }
 
   /**
    * 生成数值范围
    */
   private generateRange(min: number, max: number, step: number): number[] {
-    const values: number[] = [];
-    for (let value = min; value <= max; value += step) {
-      values.push(Math.round(value * 100) / 100); // 保留两位小数
+    const range = [];
+    for (let i = min; i <= max; i += step) {
+      range.push(Number(i.toFixed(3)));
     }
-    return values;
+    return range;
   }
 
   /**
-   * 发送进度通知
+   * 通知进度更新
    */
   private notifyProgress(task: OptimizationTask) {
     if (!this.progressCallback) return;
-    
+
+    // 记录内存使用情况
+    this.logMemoryUsage('进度通知');
+
     const progress: OptimizationProgress = {
       taskId: task.id,
       status: task.status,
@@ -834,10 +864,10 @@ export class ParameterOptimizer {
       estimatedTimeRemaining: this.estimateTimeRemaining(task),
       resourceUsage: {
         cpuUsage: 0, // 在前端环境中难以准确测量
-        memoryUsage: 0
+        memoryUsage: task.results.length * 0.05 // 估算内存使用MB
       }
     };
-    
+
     this.progressCallback(progress);
   }
 
@@ -846,11 +876,11 @@ export class ParameterOptimizer {
    */
   private estimateTimeRemaining(task: OptimizationTask): number {
     if (task.progress.current === 0 || !task.startTime) return 0;
-    
-    const elapsed = (Date.now() - task.startTime.getTime()) / 1000; // 秒
+
+    const elapsed = (Date.now() - task.startTime) / 1000; // 秒
     const averageTimePerIteration = elapsed / task.progress.current;
     const remaining = task.progress.total - task.progress.current;
-    
+
     return Math.round(averageTimePerIteration * remaining);
   }
 
@@ -862,20 +892,60 @@ export class ParameterOptimizer {
   }
 
   /**
+   * 更新任务结果，实现滚动窗口保存
+   */
+  private updateTaskResults(task: OptimizationTask, newResult: OptimizationResult | null) {
+    if (newResult === null) {
+      return; // 跳过无效结果
+    }
+
+    task.results.push(newResult);
+
+    // 按目标值排序，保持最优结果在前
+    task.results.sort((a, b) => this.compareResults(a, b));
+
+    // 只保留最好的N个结果，立即清理多余的
+    if (task.results.length > ParameterOptimizer.MAX_RESULTS_TO_KEEP) {
+      const removedResults = task.results.splice(ParameterOptimizer.MAX_RESULTS_TO_KEEP);
+
+      // 开发环境下记录清理情况
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`清理了 ${removedResults.length} 个次优结果，保留前 ${ParameterOptimizer.MAX_RESULTS_TO_KEEP} 个`);
+      }
+    }
+  }
+
+  /**
+   * 记录内存使用情况
+   */
+  private logMemoryUsage(context: string) {
+    if (process.env.NODE_ENV === 'development' && this.currentTask) {
+      const resultCount = this.currentTask.results.length;
+      const estimatedMemoryMB = resultCount * 0.01; // 每个精简结果约0.01MB（更准确的估算）
+
+      console.log(`[${context}] 内存使用:`, {
+        resultCount,
+        estimatedMemoryMB: estimatedMemoryMB.toFixed(2) + ' MB',
+        maxResults: ParameterOptimizer.MAX_RESULTS_TO_KEEP
+      });
+    }
+  }
+
+  /**
    * 验证参数组合
    */
   validateParameters(combination: ParameterCombination): ParameterValidationResult {
     const errors: string[] = [];
     const warnings: string[] = [];
-    
+
     // 验证权重总和
-    const weightSum = combination.priceChangeWeight + combination.volumeWeight + 
+    const weightSum = combination.priceChangeWeight + combination.volumeWeight +
                      combination.volatilityWeight + combination.fundingRateWeight;
-    
+
     if (Math.abs(weightSum - 1) > 0.001) {
       errors.push(`权重总和必须为1，当前为 ${weightSum.toFixed(3)}`);
     }
-    
+
     // 验证权重范围
     const weights = [
       { name: '跌幅权重', value: combination.priceChangeWeight },
@@ -883,31 +953,31 @@ export class ParameterOptimizer {
       { name: '波动率权重', value: combination.volatilityWeight },
       { name: '资金费率权重', value: combination.fundingRateWeight }
     ];
-    
+
     weights.forEach(weight => {
       if (weight.value < 0 || weight.value > 1) {
         errors.push(`${weight.name}必须在0-1之间，当前为 ${weight.value}`);
       }
     });
-    
+
     // 验证其他参数
     if (combination.maxShortPositions < 1 || combination.maxShortPositions > 50) {
       errors.push(`最多做空标的数量必须在1-50之间，当前为 ${combination.maxShortPositions}`);
     }
-    
+
     if (combination.maxSinglePositionRatio < 0.01 || combination.maxSinglePositionRatio > 1) {
       errors.push(`单币种持仓限制必须在0.01-1之间，当前为 ${combination.maxSinglePositionRatio}`);
     }
-    
+
     // 发出警告
     if (combination.priceChangeWeight < 0.1) {
       warnings.push('跌幅权重过低可能影响做空策略效果');
     }
-    
+
     if (combination.fundingRateWeight < 0.1) {
       warnings.push('资金费率权重过低可能影响做空成本控制');
     }
-    
+
     return {
       isValid: errors.length === 0,
       errors,
@@ -926,22 +996,13 @@ export class ParameterOptimizer {
 
     const results = task.results;
     const bestResult = results[0];
-    
+
     // 计算执行时间统计
     const executionTimes = results.map(r => r.executionTime);
     const averageExecutionTime = executionTimes.reduce((a, b) => a + b, 0) / executionTimes.length;
-    const totalOptimizationTime = task.endTime && task.startTime 
-      ? (task.endTime.getTime() - task.startTime.getTime()) / 1000 
+    const totalOptimizationTime = task.endTime && task.startTime
+      ? (task.endTime! - task.startTime) / 1000
       : 0;
-
-    // 参数敏感性分析
-    const sensitivityAnalysis = this.calculateParameterSensitivity(results);
-    
-    // 性能分布统计
-    const performanceDistribution = this.calculatePerformanceDistribution(results);
-    
-    // 最优参数区域分析
-    const optimalRegions = this.identifyOptimalRegions(results);
 
     return {
       taskId: task.id,
@@ -952,127 +1013,14 @@ export class ParameterOptimizer {
         averageExecutionTime,
         totalOptimizationTime
       },
-      sensitivityAnalysis,
-      performanceDistribution,
-      optimalRegions
+      sensitivityAnalysis: [],
+      performanceDistribution: {
+        totalReturn: { min: 0, max: 0, mean: 0, std: 0 },
+        sharpeRatio: { min: 0, max: 0, mean: 0, std: 0 },
+        maxDrawdown: { min: 0, max: 0, mean: 0, std: 0 }
+      },
+      optimalRegions: []
     };
-  }
-
-  /**
-   * 计算参数敏感性
-   */
-  private calculateParameterSensitivity(results: OptimizationResult[]) {
-    const parameters = [
-      'priceChangeWeight', 'volumeWeight', 'volatilityWeight', 'fundingRateWeight',
-      'maxShortPositions', 'maxSinglePositionRatio'
-    ];
-
-    return parameters.map(paramName => {
-      const values = results.map(r => {
-        const combination = r.combination as unknown as Record<string, number>;
-        return combination[paramName] || 0;
-      });
-      const objectives = results.map(r => r.objectiveValue);
-      
-      const correlation = this.calculateCorrelation(values, objectives);
-      const importance = Math.abs(correlation);
-
-      return {
-        parameterName: paramName,
-        correlation,
-        importance
-      };
-    }).sort((a, b) => b.importance - a.importance);
-  }
-
-  /**
-   * 计算相关系数
-   */
-  private calculateCorrelation(x: number[], y: number[]): number {
-    const n = x.length;
-    if (n === 0) return 0;
-
-    const meanX = x.reduce((a, b) => a + b, 0) / n;
-    const meanY = y.reduce((a, b) => a + b, 0) / n;
-
-    let numerator = 0;
-    let denomX = 0;
-    let denomY = 0;
-
-    for (let i = 0; i < n; i++) {
-      const deltaX = x[i] - meanX;
-      const deltaY = y[i] - meanY;
-      numerator += deltaX * deltaY;
-      denomX += deltaX * deltaX;
-      denomY += deltaY * deltaY;
-    }
-
-    const denominator = Math.sqrt(denomX * denomY);
-    return denominator === 0 ? 0 : numerator / denominator;
-  }
-
-  /**
-   * 计算性能分布
-   */
-  private calculatePerformanceDistribution(results: OptimizationResult[]) {
-    const totalReturns = results.map(r => r.metrics.totalReturn);
-    const sharpeRatios = results.map(r => r.metrics.sharpeRatio);
-    const maxDrawdowns = results.map(r => r.metrics.maxDrawdown);
-
-    const calcStats = (values: number[]) => {
-      const sorted = [...values].sort((a, b) => a - b);
-      const mean = values.reduce((a, b) => a + b, 0) / values.length;
-      const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
-      const std = Math.sqrt(variance);
-
-      return {
-        min: sorted[0],
-        max: sorted[sorted.length - 1],
-        mean,
-        std
-      };
-    };
-
-    return {
-      totalReturn: calcStats(totalReturns),
-      sharpeRatio: calcStats(sharpeRatios),
-      maxDrawdown: calcStats(maxDrawdowns)
-    };
-  }
-
-  /**
-   * 识别最优参数区域
-   */
-  private identifyOptimalRegions(results: OptimizationResult[]) {
-    // 取前20%的最优结果来分析最优区域
-    const topResults = results.slice(0, Math.max(1, Math.floor(results.length * 0.2)));
-    
-    const parameters = [
-      { name: 'priceChangeWeight', key: 'priceChangeWeight' },
-      { name: 'volumeWeight', key: 'volumeWeight' },
-      { name: 'volatilityWeight', key: 'volatilityWeight' },
-      { name: 'fundingRateWeight', key: 'fundingRateWeight' },
-      { name: 'maxShortPositions', key: 'maxShortPositions' },
-      { name: 'maxSinglePositionRatio', key: 'maxSinglePositionRatio' }
-    ];
-
-    return parameters.map(param => {
-      const values = topResults.map(r => {
-        const combination = r.combination as unknown as Record<string, number>;
-        return combination[param.key] || 0;
-      });
-
-      const min = Math.min(...values);
-      const max = Math.max(...values);
-      const range = max - min;
-      const confidence = range === 0 ? 1.0 : Math.max(0.1, 1 - (range / (max + 0.001))); // 简化的置信度计算
-
-      return {
-        parameterName: param.name,
-        optimalRange: { min, max },
-        confidence
-      };
-    });
   }
 
   /**
@@ -1088,7 +1036,7 @@ export class ParameterOptimizer {
         config: task.config,
         parameterRange: task.parameterRange
       },
-      results: task.results.slice(0, 50), // 只导出前50个结果
+      results: task.results.slice(0, 10), // 只导出前10个结果
       summary: {
         totalCombinations: task.results.length,
         bestObjectiveValue: task.results[0]?.objectiveValue || 0,
@@ -1105,20 +1053,20 @@ export class ParameterOptimizer {
   importResults(jsonData: string): OptimizationTask {
     try {
       const data = JSON.parse(jsonData);
-      
+
       const task: OptimizationTask = {
         id: data.taskInfo.id || this.generateTaskId(),
         config: data.taskInfo.config,
         parameterRange: data.taskInfo.parameterRange,
-        status: OptimizationStatus.COMPLETED,
-        progress: { 
-          current: data.results.length, 
-          total: data.results.length, 
-          percentage: 100 
+        status: 'completed',
+        progress: {
+          current: data.results.length,
+          total: data.results.length,
+          percentage: 100
         },
         results: data.results || [],
-        startTime: data.taskInfo.startTime ? new Date(data.taskInfo.startTime) : undefined,
-        endTime: data.taskInfo.endTime ? new Date(data.taskInfo.endTime) : undefined
+        startTime: data.taskInfo.startTime || Date.now(),
+        endTime: data.taskInfo.endTime || Date.now()
       };
 
       return task;
@@ -1128,50 +1076,48 @@ export class ParameterOptimizer {
   }
 
   /**
-   * 获取推荐的参数配置
+   * 获取推荐的优化配置
    */
-  getRecommendedConfig(): { config: OptimizationConfig; parameterRange: ParameterRange } {
+  getRecommendedConfig(): OptimizationConfig {
     return {
-      config: {
-        baseParams: {
-          startDate: '2025-01-01',
-          endDate: '2025-06-18',
-          initialCapital: 10000,
-          btcRatio: 0.5,
-          spotTradingFeeRate: 0.0008,
-          futuresTradingFeeRate: 0.0002,
-          longBtc: true,
-          shortAlt: true,
-          granularityHours: 8
-        },
-        objective: OptimizationObjective.MAXIMIZE_RISK_ADJUSTED_RETURN,
-        method: OptimizationMethod.HYBRID,
-        constraints: {
-          weightConstraints: {
-            sumToOne: true,
-            minWeight: 0,
-            maxWeight: 0.8
-          },
-          searchConstraints: {
-            maxIterations: 100,
-            timeoutMinutes: 30
-          }
-        }
-      },
-      parameterRange: {
-        weights: {
-          priceChangeWeight: { min: 0.1, max: 0.7, step: 0.1 },
-          volumeWeight: { min: 0.1, max: 0.5, step: 0.1 },
-          volatilityWeight: { min: 0, max: 0.3, step: 0.1 },
-          fundingRateWeight: { min: 0.1, max: 0.6, step: 0.1 }
-        },
-        maxShortPositions: { min: 8, max: 15, step: 1 },
-        maxSinglePositionRatio: { min: 0.15, max: 0.25, step: 0.05 },
-        allocationStrategies: [
-          PositionAllocationStrategy.BY_VOLUME,
-          PositionAllocationStrategy.BY_COMPOSITE_SCORE
-        ]
+      method: 'hybrid',
+      objective: 'sharpe',
+      maxIterations: 100,
+      convergenceThreshold: 0.001,
+      parallelEvaluations: 1,
+      timeLimit: 3600,
+      populationSize: 20,
+      crossoverRate: 0.8,
+      mutationRate: 0.1,
+      baseParams: {
+        startDate: '2025-01-01',
+        endDate: '2025-06-18',
+        initialCapital: 10000,
+        btcRatio: 0.5,
+        spotTradingFeeRate: 0.0008,
+        futuresTradingFeeRate: 0.0002,
+        longBtc: true,
+        shortAlt: true,
+        granularityHours: 8
       }
     };
+  }
+
+  /**
+   * 清理优化器资源
+   */
+  dispose() {
+    this.cancelOptimization();
+    this.progressCallback = undefined;
+
+    if (this.currentTask) {
+      // 清理所有结果数据
+      this.currentTask.results = [];
+      this.currentTask = null;
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('ParameterOptimizer 资源已清理');
+    }
   }
 }

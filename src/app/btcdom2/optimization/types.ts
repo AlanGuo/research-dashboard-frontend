@@ -1,4 +1,4 @@
-import { PositionAllocationStrategy, BTCDOM2BacktestResult } from '@/types/btcdom2';
+import { PositionAllocationStrategy } from '@/types/btcdom2';
 
 // 参数优化配置
 export interface OptimizationConfig {
@@ -21,25 +21,21 @@ export interface OptimizationConfig {
   // 优化方法
   method: OptimizationMethod;
   
-  // 优化约束
-  constraints: OptimizationConstraints;
+  // 优化参数
+  maxIterations?: number;
+  convergenceThreshold?: number;
+  parallelEvaluations?: number;
+  timeLimit?: number;
+  populationSize?: number;
+  crossoverRate?: number;
+  mutationRate?: number;
 }
 
 // 优化目标
-export enum OptimizationObjective {
-  MAXIMIZE_TOTAL_RETURN = 'MAXIMIZE_TOTAL_RETURN',           // 最大化总收益率
-  MAXIMIZE_SHARPE_RATIO = 'MAXIMIZE_SHARPE_RATIO',          // 最大化夏普比率
-  MAXIMIZE_CALMAR_RATIO = 'MAXIMIZE_CALMAR_RATIO',          // 最大化卡尔玛比率
-  MINIMIZE_MAX_DRAWDOWN = 'MINIMIZE_MAX_DRAWDOWN',          // 最小化最大回撤
-  MAXIMIZE_RISK_ADJUSTED_RETURN = 'MAXIMIZE_RISK_ADJUSTED_RETURN' // 最大化风险调整收益
-}
+export type OptimizationObjective = 'totalReturn' | 'sharpe' | 'calmar' | 'maxDrawdown' | 'composite';
 
 // 优化方法
-export enum OptimizationMethod {
-  GRID_SEARCH = 'GRID_SEARCH',           // 网格搜索
-  BAYESIAN_OPTIMIZATION = 'BAYESIAN_OPTIMIZATION', // 贝叶斯优化
-  HYBRID = 'HYBRID'                      // 混合方法（先网格后贝叶斯）
-}
+export type OptimizationMethod = 'grid' | 'bayesian' | 'hybrid';
 
 // 参数范围定义
 export interface ParameterRange {
@@ -52,11 +48,11 @@ export interface ParameterRange {
   };
   
   // 策略参数范围
-  maxShortPositions: { min: number; max: number; step: number; };
-  maxSinglePositionRatio: { min: number; max: number; step: number; };
+  maxShortPositions: { min: number; max: number; step?: number; };
+  maxSinglePositionRatio: { min: number; max: number; step?: number; };
   
-  // 仓位分配策略（离散选择）
-  allocationStrategies: PositionAllocationStrategy[];
+  // 配置策略
+  allocationStrategy?: PositionAllocationStrategy[];
 }
 
 // 优化约束
@@ -98,27 +94,21 @@ export interface ParameterCombination {
 // 优化结果
 export interface OptimizationResult {
   combination: ParameterCombination;
-  backtestResult: BTCDOM2BacktestResult;
+  // 移除 backtestResult 以节省内存，只保留关键指标
   objectiveValue: number;        // 目标函数值
   metrics: {
     totalReturn: number;
     sharpeRatio: number;
     calmarRatio: number;
     maxDrawdown: number;
-    volatility: number;
+    volatility?: number;
     winRate: number;
   };
   executionTime: number;         // 执行时间（毫秒）
 }
 
 // 优化任务状态
-export enum OptimizationStatus {
-  PENDING = 'PENDING',
-  RUNNING = 'RUNNING',
-  COMPLETED = 'COMPLETED',
-  FAILED = 'FAILED',
-  CANCELLED = 'CANCELLED'
-}
+export type OptimizationStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 
 // 优化任务
 export interface OptimizationTask {
@@ -132,8 +122,8 @@ export interface OptimizationTask {
     percentage: number;
   };
   results: OptimizationResult[];
-  startTime?: Date;
-  endTime?: Date;
+  startTime: number;
+  endTime: number | null;
   error?: string;
 }
 
@@ -212,8 +202,8 @@ export interface OptimizationProgress {
   recentResults: OptimizationResult[];
   estimatedTimeRemaining: number; // 秒
   resourceUsage: {
-    cpuUsage: number;
-    memoryUsage: number;
+    cpuUsage: number;     // CPU使用率 (0-100)
+    memoryUsage: number;  // 内存使用量 (MB)
   };
 }
 
