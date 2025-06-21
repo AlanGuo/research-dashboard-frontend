@@ -91,11 +91,6 @@ export default function OptimizationPanel({
       if (progress.currentBest && progress.recentResults.length > 0) {
         setResults(progress.recentResults);
       }
-      
-      // 显示进度信息，包括跳过的无效组合
-      if (progress.status === 'running') {
-        console.log(`优化进度: ${progress.currentIteration}/${progress.totalIterations} (${progress.resourceUsage.memoryUsage.toFixed(1)}MB)`);
-      }
     });
   }, [optimizer]);
 
@@ -526,7 +521,7 @@ export default function OptimizationPanel({
   // 如果不是开发环境，显示受限界面
   if (!isDevelopment) {
     return (
-      <div className="bg-gray-50 dark:bg-gray-800 rounded-lg shadow-lg p-6 border border-gray-200 dark:border-gray-700">
+      <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
         <div className="text-center py-8">
           <div className="text-gray-400 dark:text-gray-500 text-lg mb-2">🔧</div>
           <h3 className="text-lg font-medium text-gray-600 dark:text-gray-400 mb-2">

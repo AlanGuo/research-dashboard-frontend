@@ -320,10 +320,10 @@ class BTCDOM2StrategyEngine {
   }
 
   // 筛选做空候选标的
-  selectShortCandidates(
+  async selectShortCandidates(
     rankings: RankingItem[],
     btcPriceChange: number
-  ): ShortSelectionResult {
+  ): Promise<ShortSelectionResult> {
     const startTime = Date.now(); // 性能监控
 
     // 定期清理缓存
@@ -390,76 +390,95 @@ class BTCDOM2StrategyEngine {
     // 复用候选者数组
     ARRAY_POOL.tempCandidates.length = 0;
 
-    for (const item of preFilteredItems) {
-      const priceChange = isNaN(item.priceChange24h) ? 0 : item.priceChange24h;
-
-      // 计算各项分数（使用优化的计算方法）
-      const priceChangeScore = stats.priceChange.hasDeclines
-        ? Math.abs(Math.min(priceChange, 0)) / stats.priceChange.maxAbsoluteDecline
-        : (stats.priceChange.max > stats.priceChange.min
-            ? 1 - (priceChange - stats.priceChange.min) / (stats.priceChange.max - stats.priceChange.min)
-            : 1);
-
-      const volumeScore = (stats.totalCandidates - item.rank + 1) / stats.totalCandidates;
-
-      const validVolatility = isNaN(item.volatility24h) || !isFinite(item.volatility24h) ? idealVolatility : item.volatility24h;
-      const volatilityScore = fastVolatilityScore(validVolatility, idealVolatility, volatilitySpread);
-
-
-      let fundingRateScore = 0.5;
-      if (item.fundingRateHistory && item.fundingRateHistory.length > 0) {
-        const latestFunding = item.fundingRateHistory[item.fundingRateHistory.length - 1];
-        if (latestFunding && !isNaN(latestFunding.fundingRate) && isFinite(latestFunding.fundingRate)) {
-          fundingRateScore = fastFundingRateScore(latestFunding.fundingRate);
-        }
-      }
-
-      const totalScore = priceChangeScore * this.params.priceChangeWeight +
-                        volumeScore * this.params.volumeWeight +
-                        volatilityScore * this.params.volatilityWeight +
-                        fundingRateScore * this.params.fundingRateWeight;
-
-      const finalTotalScore = isNaN(totalScore) ? 0 : totalScore;
-
-      // 创建候选者对象，复用数组池
-      const candidate: ShortCandidate = {
-        symbol: item.symbol,
-        rank: item.rank,
-        priceChange24h: priceChange,
-        volume24h: item.volume24h,
-        quoteVolume24h: item.quoteVolume24h,
-        volatility24h: item.volatility24h,
-        marketShare: item.marketShare,
-        priceAtTime: item.priceAtTime,
-        futurePriceAtTime: item.futurePriceAtTime,
-        futureSymbol: item.futureSymbol,
-        priceChangeScore,
-        volumeScore,
-        volatilityScore,
-        fundingRateScore,
-        totalScore: finalTotalScore,
-        eligible: true,
-        reason: `综合评分: ${finalTotalScore.toFixed(3)}`
-      };
-
-      // 调试信息：记录分数异常的情况（仅开发环境）
-      if (process.env.NODE_ENV === 'development' && (isNaN(totalScore) || isNaN(priceChangeScore) || isNaN(volumeScore) || isNaN(volatilityScore) || isNaN(fundingRateScore))) {
-        console.warn(`[DEBUG] 分数异常 ${item.symbol}:`, {
-          priceChange: item.priceChange24h,
-          volatility: item.volatility24h,
-          rank: item.rank,
-          scores: { priceChangeScore, volumeScore, volatilityScore, fundingRateScore, totalScore: finalTotalScore }
-        });
-      }
-
-      ARRAY_POOL.tempCandidates.push(candidate);
-      selectedCount++;
-
-      // 提前终止：如果已经有足够多的候选者，可以提前排序并选择
-      if (selectedCount >= this.params.maxShortPositions * 2) { // 减少倍数，提高效率
-        break;
-      }
+    // 并行处理候选者评分 - 将数组分块处理以提升性能
+    const chunkSize = Math.max(1, Math.ceil(preFilteredItems.length / 8)); // 利用8个并行任务
+    const chunks: RankingItem[][] = [];
+    
+    for (let i = 0; i < preFilteredItems.length; i += chunkSize) {
+      chunks.push(preFilteredItems.slice(i, i + chunkSize));
     }
+
+    // 并行处理各个分块
+    const candidatePromises = chunks.map(async (chunk) => {
+      const chunkCandidates: ShortCandidate[] = [];
+      
+      for (const item of chunk) {
+        const priceChange = isNaN(item.priceChange24h) ? 0 : item.priceChange24h;
+
+        // 计算各项分数（使用优化的计算方法）
+        const priceChangeScore = stats.priceChange.hasDeclines
+          ? Math.abs(Math.min(priceChange, 0)) / stats.priceChange.maxAbsoluteDecline
+          : (stats.priceChange.max > stats.priceChange.min
+              ? 1 - (priceChange - stats.priceChange.min) / (stats.priceChange.max - stats.priceChange.min)
+              : 1);
+
+        const volumeScore = (stats.totalCandidates - item.rank + 1) / stats.totalCandidates;
+
+        const validVolatility = isNaN(item.volatility24h) || !isFinite(item.volatility24h) ? idealVolatility : item.volatility24h;
+        const volatilityScore = fastVolatilityScore(validVolatility, idealVolatility, volatilitySpread);
+
+        let fundingRateScore = 0.5;
+        if (item.fundingRateHistory && item.fundingRateHistory.length > 0) {
+          const latestFunding = item.fundingRateHistory[item.fundingRateHistory.length - 1];
+          if (latestFunding && !isNaN(latestFunding.fundingRate) && isFinite(latestFunding.fundingRate)) {
+            fundingRateScore = fastFundingRateScore(latestFunding.fundingRate);
+          }
+        }
+
+        const totalScore = priceChangeScore * this.params.priceChangeWeight +
+                          volumeScore * this.params.volumeWeight +
+                          volatilityScore * this.params.volatilityWeight +
+                          fundingRateScore * this.params.fundingRateWeight;
+
+        const finalTotalScore = isNaN(totalScore) ? 0 : totalScore;
+
+        // 创建候选者对象
+        const candidate: ShortCandidate = {
+          symbol: item.symbol,
+          rank: item.rank,
+          priceChange24h: priceChange,
+          volume24h: item.volume24h,
+          quoteVolume24h: item.quoteVolume24h,
+          volatility24h: item.volatility24h,
+          marketShare: item.marketShare,
+          priceAtTime: item.priceAtTime,
+          futurePriceAtTime: item.futurePriceAtTime,
+          futureSymbol: item.futureSymbol,
+          priceChangeScore,
+          volumeScore,
+          volatilityScore,
+          fundingRateScore,
+          totalScore: finalTotalScore,
+          eligible: true,
+          reason: `综合评分: ${finalTotalScore.toFixed(3)}`
+        };
+
+        // 调试信息：记录分数异常的情况（仅开发环境）
+        if (process.env.NODE_ENV === 'development' && (isNaN(totalScore) || isNaN(priceChangeScore) || isNaN(volumeScore) || isNaN(volatilityScore) || isNaN(fundingRateScore))) {
+          console.warn(`[DEBUG] 分数异常 ${item.symbol}:`, {
+            priceChange: item.priceChange24h,
+            volatility: item.volatility24h,
+            rank: item.rank,
+            scores: { priceChangeScore, volumeScore, volatilityScore, fundingRateScore, totalScore: finalTotalScore }
+          });
+        }
+
+        chunkCandidates.push(candidate);
+      }
+      
+      return chunkCandidates;
+    });
+
+    // 等待所有并行任务完成并合并结果
+    const candidateChunks = await Promise.all(candidatePromises);
+    const allCandidates = candidateChunks.flat();
+    
+    // 限制候选者数量以提高效率
+    const maxCandidates = this.params.maxShortPositions * 2;
+    selectedCount = Math.min(allCandidates.length, maxCandidates);
+    
+    // 将结果添加到数组池
+    ARRAY_POOL.tempCandidates.push(...allCandidates.slice(0, maxCandidates));
 
     // 在temp数组中排序，避免额外的过滤操作
     ARRAY_POOL.tempCandidates.sort((a, b) => b.totalScore - a.totalScore);
@@ -525,15 +544,15 @@ class BTCDOM2StrategyEngine {
   }
 
   // 生成策略快照
-  generateSnapshot(
+  async generateSnapshot(
     dataPoint: VolumeBacktestDataPoint,
     previousSnapshot: StrategySnapshot | null,
     previousData: VolumeBacktestDataPoint | null = null
-  ): StrategySnapshot {
+  ): Promise<StrategySnapshot> {
     const { timestamp, hour, btcPrice, btcPriceChange24h, btcdomPrice, btcdomPriceChange24h, rankings, removedSymbols } = dataPoint;
 
     // 筛选做空候选标的
-    const selectionResult = this.selectShortCandidates(rankings, btcPriceChange24h);
+    const selectionResult = await this.selectShortCandidates(rankings, btcPriceChange24h);
     const { selectedCandidates, rejectedCandidates, selectionReason } = selectionResult;
 
     // 检查是否有可执行的策略
@@ -1385,6 +1404,9 @@ export async function POST(request: NextRequest) {
       maxSinglePositionRatio: rawParams.maxSinglePositionRatio !== undefined ? rawParams.maxSinglePositionRatio : 0.25,
     };
 
+    // 检查是否为优化模式（跳过图表数据生成以提升性能）
+    const optimizeOnly = rawParams.optimizeOnly === true;
+
     // 验证参数
     if (!params.startDate || !params.endDate || params.initialCapital <= 0) {
       return NextResponse.json({
@@ -1454,24 +1476,23 @@ export async function POST(request: NextRequest) {
     for (let index = 0; index < data.length; index++) {
       const dataPoint = data[index];
       const previousData = index > 0 ? data[index - 1] : null;
-      const snapshot = strategyEngine.generateSnapshot(dataPoint, previousSnapshot, previousData);
+      const snapshot = await strategyEngine.generateSnapshot(dataPoint, previousSnapshot, previousData);
       snapshots.push(snapshot);
       previousSnapshot = snapshot;
 
       // 每100个数据点记录一次进度（仅开发环境）
-      if (process.env.NODE_ENV === 'development' && (index + 1) % 100 === 0) {
-        const progress = ((index + 1) / data.length * 100).toFixed(1);
-        const elapsed = Date.now() - backtestStartTime;
-        console.log(`[PERF] 回测进度: ${progress}% (${index + 1}/${data.length}), 耗时: ${elapsed}ms`);
-      }
+      // if (process.env.NODE_ENV === 'development' && (index + 1) % 100 === 0) {
+      //   const progress = ((index + 1) / data.length * 100).toFixed(1);
+      //   const elapsed = Date.now() - backtestStartTime;
+      // }
     }
 
     // 计算性能指标
     const performanceStartTime = Date.now();
     const performance = calculatePerformanceMetrics(snapshots, params, granularityHours);
 
-    // 生成图表数据
-    const chartData = generateChartData(snapshots, params);
+    // 生成图表数据（优化模式下跳过以提升性能）
+    const chartData = optimizeOnly ? [] : generateChartData(snapshots, params);
 
     // 计算汇总统计
     const activeRebalances = snapshots.filter(s => s.isActive).length;

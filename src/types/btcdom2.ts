@@ -26,6 +26,7 @@ export interface BTCDOM2StrategyParams {
   allocationStrategy: PositionAllocationStrategy; // 仓位分配策略
   maxSinglePositionRatio: number; // 最高单币种持仓限制 (0-1)
   granularityHours?: number;  // 回测粒度（小时），默认8小时
+  optimizeOnly?: boolean;     // 是否为优化模式（跳过图表数据生成以提升性能）
 }
 
 // 资金费率历史数据项
