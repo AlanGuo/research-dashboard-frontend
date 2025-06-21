@@ -35,7 +35,7 @@ export default function BTCDOM2Dashboard() {
     startDate: '2020-01-01',
     endDate: '2025-06-21',
     initialCapital: 10000,
-    btcRatio: 0.5,
+    btcRatio: 0.6,
     priceChangeWeight: 0.22,
     volumeWeight: 0.05,
     volatilityWeight: 0.13,
@@ -527,16 +527,23 @@ export default function BTCDOM2Dashboard() {
 
               <div className="space-y-2">
                 <Label htmlFor="btcRatio">BTC占比</Label>
-                <div className="flex items-center space-x-2">
-                  <Slider
-                    value={[params.btcRatio * 100]}
-                    onValueChange={(value) => handleParamChange('btcRatio', value[0] / 100)}
-                    max={100}
-                    step={1}
-                    className="flex-1"
+                <div className="relative">
+                  <Input
+                    id="btcRatio"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="5"
+                    value={(params.btcRatio * 100).toFixed(0)}
+                    onChange={(e) => {
+                      const value = parseFloat(e.target.value) || 0;
+                      handleParamChange('btcRatio', Math.min(Math.max(value, 0), 100) / 100);
+                    }}
+                    placeholder="BTC占比(%)"
+                    className="pr-8"
                   />
-                  <span className="text-sm font-medium w-12 text-right">
-                    {(params.btcRatio * 100).toFixed(0)}%
+                  <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-sm text-gray-500 pointer-events-none">
+                    %
                   </span>
                 </div>
               </div>

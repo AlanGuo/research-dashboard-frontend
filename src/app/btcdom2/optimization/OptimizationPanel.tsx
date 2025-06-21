@@ -41,8 +41,8 @@ export default function OptimizationPanel({
   // 优化配置状态
   const [config, setConfig] = useState<OptimizationConfig>({
     baseParams: {
-      startDate: '2025-01-01',
-      endDate: '2025-06-18',
+      startDate: '2020-01-01',
+      endDate: '2025-06-21',
       initialCapital: 10000,
       btcRatio: 0.5,
       spotTradingFeeRate: 0.0008,
@@ -54,7 +54,7 @@ export default function OptimizationPanel({
     objective: 'maxDrawdown',
     method: 'hybrid',
     allocationStrategyMode: 'random',
-    fixedAllocationStrategy: PositionAllocationStrategy.BY_COMPOSITE_SCORE,
+    fixedAllocationStrategy: PositionAllocationStrategy.BY_VOLUME,
 
     maxIterations: 300,
     timeLimit: 3600,
