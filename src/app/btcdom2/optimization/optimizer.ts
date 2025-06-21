@@ -123,67 +123,44 @@ export class ParameterOptimizer {
   private async executeGridSearch(task: OptimizationTask) {
     const allCombinations = this.generateGridCombinations(task.parameterRange);
 
-    console.log(`网格搜索: 总组合 ${allCombinations.length}，使用 ${ParameterOptimizer.MAX_CONCURRENT_REQUESTS} 个并发请求`);
+    console.log(`网格搜索: 总组合 ${allCombinations.length}`);
 
     task.progress.total = allCombinations.length;
     task.progress.current = 0;
 
     let validEvaluations = 0;
-    let processedCount = 0;
 
-    // 并行处理批次
-    const batchSize = ParameterOptimizer.MAX_CONCURRENT_REQUESTS;
-    
-    for (let i = 0; i < allCombinations.length; i += batchSize) {
+    for (let i = 0; i < allCombinations.length; i++) {
       if (this.abortController?.signal.aborted) {
         throw new Error('优化被用户取消');
       }
 
-      // 创建当前批次的任务
-      const batch = allCombinations.slice(i, i + batchSize);
-      const batchPromises = batch.map(async (combination, batchIndex) => {
-        try {
-          const result = await this.evaluateCombination(combination, task.config);
-          return { 
-            result, 
-            combination, 
-            globalIndex: i + batchIndex,
-            success: result !== null 
-          };
-        } catch (error) {
-          console.error(`组合 ${i + batchIndex + 1} 评估失败:`, error);
-          return { 
-            result: null, 
-            combination, 
-            globalIndex: i + batchIndex,
-            success: false,
-            error 
-          };
-        }
-      });
+      const combination = allCombinations[i];
 
-      // 等待当前批次完成
-      const batchResults = await Promise.all(batchPromises);
+      try {
+        const result = await this.evaluateCombination(combination, task.config);
 
-      // 处理批次结果
-      for (const batchResult of batchResults) {
-        processedCount++;
-        
-        if (batchResult.success && batchResult.result) {
-          this.updateTaskResults(task, batchResult.result);
+        if (result !== null) {
+          this.updateTaskResults(task, result);
           validEvaluations++;
-          console.log(`网格搜索: ${validEvaluations}个有效结果, 当前处理: ${processedCount}/${allCombinations.length}`);
+          console.log(`网格搜索: ${validEvaluations}个有效结果, 当前处理: ${i + 1}/${allCombinations.length}`);
         } else {
-          console.log(`网格搜索: 跳过无效组合 ${batchResult.globalIndex + 1}, 继续处理`);
+          console.log(`网格搜索: 跳过无效组合 ${i + 1}, 继续处理`);
         }
 
         // 更新进度
-        task.progress.current = processedCount;
+        task.progress.current = i + 1;
         task.progress.percentage = Math.round((task.progress.current / task.progress.total) * 100);
-      }
 
-      // 通知进度更新
-      this.notifyProgress(task);
+        // 通知进度更新
+        this.notifyProgress(task);
+      } catch (error) {
+        console.error(`组合 ${i + 1} 评估失败:`, error);
+        // 继续处理下一个组合，但仍然更新进度
+        task.progress.current = i + 1;
+        task.progress.percentage = Math.round((task.progress.current / task.progress.total) * 100);
+        this.notifyProgress(task);
+      }
     }
   }
 
