@@ -33,14 +33,14 @@ export default function BTCDOM2Dashboard() {
   // 策略参数状态
   const [params, setParams] = useState<BTCDOM2StrategyParams>({
     startDate: '2020-01-01',
-    endDate: '2025-06-20',
+    endDate: '2025-06-21',
     initialCapital: 10000,
     btcRatio: 0.5,
-    priceChangeWeight: 0.3,
-    volumeWeight: 0.1,
-    volatilityWeight: 0.3,
-    fundingRateWeight: 0.3,
-    maxShortPositions: 15,
+    priceChangeWeight: 0.15,
+    volumeWeight: 0.05,
+    volatilityWeight: 0.1,
+    fundingRateWeight: 0.7,
+    maxShortPositions: 5,
     spotTradingFeeRate: 0.0008, // 0.08% 现货手续费
     futuresTradingFeeRate: 0.0002, // 0.02% 期货手续费
     longBtc: true,

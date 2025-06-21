@@ -55,17 +55,9 @@ export async function POST(request: NextRequest) {
     }
 
     // 性能监控开始
-    const backtestStartTime = Date.now();
-    const memoryBefore = process.env.NODE_ENV === 'development' ? process.memoryUsage() : null;
-    
+    const backtestStartTime = Date.now();    
     if (process.env.NODE_ENV === 'development') {
-      console.log(`[OPTIMIZE] 开始优化回测 - 权重配置:`, {
-        priceChangeWeight: params.priceChangeWeight,
-        volumeWeight: params.volumeWeight,
-        volatilityWeight: params.volatilityWeight,
-        fundingRateWeight: params.fundingRateWeight
-      });
-      console.log(`[OPTIMIZE] 内存使用 (MB) - RSS: ${(memoryBefore!.rss / 1024 / 1024).toFixed(1)}, Heap: ${(memoryBefore!.heapUsed / 1024 / 1024).toFixed(1)}`);
+      console.log(`[OPTIMIZE] 开始优化回测`);
     }
 
     // 调用完整backtest接口，然后提取轻量数据
@@ -91,24 +83,16 @@ export async function POST(request: NextRequest) {
 
     // 只提取性能指标，丢弃snapshots和chartData
     const performance = fullBacktestResult.data.performance;
-
     const totalTime = Date.now() - backtestStartTime;
-    const memoryAfter = process.env.NODE_ENV === 'development' ? process.memoryUsage() : null;
 
-    if (process.env.NODE_ENV === 'development') {
-      const memoryDelta = {
-        rss: memoryAfter!.rss - memoryBefore!.rss,
-        heap: memoryAfter!.heapUsed - memoryBefore!.heapUsed
-      };
-      
+    if (process.env.NODE_ENV === 'development') {      
       console.log(`[OPTIMIZE] 优化回测完成，总耗时: ${totalTime}ms`);
       console.log(`[OPTIMIZE] 性能指标:`, {
         '总收益率': `${(performance.totalReturn * 100).toFixed(2)}%`,
         '夏普比率': performance.sharpeRatio?.toFixed(3) || 'N/A',
         '最大回撤': `${(performance.maxDrawdown * 100).toFixed(2)}%`
       });
-      console.log(`[OPTIMIZE] 内存变化 (MB) - RSS: ${(memoryDelta.rss / 1024 / 1024).toFixed(1)}, Heap: ${(memoryDelta.heap / 1024 / 1024).toFixed(1)}`);
-      console.log(`[OPTIMIZE] 优化效果 - 平均处理速度: ${(totalTime / 1000).toFixed(2)}s, 跳过图表数据生成`);
+      console.log(`[OPTIMIZE] 平均处理速度: ${(totalTime / 1000).toFixed(2)}s`);
     }
 
     // 只返回性能指标

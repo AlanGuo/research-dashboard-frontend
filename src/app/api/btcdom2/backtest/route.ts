@@ -1463,7 +1463,7 @@ export async function POST(request: NextRequest) {
     // 性能监控开始
     const backtestStartTime = Date.now();
     if (process.env.NODE_ENV === 'development') {
-      console.log(`[PERF] 开始BTCDOM2回测，数据点数: ${data.length}`);
+      console.log(`[PERF] 开始BTCDOM2回测, startTime: ${startTime}, endTime: ${endTime}, 数据点数: ${data.length}`);
     }
 
     // 创建策略引擎
