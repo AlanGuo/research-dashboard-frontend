@@ -51,9 +51,17 @@ export function BTCDOM2Chart({ data, params }: BTCDOM2ChartProps) {
   const chartData = useMemo(() => {
     if (!data || data.length === 0) return [];
     
-    // 计算BTC和BTCDOM收益率（相对于初始价格）
+    // 计算BTC收益率基准价格（第一个有效价格）
     const initialBtcPrice = data.length > 0 && data[0].btcPrice ? data[0].btcPrice : null;
-    const initialBtcdomPrice = data.length > 0 && data[0].btcdomPrice ? data[0].btcdomPrice : null;
+    
+    // 计算BTCDOM收益率基准价格（第一个有效的非零价格）
+    let initialBtcdomPrice = null;
+    for (const point of data) {
+      if (point.btcdomPrice && point.btcdomPrice > 0) {
+        initialBtcdomPrice = point.btcdomPrice;
+        break;
+      }
+    }
     
     const processedData = data.map(point => {
       // 计算BTC收益率
@@ -64,7 +72,7 @@ export function BTCDOM2Chart({ data, params }: BTCDOM2ChartProps) {
       
       // 计算BTCDOM收益率
       let btcdomReturnPercent = null;
-      if (initialBtcdomPrice && point.btcdomPrice) {
+      if (initialBtcdomPrice && point.btcdomPrice && point.btcdomPrice > 0) {
         btcdomReturnPercent = ((point.btcdomPrice - initialBtcdomPrice) / initialBtcdomPrice) * 100;
       }
       
@@ -139,6 +147,14 @@ export function BTCDOM2Chart({ data, params }: BTCDOM2ChartProps) {
                 ${data.btcPrice.toLocaleString()}
               </span>
             </div>
+            {data.btcdomPrice && data.btcdomPrice > 0 && (
+              <div className="flex justify-between gap-6">
+                <span className="text-gray-600 dark:text-gray-400">BTCDOM价格:</span>
+                <span className="font-medium text-gray-900 dark:text-gray-100">
+                  ${data.btcdomPrice.toLocaleString()}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between gap-6">
               <span className="text-gray-600 dark:text-gray-400">策略状态:</span>
               <span className={`font-medium ${data.isActive ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
@@ -330,7 +346,7 @@ export function BTCDOM2Chart({ data, params }: BTCDOM2ChartProps) {
                   strokeWidth={2}
                   dot={false}
                   name="BTCDOM收益率 (%)"
-                  connectNulls={false}
+                  connectNulls={true}
                 />
               )}
               {visibility.strategyReturn && (

@@ -12,9 +12,15 @@ import { PositionAllocationStrategy, BTCDOM2StrategyParams } from '@/types/btcdo
 
 export class ParameterOptimizer {
   private static readonly MAX_RESULTS_TO_KEEP = 10; // 只保留最优的10个结果
+  private static readonly MAX_CONCURRENT_REQUESTS = 3; // 最大并发请求数
+  private static readonly RETRY_ATTEMPTS = 3; // 重试次数
+  private static readonly RETRY_DELAY = 1000; // 重试延迟(ms)
+  
   private currentTask: OptimizationTask | null = null;
   private progressCallback?: (progress: OptimizationProgress) => void;
   private abortController?: AbortController;
+  private activeRequests: number = 0; // 当前活跃请求数
+  private requestQueue: Array<() => void> = []; // 请求队列
 
   /**
    * 设置进度回调函数
@@ -351,6 +357,9 @@ export class ParameterOptimizer {
       return null;
     }
 
+    // 并发控制：等待直到有可用的请求槽位
+    await this.waitForAvailableSlot();
+
     // 构建完整的策略参数
     const strategyParams: BTCDOM2StrategyParams = {
       ...config.baseParams,
@@ -365,34 +374,13 @@ export class ParameterOptimizer {
       granularityHours: config.baseParams.granularityHours || 8
     };
 
-    console.log('调用回测API，参数:', strategyParams);
+    console.log('调用优化API，参数:', strategyParams);
 
-    // 调用回测API
-    const response = await fetch('/api/btcdom2/backtest', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(strategyParams)
-    });
-
-    console.log('API响应状态:', response.status, response.statusText);
-    console.log('开始调用回测API...');
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('API响应错误:', errorText);
-      return null; // 返回null而不是抛出错误
-    }
-
-    const apiResponse = await response.json();
-    console.log('API响应结构:', {
-      success: apiResponse.success,
-      hasData: !!apiResponse.data,
-      error: apiResponse.error
-    });
-
+    // 使用重试机制调用优化API
+    const apiResponse = await this.callOptimizeAPIWithRetry(strategyParams, combination.id);
     // 检查API响应格式
-    if (!apiResponse.success || !apiResponse.data) {
-      console.warn(`回测API返回错误，跳过此组合: ${apiResponse.error || '未知错误'}`);
+    if (!apiResponse || !apiResponse.success || !apiResponse.data) {
+      console.warn(`优化API返回错误，跳过此组合: ${apiResponse?.error || '未知错误'}`);
       return null;
     }
 
@@ -404,7 +392,7 @@ export class ParameterOptimizer {
     // 立即提取性能指标，不保存完整的回测结果对象
     const performance = backtestData.performance;
     if (!performance) {
-      console.warn(`回测结果缺少性能指标，跳过此组合`);
+      console.warn(`优化结果缺少性能指标，跳过此组合`);
       return null;
     }
 
@@ -442,13 +430,7 @@ export class ParameterOptimizer {
       winRate: performance.winRate || 0,
     };
 
-    // 显式清理对大型数据的引用
-    if (backtestData.snapshots) {
-      backtestData.snapshots = null;
-    }
-    if (backtestData.chartData) {
-      backtestData.chartData = null;
-    }
+    // 优化接口不返回snapshots和chartData，无需清理
 
     return {
       combination,
@@ -456,6 +438,101 @@ export class ParameterOptimizer {
       objectiveValue,
       executionTime
     };
+  }
+
+  /**
+   * 等待可用的请求槽位
+   */
+  private async waitForAvailableSlot(): Promise<void> {
+    return new Promise<void>((resolve) => {
+      if (this.activeRequests < ParameterOptimizer.MAX_CONCURRENT_REQUESTS) {
+        this.activeRequests++;
+        resolve();
+      } else {
+        this.requestQueue.push(() => {
+          this.activeRequests++;
+          resolve();
+        });
+      }
+    });
+  }
+
+  /**
+   * 释放请求槽位
+   */
+  private releaseSlot(): void {
+    this.activeRequests--;
+    if (this.requestQueue.length > 0) {
+      const nextRequest = this.requestQueue.shift();
+      if (nextRequest) {
+        nextRequest();
+      }
+    }
+  }
+
+  /**
+   * 带重试机制的优化API调用
+   */
+  private async callOptimizeAPIWithRetry(
+    params: BTCDOM2StrategyParams, 
+    combinationId: string
+  ): Promise<any> {
+    let lastError: Error | null = null;
+    
+    for (let attempt = 1; attempt <= ParameterOptimizer.RETRY_ATTEMPTS; attempt++) {
+      try {
+        console.log(`调用优化API (组合 ${combinationId}, 尝试 ${attempt}/${ParameterOptimizer.RETRY_ATTEMPTS})`);
+        
+        const response = await fetch('/api/btcdom2/optimize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(params),
+          signal: this.abortController?.signal
+        });
+
+        console.log(`API响应状态 (组合 ${combinationId}):`, response.status, response.statusText);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+
+        const apiResponse = await response.json();
+        console.log(`API响应成功 (组合 ${combinationId}):`, {
+          success: apiResponse.success,
+          hasData: !!apiResponse.data,
+          error: apiResponse.error
+        });
+
+        // 成功后释放槽位
+        this.releaseSlot();
+        return apiResponse;
+
+      } catch (error) {
+        lastError = error as Error;
+        console.warn(`API调用失败 (组合 ${combinationId}, 尝试 ${attempt}/${ParameterOptimizer.RETRY_ATTEMPTS}):`, error);
+        
+        // 如果是取消信号，直接抛出错误
+        if (error instanceof Error && error.name === 'AbortError') {
+          this.releaseSlot();
+          throw error;
+        }
+        
+        // 最后一次尝试失败，释放槽位并返回null
+        if (attempt === ParameterOptimizer.RETRY_ATTEMPTS) {
+          this.releaseSlot();
+          console.error(`API调用最终失败 (组合 ${combinationId}):`, lastError);
+          return null;
+        }
+        
+        // 等待后重试
+        await new Promise(resolve => setTimeout(resolve, ParameterOptimizer.RETRY_DELAY * attempt));
+      }
+    }
+    
+    // 不应该到达这里，但为了类型安全
+    this.releaseSlot();
+    return null;
   }
 
   /**
