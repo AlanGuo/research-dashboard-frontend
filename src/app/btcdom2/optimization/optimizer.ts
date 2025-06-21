@@ -1169,9 +1169,12 @@ export class ParameterOptimizer {
       populationSize: 20,
       crossoverRate: 0.8,
       mutationRate: 0.1,
+      allocationStrategyMode: 'fixed',
+      fixedAllocationStrategy: PositionAllocationStrategy.BY_COMPOSITE_SCORE,
+      fixedMaxSinglePositionRatio: 0.2,
       baseParams: {
         startDate: '2025-01-01',
-        endDate: '2025-06-18',
+        endDate: '2025-06-20',
         initialCapital: 10000,
         btcRatio: 0.5,
         spotTradingFeeRate: 0.0008,

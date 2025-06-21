@@ -1,5 +1,8 @@
 import { PositionAllocationStrategy } from '@/types/btcdom2';
 
+// 仓位配置策略模式
+export type AllocationStrategyMode = 'random' | 'fixed';
+
 // 参数优化配置
 export interface OptimizationConfig {
   // 基础参数（不参与优化的固定参数）
@@ -20,6 +23,15 @@ export interface OptimizationConfig {
   
   // 优化方法
   method: OptimizationMethod;
+  
+  // 仓位配置策略模式
+  allocationStrategyMode: AllocationStrategyMode;
+  
+  // 固定的仓位配置策略（当 allocationStrategyMode 为 'fixed' 时使用）
+  fixedAllocationStrategy?: PositionAllocationStrategy;
+  
+  // 固定的单币种最大持仓比例（当使用按综合分数分配策略时）
+  fixedMaxSinglePositionRatio?: number;
   
   // 优化参数
   maxIterations?: number;

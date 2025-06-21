@@ -5,7 +5,8 @@ import {
   OptimizationConfig, 
   OptimizationResult, 
   ParameterRange,
-  OptimizationProgress 
+  OptimizationProgress,
+  AllocationStrategyMode
 } from './types';
 import { ParameterOptimizer } from './optimizer';
 import { PositionAllocationStrategy } from '@/types/btcdom2';
@@ -53,6 +54,9 @@ export default function OptimizationPanel({
     },
     objective: 'maxDrawdown',
     method: 'hybrid',
+    allocationStrategyMode: 'random',
+    fixedAllocationStrategy: PositionAllocationStrategy.BY_COMPOSITE_SCORE,
+    fixedMaxSinglePositionRatio: 0.2,
     maxIterations: 300,
     timeLimit: 3600,
     ...initialConfig
@@ -74,6 +78,37 @@ export default function OptimizationPanel({
       PositionAllocationStrategy.EQUAL_ALLOCATION
     ]
   });
+
+  // 根据仓位配置策略模式更新参数范围
+  useEffect(() => {
+    setParameterRange(prev => {
+      const newRange = {
+        ...prev,
+        allocationStrategy: config.allocationStrategyMode === 'random' 
+          ? [
+              PositionAllocationStrategy.BY_VOLUME,
+              PositionAllocationStrategy.BY_COMPOSITE_SCORE,
+              PositionAllocationStrategy.EQUAL_ALLOCATION
+            ]
+          : config.fixedAllocationStrategy 
+            ? [config.fixedAllocationStrategy]
+            : [PositionAllocationStrategy.BY_COMPOSITE_SCORE]
+      };
+
+      // 如果是固定策略且使用按综合分数分配，并且设置了固定比例，则更新单币种持仓比例范围
+      if (config.allocationStrategyMode === 'fixed' && 
+          config.fixedAllocationStrategy === PositionAllocationStrategy.BY_COMPOSITE_SCORE &&
+          config.fixedMaxSinglePositionRatio) {
+        newRange.maxSinglePositionRatio = {
+          min: config.fixedMaxSinglePositionRatio,
+          max: config.fixedMaxSinglePositionRatio,
+          step: 0.01
+        };
+      }
+
+      return newRange;
+    });
+  }, [config.allocationStrategyMode, config.fixedAllocationStrategy, config.fixedMaxSinglePositionRatio]);
 
   // 任务状态
   const [progress, setProgress] = useState<OptimizationProgress | null>(null);
@@ -228,6 +263,119 @@ export default function OptimizationPanel({
     </div>
   );
 
+  // 渲染仓位配置策略选择
+  const renderAllocationStrategySelector = () => (
+    <div className="mb-4">
+      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+        仓位配置策略
+      </label>
+      <Select
+        value={config.allocationStrategyMode}
+        onValueChange={(value) => setConfig(prev => ({ 
+          ...prev, 
+          allocationStrategyMode: value as AllocationStrategyMode
+        }))}
+      >
+        <SelectTrigger className="w-full text-left">
+          <SelectValue>
+            {config.allocationStrategyMode === 'random' && "随机测试所有策略"}
+            {config.allocationStrategyMode === 'fixed' && "固定单一策略"}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="random">
+            <div className="flex flex-col">
+              <span>随机测试所有策略</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">在优化过程中随机选择不同的仓位分配策略</span>
+            </div>
+          </SelectItem>
+          <SelectItem value="fixed">
+            <div className="flex flex-col">
+              <span>固定单一策略</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">使用固定的仓位分配策略，专注测试其他参数</span>
+            </div>
+          </SelectItem>
+        </SelectContent>
+      </Select>
+      
+      {/* 当选择固定策略时，显示策略选择器 */}
+      {config.allocationStrategyMode === 'fixed' && (
+        <div className="mt-3">
+          <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+            固定策略选择
+          </label>
+          <Select
+            value={config.fixedAllocationStrategy || PositionAllocationStrategy.BY_COMPOSITE_SCORE}
+            onValueChange={(value) => setConfig(prev => ({ 
+              ...prev, 
+              fixedAllocationStrategy: value as PositionAllocationStrategy
+            }))}
+          >
+            <SelectTrigger className="w-full text-left">
+              <SelectValue>
+                {config.fixedAllocationStrategy === PositionAllocationStrategy.BY_VOLUME && "按成交量比例分配"}
+                {config.fixedAllocationStrategy === PositionAllocationStrategy.BY_COMPOSITE_SCORE && "按综合分数分配"}
+                {config.fixedAllocationStrategy === PositionAllocationStrategy.EQUAL_ALLOCATION && "平均分配"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={PositionAllocationStrategy.BY_VOLUME}>
+                <div className="flex flex-col">
+                  <span>按成交量比例分配</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">根据成交量大小分配仓位</span>
+                </div>
+              </SelectItem>
+              <SelectItem value={PositionAllocationStrategy.BY_COMPOSITE_SCORE}>
+                <div className="flex flex-col">
+                  <span>按综合分数分配</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">根据综合评分分配仓位，可设置单币种最大持仓比例</span>
+                </div>
+              </SelectItem>
+              <SelectItem value={PositionAllocationStrategy.EQUAL_ALLOCATION}>
+                <div className="flex flex-col">
+                  <span>平均分配</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">所有标的平均分配仓位</span>
+                </div>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+      
+      {/* 按综合分数分配时的单币种持仓比例配置 */}
+      {config.allocationStrategyMode === 'fixed' && 
+       config.fixedAllocationStrategy === PositionAllocationStrategy.BY_COMPOSITE_SCORE && (
+        <div className="mt-3">
+          <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">
+            单币种最大持仓比例
+          </label>
+          <div className="grid grid-cols-3 gap-2">
+            <input
+              type="number"
+              step="0.01"
+              placeholder="固定值"
+              value={config.fixedMaxSinglePositionRatio || 0.2}
+              onChange={(e) => setConfig(prev => ({ 
+                ...prev, 
+                fixedMaxSinglePositionRatio: parseFloat(e.target.value) || 0.2
+              }))}
+              className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+            />
+            <div className="col-span-2 flex items-center">
+              <span className="text-sm text-gray-500 dark:text-gray-400">
+                当前值：{((config.fixedMaxSinglePositionRatio || 0.2) * 100).toFixed(0)}% 
+                （范围：5%-50%）
+              </span>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            限制单个币种在总做空仓位中的最大占比，避免过度集中风险
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
   // 渲染优化方法选择
   const renderMethodSelector = () => (
     <div className="mb-4">
@@ -354,34 +502,60 @@ export default function OptimizationPanel({
         </div>
       </div>
 
-      {/* 仓位分配策略选择 */}
-      <div>
-        <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">包含的分配策略</label>
-        <div className="space-y-1">
-          {[
-            { value: PositionAllocationStrategy.BY_VOLUME, label: '按成交量比例分配' },
-            { value: PositionAllocationStrategy.BY_COMPOSITE_SCORE, label: '按综合分数分配' },
-            { value: PositionAllocationStrategy.EQUAL_ALLOCATION, label: '平均分配' }
-          ].map(strategy => (
-            <label key={strategy.value} className="flex items-center">
-              <input
-                type="checkbox"
-                checked={parameterRange.allocationStrategy?.includes(strategy.value) || false}
-                onChange={(e) => {
-                  setParameterRange(prev => ({
-                    ...prev,
-                    allocationStrategy: e.target.checked
-                      ? [...(prev.allocationStrategy || []), strategy.value]
-                      : (prev.allocationStrategy || []).filter(s => s !== strategy.value)
-                  }));
-                }}
-                className="mr-2"
-              />
-              <span className="text-sm text-gray-700 dark:text-gray-300">{strategy.label}</span>
-            </label>
-          ))}
+      {/* 仓位分配策略选择 - 只在随机模式下显示 */}
+      {config.allocationStrategyMode === 'random' && (
+        <div>
+          <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">包含的分配策略</label>
+          <div className="space-y-1">
+            {[
+              { value: PositionAllocationStrategy.BY_VOLUME, label: '按成交量比例分配' },
+              { value: PositionAllocationStrategy.BY_COMPOSITE_SCORE, label: '按综合分数分配' },
+              { value: PositionAllocationStrategy.EQUAL_ALLOCATION, label: '平均分配' }
+            ].map(strategy => (
+              <label key={strategy.value} className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={parameterRange.allocationStrategy?.includes(strategy.value) || false}
+                  onChange={(e) => {
+                    setParameterRange(prev => ({
+                      ...prev,
+                      allocationStrategy: e.target.checked
+                        ? [...(prev.allocationStrategy || []), strategy.value]
+                        : (prev.allocationStrategy || []).filter(s => s !== strategy.value)
+                    }));
+                  }}
+                  className="mr-2"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">{strategy.label}</span>
+              </label>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* 固定策略模式下的提示 */}
+      {config.allocationStrategyMode === 'fixed' && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-3">
+          <p className="text-sm text-blue-800 dark:text-blue-400">
+            当前使用固定策略：<strong>
+            {config.fixedAllocationStrategy === PositionAllocationStrategy.BY_VOLUME && "按成交量比例分配"}
+            {config.fixedAllocationStrategy === PositionAllocationStrategy.BY_COMPOSITE_SCORE && "按综合分数分配"}
+            {config.fixedAllocationStrategy === PositionAllocationStrategy.EQUAL_ALLOCATION && "平均分配"}
+            </strong>
+            {config.fixedAllocationStrategy === PositionAllocationStrategy.BY_COMPOSITE_SCORE && 
+             config.fixedMaxSinglePositionRatio && (
+              <span>，单币种最大持仓比例：<strong>{(config.fixedMaxSinglePositionRatio * 100).toFixed(0)}%</strong></span>
+            )}
+          </p>
+          <p className="text-xs text-blue-600 dark:text-blue-300 mt-1">
+            优化将专注于其他参数的调整，不会变更仓位分配策略
+            {config.fixedAllocationStrategy === PositionAllocationStrategy.BY_COMPOSITE_SCORE && 
+             config.fixedMaxSinglePositionRatio && 
+             "和单币种持仓比例"
+            }
+          </p>
+        </div>
+      )}
     </div>
   );
 
@@ -581,9 +755,12 @@ export default function OptimizationPanel({
       ) : (
         <>
           {/* 基础配置 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            {renderObjectiveSelector()}
-            {renderMethodSelector()}
+          <div className="space-y-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {renderObjectiveSelector()}
+              {renderMethodSelector()}
+            </div>
+            {renderAllocationStrategySelector()}
           </div>
 
           {/* 高级设置 */}
