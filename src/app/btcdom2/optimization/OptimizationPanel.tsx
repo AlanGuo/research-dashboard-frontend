@@ -329,13 +329,6 @@ export default function OptimizationPanel({
           </Select>
         </div>
       )}
-      
-      {config.allocationStrategyMode === 'fixed' && 
-       config.fixedAllocationStrategy === PositionAllocationStrategy.BY_COMPOSITE_SCORE && (
-        <div className="mt-3">
-
-        </div>
-      )}
     </div>
   );
 
