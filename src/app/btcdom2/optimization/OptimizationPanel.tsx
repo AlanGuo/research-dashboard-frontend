@@ -35,23 +35,6 @@ export default function OptimizationPanel({
   // 环境检查：只在开发环境下启用
   const isDevelopment = process.env.NODE_ENV === 'development';
   
-  // 如果不是开发环境，不渲染优化面板
-  if (!isDevelopment) {
-    return (
-      <div className="bg-gray-50 dark:bg-gray-800 rounded-lg shadow-lg p-6 border border-gray-200 dark:border-gray-700">
-        <div className="text-center py-8">
-          <div className="text-gray-400 dark:text-gray-500 text-lg mb-2">🔧</div>
-          <h3 className="text-lg font-medium text-gray-600 dark:text-gray-400 mb-2">
-            参数优化工具
-          </h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            此功能仅在开发环境下可用
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   // 优化器实例
   const [optimizer] = useState(() => new ParameterOptimizer());
   
@@ -539,6 +522,23 @@ export default function OptimizationPanel({
       </div>
     );
   };
+
+  // 如果不是开发环境，显示受限界面
+  if (!isDevelopment) {
+    return (
+      <div className="bg-gray-50 dark:bg-gray-800 rounded-lg shadow-lg p-6 border border-gray-200 dark:border-gray-700">
+        <div className="text-center py-8">
+          <div className="text-gray-400 dark:text-gray-500 text-lg mb-2">🔧</div>
+          <h3 className="text-lg font-medium text-gray-600 dark:text-gray-400 mb-2">
+            参数优化工具
+          </h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            此功能仅在开发环境下可用
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6 border border-gray-200 dark:border-gray-700">
