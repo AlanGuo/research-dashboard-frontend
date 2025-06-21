@@ -168,7 +168,7 @@ export class ParameterOptimizer {
    * 执行贝叶斯优化
    */
   private async executeBayesianOptimization(task: OptimizationTask) {
-    const maxIterations = task.config.maxIterations || 50;
+    const maxIterations = task.config.maxIterations || 200;
     const initialSamples = Math.min(10, maxIterations);
 
     task.progress.total = maxIterations;
@@ -230,7 +230,7 @@ export class ParameterOptimizer {
    * 执行混合优化
    */
   private async executeHybridOptimization(task: OptimizationTask) {
-    const maxIterations = task.config.maxIterations || 100;
+    const maxIterations = task.config.maxIterations || 200;
     const phase1Target = Math.floor(maxIterations * 0.3); // 30%用于粗粒度网格搜索
     const phase2Target = maxIterations - phase1Target; // 70%用于精细化搜索
 
@@ -1162,7 +1162,7 @@ export class ParameterOptimizer {
     return {
       method: 'hybrid',
       objective: 'sharpe',
-      maxIterations: 100,
+      maxIterations: 200,
       convergenceThreshold: 0.001,
       parallelEvaluations: 1,
       timeLimit: 3600,
