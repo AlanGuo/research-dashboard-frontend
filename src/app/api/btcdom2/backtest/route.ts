@@ -1439,7 +1439,7 @@ export async function POST(request: NextRequest) {
     // 性能监控开始
     const backtestStartTime = Date.now();
     if (process.env.NODE_ENV === 'development') {
-      console.log(`[PERF] 开始BTCDOM2回测, startTime: ${startTime}, endTime: ${endTime}, BTC占比: ${params.btcRatio}, 起始资金: ${params.initialCapital}, 数据点数: ${data.length}`);
+      console.log(`[PERF] 开始BTCDOM2回测, ${startTime} - ${endTime}, BTC占比: ${params.btcRatio}, 起始资金: ${params.initialCapital}, 数据点数: ${data.length}`);
     }
 
     // 创建策略引擎
@@ -1455,12 +1455,6 @@ export async function POST(request: NextRequest) {
       const snapshot = await strategyEngine.generateSnapshot(dataPoint, previousSnapshot, previousData);
       snapshots.push(snapshot);
       previousSnapshot = snapshot;
-
-      // 每100个数据点记录一次进度（仅开发环境）
-      // if (process.env.NODE_ENV === 'development' && (index + 1) % 100 === 0) {
-      //   const progress = ((index + 1) / data.length * 100).toFixed(1);
-      //   const elapsed = Date.now() - backtestStartTime;
-      // }
     }
 
     // 计算性能指标
