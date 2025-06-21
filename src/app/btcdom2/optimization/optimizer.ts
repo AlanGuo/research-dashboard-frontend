@@ -909,7 +909,7 @@ export class ParameterOptimizer {
       currentIteration: task.progress.current,
       totalIterations: task.progress.total,
       currentBest: task.results.length > 0 ? task.results[0] : null,
-      recentResults: task.results.slice(0, 5),
+      recentResults: task.results,
       estimatedTimeRemaining: this.estimateTimeRemaining(task),
       resourceUsage: {
         cpuUsage: 0, // 在前端环境中难以准确测量

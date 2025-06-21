@@ -685,10 +685,10 @@ export default function OptimizationPanel({
                   <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">最大迭代次数</label>
                   <Input
                     type="number"
-                    value={config.maxIterations || 100}
+                    value={config.maxIterations}
                     onChange={(e) => setConfig(prev => ({
                       ...prev,
-                      maxIterations: parseInt(e.target.value) || 100
+                      maxIterations: parseInt(e.target.value)
                     }))}
                     className="w-full"
                   />
