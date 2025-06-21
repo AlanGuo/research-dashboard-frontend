@@ -6,11 +6,9 @@ import {
   OptimizationReport,
   ParameterCombination,
   ParameterRange,
-  OptimizationObjective,
-
   ParameterValidationResult
 } from './types';
-import { PositionAllocationStrategy, BTCDOM2StrategyParams, BTCDOM2BacktestResult } from '@/types/btcdom2';
+import { PositionAllocationStrategy, BTCDOM2StrategyParams } from '@/types/btcdom2';
 
 export class ParameterOptimizer {
   private static readonly MAX_RESULTS_TO_KEEP = 10; // 只保留最优的10个结果
@@ -333,7 +331,7 @@ export class ParameterOptimizer {
 
   /**
    * 评估参数组合
-   * 
+   *
    * 内存优化策略：
    * 1. 不保存完整的 BTCDOM2BacktestResult 对象
    * 2. 立即提取必要的性能指标
