@@ -143,9 +143,9 @@ optimization/
 
 #### 基础配置
 ```typescript
-import { createDefaultCrossValidationConfig } from './types';
+import { ParameterOptimizer } from './optimizer';
 
-const crossValidationConfig = createDefaultCrossValidationConfig(
+const crossValidationConfig = ParameterOptimizer.createDefaultCrossValidationConfig(
   '2023-01-01', // 训练开始日期
   '2023-03-31', // 训练结束日期
   '2022-01-01', // 验证选择范围开始

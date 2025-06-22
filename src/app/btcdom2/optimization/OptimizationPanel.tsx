@@ -7,8 +7,7 @@ import {
   ParameterRange,
   OptimizationProgress,
   AllocationStrategyMode,
-  CrossValidationConfig,
-  createDefaultCrossValidationConfig
+  CrossValidationConfig
 } from './types';
 import { ParameterOptimizer } from './optimizer';
 import { PositionAllocationStrategy } from '@/types/btcdom2';
@@ -67,7 +66,7 @@ export default function OptimizationPanel({
 
   // 交叉验证配置状态
   const [crossValidationConfig, setCrossValidationConfig] = useState<CrossValidationConfig>(
-    createDefaultCrossValidationConfig(
+    ParameterOptimizer.createDefaultCrossValidationConfig(
       config.baseParams.startDate,
       config.baseParams.endDate,
       '2020-01-01',

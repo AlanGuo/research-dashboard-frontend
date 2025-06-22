@@ -32,6 +32,41 @@ export class ParameterOptimizer {
   private requestQueue: Array<() => void> = []; // 请求队列
 
   /**
+   * 创建默认交叉验证配置
+   */
+  static createDefaultCrossValidationConfig(
+    trainingStartDate: string,
+    trainingEndDate: string,
+    selectionStartDate?: string,
+    selectionEndDate?: string
+  ): CrossValidationConfig {
+    // 如果未指定选择范围，使用更大的时间范围
+    const defaultSelectionStart = selectionStartDate || '2022-01-01';
+    const defaultSelectionEnd = selectionEndDate || '2024-12-31';
+    
+    return {
+      enabled: true,
+      validationPeriods: 2,
+      periodLength: {
+        type: 'random',
+        randomRange: {
+          minDays: 60,
+          maxDays: 180
+        }
+      },
+      selectionRange: {
+        startDate: defaultSelectionStart,
+        endDate: defaultSelectionEnd,
+        allowOverlap: false
+      },
+      scoreWeights: {
+        training: 0.6,
+        validation: 0.4
+      }
+    };
+  }
+
+  /**
    * 设置进度回调函数
    */
   setProgressCallback(callback: (progress: OptimizationProgress) => void) {

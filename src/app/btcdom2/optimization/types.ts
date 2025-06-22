@@ -322,36 +322,3 @@ export interface OptimizationRecommendation {
   impact: 'low' | 'medium' | 'high';
   suggestedAction: string;
 }
-
-// 默认交叉验证配置工厂函数
-export function createDefaultCrossValidationConfig(
-  trainingStartDate: string,
-  trainingEndDate: string,
-  selectionStartDate?: string,
-  selectionEndDate?: string
-): CrossValidationConfig {
-  // 如果未指定选择范围，使用更大的时间范围
-  const defaultSelectionStart = selectionStartDate || '2022-01-01';
-  const defaultSelectionEnd = selectionEndDate || '2024-12-31';
-  
-  return {
-    enabled: true,
-    validationPeriods: 2,
-    periodLength: {
-      type: 'random',
-      randomRange: {
-        minDays: 60,
-        maxDays: 180
-      }
-    },
-    selectionRange: {
-      startDate: defaultSelectionStart,
-      endDate: defaultSelectionEnd,
-      allowOverlap: true
-    },
-    scoreWeights: {
-      training: 0.6,
-      validation: 0.4
-    }
-  };
-}
