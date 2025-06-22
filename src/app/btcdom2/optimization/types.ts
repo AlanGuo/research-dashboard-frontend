@@ -340,8 +340,8 @@ export function createDefaultCrossValidationConfig(
     periodLength: {
       type: 'random',
       randomRange: {
-        minDays: 30,
-        maxDays: 90
+        minDays: 60,
+        maxDays: 180
       }
     },
     selectionRange: {
