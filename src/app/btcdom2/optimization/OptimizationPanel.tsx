@@ -13,6 +13,7 @@ import { ParameterOptimizer } from './optimizer';
 import { PositionAllocationStrategy } from '@/types/btcdom2';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import OptimizationGuide from './OptimizationGuide';
 import { CrossValidationConfigComponent } from './components/CrossValidationConfig';
 import CrossValidationResults from './components/CrossValidationResults';
@@ -141,6 +142,17 @@ export default function OptimizationPanel({
       }
     });
   }, [optimizer]);
+
+  // 当结果更新时，自动选中第一个有交叉验证数据的结果
+  useEffect(() => {
+    if (results.length > 0 && selectedResultIndex === null) {
+      const sortedResults = getSortedResults();
+      const firstValidationIndex = sortedResults.findIndex(result => result.crossValidation);
+      if (firstValidationIndex !== -1) {
+        setSelectedResultIndex(firstValidationIndex);
+      }
+    }
+  }, [results, selectedResultIndex, sortBy]);
 
   // 组件卸载时清理资源
   useEffect(() => {
@@ -408,7 +420,7 @@ export default function OptimizationPanel({
       <div>
         <label className="block text-sm text-gray-600 dark:text-gray-400 mb-1">最多做空标的数量</label>
         <div className="grid grid-cols-3 gap-2">
-          <input
+          <Input
             type="number"
             placeholder="最小值"
             value={parameterRange.maxShortPositions.min}
@@ -416,9 +428,9 @@ export default function OptimizationPanel({
               ...prev,
               maxShortPositions: { ...prev.maxShortPositions, min: parseInt(e.target.value) || 5 }
             }))}
-            className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+            className="text-sm"
           />
-          <input
+          <Input
             type="number"
             placeholder="最大值"
             value={parameterRange.maxShortPositions.max}
@@ -426,9 +438,9 @@ export default function OptimizationPanel({
               ...prev,
               maxShortPositions: { ...prev.maxShortPositions, max: parseInt(e.target.value) || 20 }
             }))}
-            className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+            className="text-sm"
           />
-          <input
+          <Input
             type="number"
             placeholder="步长"
             value={parameterRange.maxShortPositions.step}
@@ -436,7 +448,7 @@ export default function OptimizationPanel({
               ...prev,
               maxShortPositions: { ...prev.maxShortPositions, step: parseInt(e.target.value) || 1 }
             }))}
-            className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+            className="text-sm"
           />
         </div>
       </div>
@@ -573,17 +585,21 @@ export default function OptimizationPanel({
             {hasValidationResults && (
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-600 dark:text-gray-400">排序方式:</span>
-                <select
+                <Select
                   value={sortBy}
-                  onChange={(e) => {
-                    setSortBy(e.target.value as 'objective' | 'composite');
+                  onValueChange={(value) => {
+                    setSortBy(value as 'objective' | 'composite');
                     setSelectedResultIndex(null); // 重置选中项
                   }}
-                  className="text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                 >
-                  <option value="objective">目标值排序</option>
-                  <option value="composite">综合评分排序</option>
-                </select>
+                  <SelectTrigger className="w-32 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="objective">目标值排序</SelectItem>
+                    <SelectItem value="composite">综合评分排序</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             )}
           </div>
@@ -680,25 +696,24 @@ export default function OptimizationPanel({
                     )}
                   </td>
                   <td className="border border-gray-300 dark:border-gray-600 px-2 py-1">
-                    <button
+                    <Button
                       onClick={() => handleApplyParameters(result)}
-                      className="px-2 py-1 bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white text-xs rounded"
+                      size="sm"
+                      className="text-xs"
                     >
                       应用
-                    </button>
+                    </Button>
                   </td>
                   <td className="border border-gray-300 dark:border-gray-600 px-2 py-1">
                     {result.crossValidation ? (
-                      <button
+                      <Button
                         onClick={() => setSelectedResultIndex(index)}
-                        className={`px-2 py-1 text-xs rounded ${
-                          selectedResultIndex === index
-                            ? 'bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700 text-white'
-                            : 'bg-gray-500 hover:bg-gray-600 dark:bg-gray-600 dark:hover:bg-gray-700 text-white'
-                        }`}
+                        size="sm"
+                        variant={selectedResultIndex === index ? "default" : "secondary"}
+                        className="text-xs"
                       >
                         {selectedResultIndex === index ? '✓ 已选中' : '查看详细'}
-                      </button>
+                      </Button>
                     ) : (
                       <span className="text-gray-400 text-xs">无验证数据</span>
                     )}
@@ -736,35 +751,41 @@ export default function OptimizationPanel({
         <div className="flex items-center gap-4">
           {/* 标签页切换 */}
           <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
-            <button
+            <Button
               onClick={() => setActiveTab('optimize')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              variant={activeTab === 'optimize' ? 'default' : 'ghost'}
+              size="sm"
+              className={`text-sm font-medium ${
                 activeTab === 'optimize'
                   ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
               }`}
             >
               优化工具
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => setActiveTab('guide')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              variant={activeTab === 'guide' ? 'default' : 'ghost'}
+              size="sm"
+              className={`text-sm font-medium ${
                 activeTab === 'guide'
                   ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
               }`}
             >
               使用指南
-            </button>
+            </Button>
           </div>
 
           {activeTab === 'optimize' && (
-            <button
+            <Button
               onClick={() => setShowAdvanced(!showAdvanced)}
-              className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+              variant="link"
+              size="sm"
+              className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 p-0 h-auto"
             >
               {showAdvanced ? '隐藏高级设置' : '显示高级设置'}
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -831,25 +852,22 @@ export default function OptimizationPanel({
 
           {/* 控制按钮 */}
           <div className="flex gap-3 mb-6">
-            <button
+            <Button
               onClick={handleStartOptimization}
               disabled={isRunning}
-              className={`px-4 py-2 rounded-md font-medium ${
-                isRunning
-                  ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                  : 'bg-blue-600 dark:bg-blue-700 text-white hover:bg-blue-700 dark:hover:bg-blue-800'
-              }`}
+              className="font-medium"
             >
               {isRunning ? '优化中...' : '开始优化'}
-            </button>
+            </Button>
 
             {isRunning && (
-              <button
+              <Button
                 onClick={handleStopOptimization}
-                className="px-4 py-2 bg-red-600 dark:bg-red-700 text-white rounded-md font-medium hover:bg-red-700 dark:hover:bg-red-800"
+                variant="destructive"
+                className="font-medium"
               >
                 停止优化
-              </button>
+              </Button>
             )}
           </div>
 
@@ -869,12 +887,14 @@ export default function OptimizationPanel({
                   <h4 className="font-medium text-gray-700 dark:text-gray-300">交叉验证详细结果</h4>
                   <div className="text-sm text-gray-500 dark:text-gray-400">
                     显示第 {selectedResultIndex + 1} 名的详细结果
-                    <button
+                    <Button
                       onClick={() => setSelectedResultIndex(null)}
-                      className="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                      variant="ghost"
+                      size="sm"
+                      className="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1 h-auto"
                     >
                       ✕
-                    </button>
+                    </Button>
                   </div>
                 </div>
                 <CrossValidationResults result={selectedResult.crossValidation} />
