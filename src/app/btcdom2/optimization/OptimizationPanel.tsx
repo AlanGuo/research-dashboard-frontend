@@ -592,7 +592,7 @@ export default function OptimizationPanel({
                     setSelectedResultIndex(null); // 重置选中项
                   }}
                 >
-                  <SelectTrigger className="w-32 text-sm">
+                  <SelectTrigger className="text-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -712,7 +712,7 @@ export default function OptimizationPanel({
                         variant={selectedResultIndex === index ? "default" : "secondary"}
                         className="text-xs"
                       >
-                        {selectedResultIndex === index ? '✓ 已选中' : '查看详细'}
+                        {selectedResultIndex === index ? '✓ 已选择' : '查看详细'}
                       </Button>
                     ) : (
                       <span className="text-gray-400 text-xs">无验证数据</span>

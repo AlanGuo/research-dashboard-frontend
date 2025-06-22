@@ -586,7 +586,7 @@ export default function BTCDOM2Dashboard() {
                           value={[params.priceChangeWeight * 100]}
                           onValueChange={(value) => handleWeightChange('priceChange', value[0])}
                           max={100}
-                          step={10}
+                          step={5}
                           className="flex-1"
                         />
                         <span className="text-sm font-medium w-12 text-right bg-gray-50 dark:bg-gray-700 px-2 py-1 rounded">
@@ -603,7 +603,7 @@ export default function BTCDOM2Dashboard() {
                           value={[params.volumeWeight * 100]}
                           onValueChange={(value) => handleWeightChange('volume', value[0])}
                           max={100}
-                          step={10}
+                          step={5}
                           className="flex-1"
                         />
                         <span className="text-sm font-medium w-12 text-right bg-gray-50 dark:bg-gray-700 px-2 py-1 rounded">
@@ -620,7 +620,7 @@ export default function BTCDOM2Dashboard() {
                           value={[params.volatilityWeight * 100]}
                           onValueChange={(value) => handleWeightChange('volatility', value[0])}
                           max={100}
-                          step={10}
+                          step={5}
                           className="flex-1"
                         />
                         <span className="text-sm font-medium w-12 text-right bg-gray-50 dark:bg-gray-700 px-2 py-1 rounded">
@@ -637,7 +637,7 @@ export default function BTCDOM2Dashboard() {
                           value={[params.fundingRateWeight * 100]}
                           onValueChange={(value) => handleWeightChange('fundingRate', value[0])}
                           max={100}
-                          step={10}
+                          step={5}
                           className="flex-1"
                         />
                         <span className="text-sm font-medium w-12 text-right bg-gray-50 dark:bg-gray-700 px-2 py-1 rounded">
