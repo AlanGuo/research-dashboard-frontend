@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import { Progress } from '@/components/ui/progress';
+
 import { DatePicker } from '@/components/ui/date-picker';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -25,6 +25,7 @@ import {
 } from '@/types/btcdom2';
 import { BTCDOM2Chart } from '@/components/btcdom2/btcdom2-chart';
 import { BTCDOM2PositionTable } from '@/components/btcdom2/btcdom2-position-table';
+import { WeightControl } from '@/components/btcdom2/WeightControl';
 import { AlertCircle, Play, Settings, TrendingUp, TrendingDown, Clock, Loader2, Eye, Info, Bitcoin, ArrowDown, Zap } from 'lucide-react';
 
 export default function BTCDOM2Dashboard() {
@@ -60,6 +61,16 @@ export default function BTCDOM2Dashboard() {
   // UI状态
   const [showAdvancedSettings, setShowAdvancedSettings] = useState<boolean>(false);
   const [showOptimization, setShowOptimization] = useState<boolean>(false);
+
+  // 防抖相关状态
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const btcRatioDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [displayParams, setDisplayParams] = useState<BTCDOM2StrategyParams>(params); // 用于立即显示的参数
+  const [displayBtcRatio, setDisplayBtcRatio] = useState<number>(params.btcRatio * 100); // BTC占比的显示状态（百分比形式）
+  const [isUserInputting, setIsUserInputting] = useState<boolean>(false); // 用户是否正在输入BTC占比
+
+  // 优化：缓存BTC占比的显示值，避免每次render都计算
+  const displayBtcRatioValue = useMemo(() => displayBtcRatio.toFixed(0), [displayBtcRatio]);
 
   // 工具函数：格式化时间（使用UTC+0时区）
   const formatPeriodTime = (timestamp: string): string => {
@@ -103,20 +114,28 @@ export default function BTCDOM2Dashboard() {
     return `${formattedAmount} (${formattedPercent})`;
   };
   // 验证参数 - 使用 useMemo 缓存验证结果
-  const validateParameters = useCallback((params: BTCDOM2StrategyParams): Record<string, string> => {
+  // 检查权重是否有效 - 使用显示参数以提供即时反馈
+  const isWeightsValid = useMemo(() => {
+    const weightSum = displayParams.priceChangeWeight + displayParams.volumeWeight + displayParams.volatilityWeight + displayParams.fundingRateWeight;
+    return Math.abs(weightSum - 1) <= 0.001;
+  }, [displayParams.priceChangeWeight, displayParams.volumeWeight, displayParams.volatilityWeight, displayParams.fundingRateWeight]);
+
+  // 获取权重总和百分比 - 使用显示参数
+  const getWeightSumPercent = useMemo(() => {
+    return ((displayParams.priceChangeWeight + displayParams.volumeWeight + displayParams.volatilityWeight + displayParams.fundingRateWeight) * 100).toFixed(0);
+  }, [displayParams.priceChangeWeight, displayParams.volumeWeight, displayParams.volatilityWeight, displayParams.fundingRateWeight]);
+
+  // 使用 useMemo 缓存当前参数的验证结果 - 优化版本
+  const parameterErrors = useMemo(() => {
     const errors: Record<string, string> = {};
 
+    // 基础参数验证
     if (params.initialCapital <= 0) {
       errors.initialCapital = '初始本金必须大于0';
     }
 
     if (params.btcRatio < 0 || params.btcRatio > 1) {
       errors.btcRatio = 'BTC占比必须在0-1之间';
-    }
-
-    const weightSum = params.priceChangeWeight + params.volumeWeight + params.volatilityWeight + params.fundingRateWeight;
-    if (Math.abs(weightSum - 1) > 0.001) {
-      errors.weights = '跌幅权重、成交量权重、波动率权重和资金费率权重之和必须等于1';
     }
 
     if (params.maxShortPositions <= 0 || params.maxShortPositions > 50) {
@@ -141,22 +160,35 @@ export default function BTCDOM2Dashboard() {
       errors.strategySelection = '至少需要选择一种策略：做多BTC或做空ALT';
     }
 
-
+    // 权重验证 - 使用实际参数的权重验证
+    const actualWeightSum = params.priceChangeWeight + params.volumeWeight + params.volatilityWeight + params.fundingRateWeight;
+    if (Math.abs(actualWeightSum - 1) > 0.001) {
+      errors.weights = '跌幅权重、成交量权重、波动率权重和资金费率权重之和必须等于1';
+    }
 
     return errors;
-  }, []);
-
-  // 使用 useMemo 缓存当前参数的验证结果
-  const parameterErrors = useMemo(() => {
-    return validateParameters(params);
-  }, [params, validateParameters]);
+  }, [
+    params.initialCapital,
+    params.btcRatio,
+    params.maxShortPositions,
+    params.spotTradingFeeRate,
+    params.futuresTradingFeeRate,
+    params.startDate,
+    params.endDate,
+    params.longBtc,
+    params.shortAlt,
+    params.priceChangeWeight,
+    params.volumeWeight,
+    params.volatilityWeight,
+    params.fundingRateWeight
+  ]);
 
   // 执行回测
   const runBacktest = useCallback(async (currentParams?: BTCDOM2StrategyParams) => {
     const paramsToUse = currentParams || params;
-    const errors = validateParameters(paramsToUse);
 
-    if (Object.keys(errors).length > 0) {
+    // 直接使用 parameterErrors 进行验证
+    if (Object.keys(parameterErrors).length > 0) {
       return;
     }
 
@@ -196,7 +228,7 @@ export default function BTCDOM2Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, [validateParameters, params]);
+  }, [parameterErrors, params]);
 
   // 按钮点击处理
   const handleRunBacktest = () => {
@@ -209,52 +241,106 @@ export default function BTCDOM2Dashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 空依赖数组，只在组件挂载时执行一次
 
-  // 检查权重是否有效
-  const isWeightsValid = useCallback(() => {
-    const weightSum = params.priceChangeWeight + params.volumeWeight + params.volatilityWeight + params.fundingRateWeight;
-    return Math.abs(weightSum - 1) <= 0.001;
-  }, [params.priceChangeWeight, params.volumeWeight, params.volatilityWeight, params.fundingRateWeight]);
+  // 清理防抖定时器
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      if (btcRatioDebounceTimerRef.current) {
+        clearTimeout(btcRatioDebounceTimerRef.current);
+      }
+    };
+  }, []);
 
-  // 获取权重总和百分比
-  const getWeightSumPercent = useCallback(() => {
-    return ((params.priceChangeWeight + params.volumeWeight + params.volatilityWeight + params.fundingRateWeight) * 100).toFixed(0);
-  }, [params.priceChangeWeight, params.volumeWeight, params.volatilityWeight, params.fundingRateWeight]);
+  // 保持显示参数与实际参数同步（当外部更新params时）
+  useEffect(() => {
+    setDisplayParams(params);
+  }, [params]);
 
-  // 参数更新处理
-  const handleParamChange = (key: keyof BTCDOM2StrategyParams, value: string | number | boolean) => {
+  // 单独处理BTC占比的同步，避免被权重参数更新干扰，但不在用户输入时更新
+  useEffect(() => {
+    if (!isUserInputting) {
+      setDisplayBtcRatio(params.btcRatio * 100);
+    }
+  }, [params.btcRatio, isUserInputting]);
+
+  // 参数更新处理 - 优化版本
+  const handleParamChange = useCallback((key: keyof BTCDOM2StrategyParams, value: string | number | boolean) => {
     const newParams = {
       ...params,
       [key]: value
     };
     setParams(newParams);
-  };
+    setDisplayParams(newParams); // 同时更新显示参数
+  }, [params]);
 
-  // 权重调整处理
-  const handleWeightChange = (type: 'priceChange' | 'volume' | 'volatility' | 'fundingRate', value: number) => {
+  // 权重调整处理 - 添加防抖优化
+  const handleWeightChange = useCallback((type: 'priceChange' | 'volume' | 'volatility' | 'fundingRate', value: number) => {
     const weight = value / 100;
-    const newParams = {
-      ...params,
+    const newDisplayParams = {
+      ...displayParams,
       [`${type}Weight`]: weight
     };
 
-    setParams(newParams);
-  };
+    // 立即更新显示参数，提供即时的UI反馈
+    setDisplayParams(newDisplayParams);
+
+    // 清除之前的定时器
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    // 设置新的定时器，延迟更新实际参数
+    debounceTimerRef.current = setTimeout(() => {
+      setParams(newDisplayParams);
+    }, 50); // 50ms 防抖延迟
+  }, [displayParams]);
+
+  // BTC占比防抖处理函数 - 优化版本
+  const handleBtcRatioChange = useCallback((value: number) => {
+    // 立即更新显示状态，提供即时的UI反馈
+    setDisplayBtcRatio(value);
+    setIsUserInputting(true);
+
+    // 清除之前的定时器
+    if (btcRatioDebounceTimerRef.current) {
+      clearTimeout(btcRatioDebounceTimerRef.current);
+    }
+
+    // 设置新的定时器，延迟更新实际参数
+    btcRatioDebounceTimerRef.current = setTimeout(() => {
+      const btcRatio = value / 100; // 转换为小数
+      setParams(prev => ({
+        ...prev,
+        btcRatio
+      }));
+      setIsUserInputting(false); // 标记输入完成
+    }, 50); // 优化：进一步减少防抖延迟到50ms，提升响应速度
+  }, []);
 
   // 标准化权重 - 将所有权重按比例调整使总和为1
-  const normalizeWeights = () => {
-    const currentSum = params.priceChangeWeight + params.volumeWeight + params.volatilityWeight + params.fundingRateWeight;
+  const normalizeWeights = useCallback(() => {
+    const currentSum = displayParams.priceChangeWeight + displayParams.volumeWeight + displayParams.volatilityWeight + displayParams.fundingRateWeight;
     if (currentSum === 0) return; // 避免除零
 
     const normalizedParams = {
       ...params,
-      priceChangeWeight: params.priceChangeWeight / currentSum,
-      volumeWeight: params.volumeWeight / currentSum,
-      volatilityWeight: params.volatilityWeight / currentSum,
-      fundingRateWeight: params.fundingRateWeight / currentSum
+      priceChangeWeight: displayParams.priceChangeWeight / currentSum,
+      volumeWeight: displayParams.volumeWeight / currentSum,
+      volatilityWeight: displayParams.volatilityWeight / currentSum,
+      fundingRateWeight: displayParams.fundingRateWeight / currentSum
     };
 
     setParams(normalizedParams);
-  };
+    setDisplayParams(normalizedParams);
+
+    // 清除防抖定时器，因为我们立即应用了标准化
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+  }, [displayParams, params]);
 
   // 处理优化完成
   const handleOptimizationComplete = useCallback((results: OptimizationResult[]) => {
@@ -535,10 +621,24 @@ export default function BTCDOM2Dashboard() {
                     min="0"
                     max="100"
                     step="5"
-                    value={(params.btcRatio * 100).toFixed(0)}
+                    value={displayBtcRatioValue}
                     onChange={(e) => {
-                      const value = parseFloat(e.target.value) || 0;
-                      handleParamChange('btcRatio', Math.min(Math.max(value, 0), 100) / 100);
+                      // 优化：直接获取原始值，避免不必要的转换
+                      const rawValue = e.target.value;
+
+                      // 允许空值和正在输入的情况
+                      if (rawValue === '' || rawValue === '.') {
+                        setDisplayBtcRatio(0);
+                        setIsUserInputting(true);
+                        return;
+                      }
+
+                      const value = parseFloat(rawValue);
+
+                      // 只有在值有效且在范围内时才更新
+                      if (!isNaN(value) && value >= 0 && value <= 100) {
+                        handleBtcRatioChange(value);
+                      }
                     }}
                     placeholder="BTC占比(%)"
                     className="pr-8"
@@ -561,11 +661,11 @@ export default function BTCDOM2Dashboard() {
                     <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300">做空标的选择权重配置</h5>
                     <div className="flex items-center gap-3">
                       <span className={`text-sm transition-colors duration-200 ${
-                        !isWeightsValid()
+                        !isWeightsValid
                           ? 'text-red-600 dark:text-red-400 font-semibold'
                           : 'text-gray-600 dark:text-gray-400'
                       }`}>
-                        权重总和: {getWeightSumPercent()}%
+                        权重总和: {getWeightSumPercent}%
                       </span>
                       <Button
                         type="button"
@@ -580,177 +680,33 @@ export default function BTCDOM2Dashboard() {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-3">
-                      <Label className="text-sm font-medium">跌幅权重</Label>
-                      <div className="flex items-center space-x-3">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const currentValue = params.priceChangeWeight * 100;
-                            const newValue = currentValue % 5 === 0 
-                              ? Math.max(0, currentValue - 5)
-                              : Math.max(0, Math.floor(currentValue / 5) * 5);
-                            handleWeightChange('priceChange', newValue);
-                          }}
-                          disabled={(params.priceChangeWeight * 100) <= 0}
-                          className="w-8 h-8 p-0"
-                        >
-                          -
-                        </Button>
-                        <div className="flex-1 flex items-center space-x-2">
-                          <Progress value={params.priceChangeWeight * 100} className="flex-1" />
-                          <span className="text-sm font-medium min-w-[40px] text-right">
-                            {(params.priceChangeWeight * 100).toFixed(0)}%
-                          </span>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const currentValue = params.priceChangeWeight * 100;
-                            const newValue = currentValue % 5 === 0 
-                              ? Math.min(100, currentValue + 5)
-                              : Math.min(100, Math.ceil(currentValue / 5) * 5);
-                            handleWeightChange('priceChange', newValue);
-                          }}
-                          disabled={(params.priceChangeWeight * 100) >= 100}
-                          className="w-8 h-8 p-0"
-                        >
-                          +
-                        </Button>
-                      </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">评估价格下跌程度，跌幅越大分数越高</p>
-                    </div>
+                    <WeightControl
+                      label="跌幅权重"
+                      value={displayParams.priceChangeWeight}
+                      onValueChange={(value) => handleWeightChange('priceChange', value)}
+                      description="评估价格下跌程度，跌幅越大分数越高"
+                    />
 
-                    <div className="space-y-3">
-                      <Label className="text-sm font-medium">成交量权重</Label>
-                      <div className="flex items-center space-x-3">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const currentValue = params.volumeWeight * 100;
-                            const newValue = currentValue % 5 === 0 
-                              ? Math.max(0, currentValue - 5)
-                              : Math.max(0, Math.floor(currentValue / 5) * 5);
-                            handleWeightChange('volume', newValue);
-                          }}
-                          disabled={(params.volumeWeight * 100) <= 0}
-                          className="w-8 h-8 p-0"
-                        >
-                          -
-                        </Button>
-                        <div className="flex-1 flex items-center space-x-2">
-                          <Progress value={params.volumeWeight * 100} className="flex-1" />
-                          <span className="text-sm font-medium min-w-[40px] text-right">
-                            {(params.volumeWeight * 100).toFixed(0)}%
-                          </span>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const currentValue = params.volumeWeight * 100;
-                            const newValue = currentValue % 5 === 0 
-                              ? Math.min(100, currentValue + 5)
-                              : Math.min(100, Math.ceil(currentValue / 5) * 5);
-                            handleWeightChange('volume', newValue);
-                          }}
-                          disabled={(params.volumeWeight * 100) >= 100}
-                          className="w-8 h-8 p-0"
-                        >
-                          +
-                        </Button>
-                      </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">评估交易活跃度和流动性，确保足够流动性</p>
-                    </div>
+                    <WeightControl
+                      label="成交量权重"
+                      value={displayParams.volumeWeight}
+                      onValueChange={(value) => handleWeightChange('volume', value)}
+                      description="评估交易活跃度和流动性，确保足够流动性"
+                    />
 
-                    <div className="space-y-3">
-                      <Label className="text-sm font-medium">波动率权重</Label>
-                      <div className="flex items-center space-x-3">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const currentValue = params.volatilityWeight * 100;
-                            const newValue = currentValue % 5 === 0 
-                              ? Math.max(0, currentValue - 5)
-                              : Math.max(0, Math.floor(currentValue / 5) * 5);
-                            handleWeightChange('volatility', newValue);
-                          }}
-                          disabled={(params.volatilityWeight * 100) <= 0}
-                          className="w-8 h-8 p-0"
-                        >
-                          -
-                        </Button>
-                        <div className="flex-1 flex items-center space-x-2">
-                          <Progress value={params.volatilityWeight * 100} className="flex-1" />
-                          <span className="text-sm font-medium min-w-[40px] text-right">
-                            {(params.volatilityWeight * 100).toFixed(0)}%
-                          </span>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const currentValue = params.volatilityWeight * 100;
-                            const newValue = currentValue % 5 === 0 
-                              ? Math.min(100, currentValue + 5)
-                              : Math.min(100, Math.ceil(currentValue / 5) * 5);
-                            handleWeightChange('volatility', newValue);
-                          }}
-                          disabled={(params.volatilityWeight * 100) >= 100}
-                          className="w-8 h-8 p-0"
-                        >
-                          +
-                        </Button>
-                      </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">评估价格波动稳定性，适中波动率得分最高</p>
-                    </div>
+                    <WeightControl
+                      label="波动率权重"
+                      value={displayParams.volatilityWeight}
+                      onValueChange={(value) => handleWeightChange('volatility', value)}
+                      description="评估价格波动稳定性，适中波动率得分最高"
+                    />
 
-                    <div className="space-y-3">
-                      <Label className="text-sm font-medium">资金费率权重</Label>
-                      <div className="flex items-center space-x-3">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const currentValue = params.fundingRateWeight * 100;
-                            const newValue = currentValue % 5 === 0 
-                              ? Math.max(0, currentValue - 5)
-                              : Math.max(0, Math.floor(currentValue / 5) * 5);
-                            handleWeightChange('fundingRate', newValue);
-                          }}
-                          disabled={(params.fundingRateWeight * 100) <= 0}
-                          className="w-8 h-8 p-0"
-                        >
-                          -
-                        </Button>
-                        <div className="flex-1 flex items-center space-x-2">
-                          <Progress value={params.fundingRateWeight * 100} className="flex-1" />
-                          <span className="text-sm font-medium min-w-[40px] text-right">
-                            {(params.fundingRateWeight * 100).toFixed(0)}%
-                          </span>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            const currentValue = params.fundingRateWeight * 100;
-                            const newValue = currentValue % 5 === 0 
-                              ? Math.min(100, currentValue + 5)
-                              : Math.min(100, Math.ceil(currentValue / 5) * 5);
-                            handleWeightChange('fundingRate', newValue);
-                          }}
-                          disabled={(params.fundingRateWeight * 100) >= 100}
-                          className="w-8 h-8 p-0"
-                        >
-                          +
-                        </Button>
-                      </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">评估做空成本和收益，正费率对做空有利</p>
-                    </div>
+                    <WeightControl
+                      label="资金费率权重"
+                      value={displayParams.fundingRateWeight}
+                      onValueChange={(value) => handleWeightChange('fundingRate', value)}
+                      description="评估做空成本和收益，正费率对做空有利"
+                    />
                   </div>
                 </div>
 
