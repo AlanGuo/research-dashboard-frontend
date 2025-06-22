@@ -6,13 +6,17 @@ import {
   OptimizationResult,
   ParameterRange,
   OptimizationProgress,
-  AllocationStrategyMode
+  AllocationStrategyMode,
+  CrossValidationConfig,
+  createDefaultCrossValidationConfig
 } from './types';
 import { ParameterOptimizer } from './optimizer';
 import { PositionAllocationStrategy } from '@/types/btcdom2';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import OptimizationGuide from './OptimizationGuide';
+import { CrossValidationConfigComponent } from './components/CrossValidationConfig';
+import CrossValidationResults from './components/CrossValidationResults';
 
 interface OptimizationPanelProps {
   initialConfig?: Partial<OptimizationConfig>;
@@ -51,7 +55,7 @@ export default function OptimizationPanel({
       shortAlt: true,
       granularityHours: 8
     },
-    objective: 'maxDrawdown',
+    objective: 'calmar',
     method: 'hybrid',
     allocationStrategyMode: 'random',
     fixedAllocationStrategy: PositionAllocationStrategy.BY_VOLUME,
@@ -60,6 +64,24 @@ export default function OptimizationPanel({
     timeLimit: 3600,
     ...initialConfig
   });
+
+  // 交叉验证配置状态
+  const [crossValidationConfig, setCrossValidationConfig] = useState<CrossValidationConfig>(
+    createDefaultCrossValidationConfig(
+      config.baseParams.startDate,
+      config.baseParams.endDate,
+      '2020-01-01',
+      '2025-06-20'
+    )
+  );
+
+  // 更新优化配置中的交叉验证设置
+  useEffect(() => {
+    setConfig(prev => ({
+      ...prev,
+      crossValidation: crossValidationConfig.enabled ? crossValidationConfig : undefined
+    }));
+  }, [crossValidationConfig]);
 
   // 参数范围配置
   const [parameterRange, setParameterRange] = useState<ParameterRange>({
@@ -534,6 +556,8 @@ export default function OptimizationPanel({
                 <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">做空数量</th>
 
                 <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">分配策略</th>
+                <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">交叉验证</th>
+                <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">操作</th>
 
               </tr>
             </thead>
@@ -585,6 +609,20 @@ export default function OptimizationPanel({
                   <td className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-gray-900 dark:text-gray-100">
                     {result.combination.allocationStrategy === PositionAllocationStrategy.BY_VOLUME ? '成交量' :
                      result.combination.allocationStrategy === PositionAllocationStrategy.BY_COMPOSITE_SCORE ? '综合分数' : '平均'}
+                  </td>
+                  <td className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-gray-900 dark:text-gray-100">
+                    {result.crossValidation ? (
+                      <div className="text-xs">
+                        <div className="text-green-600 dark:text-green-400">
+                          综合: {result.crossValidation.compositeScore.toFixed(3)}
+                        </div>
+                        <div className="text-blue-600 dark:text-blue-400">
+                          稳定: {result.crossValidation.consistency.stabilityScore.toFixed(2)}
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-gray-400 text-xs">未启用</span>
+                    )}
                   </td>
                   <td className="border border-gray-300 dark:border-gray-600 px-2 py-1">
                     <button
@@ -708,6 +746,15 @@ export default function OptimizationPanel({
               </div>
 
               {renderParameterRanges()}
+
+              {/* 交叉验证配置 */}
+              <div className="mt-6">
+                <CrossValidationConfigComponent
+                  config={crossValidationConfig}
+                  onChange={setCrossValidationConfig}
+                  className="border border-gray-200 dark:border-gray-700 rounded-lg"
+                />
+              </div>
             </div>
           )}
 
@@ -741,17 +788,13 @@ export default function OptimizationPanel({
           {/* 结果显示 */}
           {renderResults()}
 
-          {/* 说明文字 */}
-          <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-            <h5 className="font-medium text-gray-700 dark:text-gray-300 mb-2">使用说明：</h5>
-            <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-              <li>• 选择优化目标：根据你的投资偏好选择最重要的指标</li>
-              <li>• 设置搜索范围：定义各参数的取值范围，范围越大搜索越全面但时间越长</li>
-              <li>• 混合方法推荐：先进行粗搜索找到有潜力区域，再精细优化</li>
-              <li>• 结果可以直接应用到当前策略，或手动调整后使用</li>
-              <li>• 权重系统会自动确保四个权重总和为1</li>
-            </ul>
-          </div>
+          {/* 交叉验证结果展示 */}
+          {results.length > 0 && results[0]?.crossValidation && (
+            <div className="mt-6">
+              <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-4">交叉验证详细结果</h4>
+              <CrossValidationResults result={results[0].crossValidation} />
+            </div>
+          )}
         </>
       )}
     </div>
