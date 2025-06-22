@@ -127,6 +127,10 @@ export default function OptimizationPanel({
   // UI状态
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [activeTab, setActiveTab] = useState<'optimize' | 'guide'>('optimize');
+  
+  // 结果显示状态
+  const [sortBy, setSortBy] = useState<'objective' | 'composite'>('objective');
+  const [selectedResultIndex, setSelectedResultIndex] = useState<number | null>(null);
 
   // 设置进度回调
   useEffect(() => {
@@ -525,15 +529,68 @@ export default function OptimizationPanel({
     );
   };
 
+  // 获取排序后的结果
+  const getSortedResults = () => {
+    const sortedResults = [...results];
+    
+    if (sortBy === 'composite') {
+      // 按综合评分排序（只有有交叉验证结果的项目才参与排序）
+      return sortedResults
+        .filter(result => result.crossValidation?.compositeScore !== undefined)
+        .sort((a, b) => (b.crossValidation?.compositeScore || 0) - (a.crossValidation?.compositeScore || 0));
+    } else {
+      // 按目标值排序（原有逻辑）
+      return sortedResults.sort((a, b) => {
+        if (config.objective === 'maxDrawdown') {
+          // 最大回撤：绝对值越小越好
+          return Math.abs(a.objectiveValue) - Math.abs(b.objectiveValue);
+        } else {
+          // 其他指标：值越大越好
+          return b.objectiveValue - a.objectiveValue;
+        }
+      });
+    }
+  };
+
+  // 检查是否有交叉验证结果
+  const hasValidationResults = results.some(result => result.crossValidation?.compositeScore !== undefined);
+
   // 渲染结果表格
   const renderResults = () => {
     if (results.length === 0) return null;
 
+    const sortedResults = getSortedResults();
+
     return (
       <div className="mt-6">
         <div className="flex justify-between items-center mb-4">
-          <h4 className="font-medium text-gray-700 dark:text-gray-300">优化结果（前10名）</h4>
-          <span className="text-sm text-gray-500 dark:text-gray-400">共找到 {results.length} 个有效组合</span>
+          <div className="flex items-center gap-4">
+            <h4 className="font-medium text-gray-700 dark:text-gray-300">
+              优化结果（前10名）
+            </h4>
+            
+            {/* 排序方式选择器 - 只在有交叉验证结果时显示 */}
+            {hasValidationResults && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600 dark:text-gray-400">排序方式:</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => {
+                    setSortBy(e.target.value as 'objective' | 'composite');
+                    setSelectedResultIndex(null); // 重置选中项
+                  }}
+                  className="text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                >
+                  <option value="objective">目标值排序</option>
+                  <option value="composite">综合评分排序</option>
+                </select>
+              </div>
+            )}
+          </div>
+          <span className="text-sm text-gray-500 dark:text-gray-400">
+            共找到 {results.length} 个有效组合
+            {sortBy === 'composite' && ` (${sortedResults.length} 有交叉验证)`}
+          </span>
         </div>
 
         <div className="overflow-x-auto">
@@ -555,11 +612,12 @@ export default function OptimizationPanel({
                 <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">分配策略</th>
                 <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">交叉验证</th>
                 <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">操作</th>
+                <th className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-left text-gray-700 dark:text-gray-300">详细结果</th>
 
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-900">
-              {results.slice(0, 10).map((result, index) => (
+              {sortedResults.slice(0, 10).map((result, index) => (
                 <tr key={result.combination.id} className={index === 0 ? 'bg-green-50 dark:bg-green-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-800'}>
                   <td className="border border-gray-300 dark:border-gray-600 px-2 py-1 text-gray-900 dark:text-gray-100">
                     {index + 1}
@@ -628,6 +686,22 @@ export default function OptimizationPanel({
                     >
                       应用
                     </button>
+                  </td>
+                  <td className="border border-gray-300 dark:border-gray-600 px-2 py-1">
+                    {result.crossValidation ? (
+                      <button
+                        onClick={() => setSelectedResultIndex(index)}
+                        className={`px-2 py-1 text-xs rounded ${
+                          selectedResultIndex === index
+                            ? 'bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700 text-white'
+                            : 'bg-gray-500 hover:bg-gray-600 dark:bg-gray-600 dark:hover:bg-gray-700 text-white'
+                        }`}
+                      >
+                        {selectedResultIndex === index ? '✓ 已选中' : '查看详细'}
+                      </button>
+                    ) : (
+                      <span className="text-gray-400 text-xs">无验证数据</span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -786,12 +860,27 @@ export default function OptimizationPanel({
           {renderResults()}
 
           {/* 交叉验证结果展示 */}
-          {results.length > 0 && results[0]?.crossValidation && (
-            <div className="mt-6">
-              <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-4">交叉验证详细结果</h4>
-              <CrossValidationResults result={results[0].crossValidation} />
-            </div>
-          )}
+          {selectedResultIndex !== null && (() => {
+            const sortedResults = getSortedResults();
+            const selectedResult = sortedResults[selectedResultIndex];
+            return selectedResult?.crossValidation && (
+              <div className="mt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-medium text-gray-700 dark:text-gray-300">交叉验证详细结果</h4>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    显示第 {selectedResultIndex + 1} 名的详细结果
+                    <button
+                      onClick={() => setSelectedResultIndex(null)}
+                      className="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+                <CrossValidationResults result={selectedResult.crossValidation} />
+              </div>
+            );
+          })()}
         </>
       )}
     </div>
