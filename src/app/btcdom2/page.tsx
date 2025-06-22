@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
+import { Progress } from '@/components/ui/progress';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -36,10 +37,10 @@ export default function BTCDOM2Dashboard() {
     endDate: '2025-06-21',
     initialCapital: 10000,
     btcRatio: 0.6,
-    priceChangeWeight: 0.22,
-    volumeWeight: 0.05,
-    volatilityWeight: 0.13,
-    fundingRateWeight: 0.6,
+    priceChangeWeight: 0.15,
+    volumeWeight: 0.35,
+    volatilityWeight: 0.15,
+    fundingRateWeight: 0.35,
     maxShortPositions: 5,
     spotTradingFeeRate: 0.0008, // 0.08% 现货手续费
     futuresTradingFeeRate: 0.0002, // 0.02% 期货手续费
@@ -582,16 +583,42 @@ export default function BTCDOM2Dashboard() {
                     <div className="space-y-3">
                       <Label className="text-sm font-medium">跌幅权重</Label>
                       <div className="flex items-center space-x-3">
-                        <Slider
-                          value={[params.priceChangeWeight * 100]}
-                          onValueChange={(value) => handleWeightChange('priceChange', value[0])}
-                          max={100}
-                          step={5}
-                          className="flex-1"
-                        />
-                        <span className="text-sm font-medium w-12 text-right bg-gray-50 dark:bg-gray-700 px-2 py-1 rounded">
-                          {(params.priceChangeWeight * 100).toFixed(0)}%
-                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const currentValue = params.priceChangeWeight * 100;
+                            const newValue = currentValue % 5 === 0 
+                              ? Math.max(0, currentValue - 5)
+                              : Math.max(0, Math.floor(currentValue / 5) * 5);
+                            handleWeightChange('priceChange', newValue);
+                          }}
+                          disabled={(params.priceChangeWeight * 100) <= 0}
+                          className="w-8 h-8 p-0"
+                        >
+                          -
+                        </Button>
+                        <div className="flex-1 flex items-center space-x-2">
+                          <Progress value={params.priceChangeWeight * 100} className="flex-1" />
+                          <span className="text-sm font-medium min-w-[40px] text-right">
+                            {(params.priceChangeWeight * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const currentValue = params.priceChangeWeight * 100;
+                            const newValue = currentValue % 5 === 0 
+                              ? Math.min(100, currentValue + 5)
+                              : Math.min(100, Math.ceil(currentValue / 5) * 5);
+                            handleWeightChange('priceChange', newValue);
+                          }}
+                          disabled={(params.priceChangeWeight * 100) >= 100}
+                          className="w-8 h-8 p-0"
+                        >
+                          +
+                        </Button>
                       </div>
                       <p className="text-xs text-gray-500 dark:text-gray-400">评估价格下跌程度，跌幅越大分数越高</p>
                     </div>
@@ -599,16 +626,42 @@ export default function BTCDOM2Dashboard() {
                     <div className="space-y-3">
                       <Label className="text-sm font-medium">成交量权重</Label>
                       <div className="flex items-center space-x-3">
-                        <Slider
-                          value={[params.volumeWeight * 100]}
-                          onValueChange={(value) => handleWeightChange('volume', value[0])}
-                          max={100}
-                          step={5}
-                          className="flex-1"
-                        />
-                        <span className="text-sm font-medium w-12 text-right bg-gray-50 dark:bg-gray-700 px-2 py-1 rounded">
-                          {(params.volumeWeight * 100).toFixed(0)}%
-                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const currentValue = params.volumeWeight * 100;
+                            const newValue = currentValue % 5 === 0 
+                              ? Math.max(0, currentValue - 5)
+                              : Math.max(0, Math.floor(currentValue / 5) * 5);
+                            handleWeightChange('volume', newValue);
+                          }}
+                          disabled={(params.volumeWeight * 100) <= 0}
+                          className="w-8 h-8 p-0"
+                        >
+                          -
+                        </Button>
+                        <div className="flex-1 flex items-center space-x-2">
+                          <Progress value={params.volumeWeight * 100} className="flex-1" />
+                          <span className="text-sm font-medium min-w-[40px] text-right">
+                            {(params.volumeWeight * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const currentValue = params.volumeWeight * 100;
+                            const newValue = currentValue % 5 === 0 
+                              ? Math.min(100, currentValue + 5)
+                              : Math.min(100, Math.ceil(currentValue / 5) * 5);
+                            handleWeightChange('volume', newValue);
+                          }}
+                          disabled={(params.volumeWeight * 100) >= 100}
+                          className="w-8 h-8 p-0"
+                        >
+                          +
+                        </Button>
                       </div>
                       <p className="text-xs text-gray-500 dark:text-gray-400">评估交易活跃度和流动性，确保足够流动性</p>
                     </div>
@@ -616,16 +669,42 @@ export default function BTCDOM2Dashboard() {
                     <div className="space-y-3">
                       <Label className="text-sm font-medium">波动率权重</Label>
                       <div className="flex items-center space-x-3">
-                        <Slider
-                          value={[params.volatilityWeight * 100]}
-                          onValueChange={(value) => handleWeightChange('volatility', value[0])}
-                          max={100}
-                          step={5}
-                          className="flex-1"
-                        />
-                        <span className="text-sm font-medium w-12 text-right bg-gray-50 dark:bg-gray-700 px-2 py-1 rounded">
-                          {(params.volatilityWeight * 100).toFixed(0)}%
-                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const currentValue = params.volatilityWeight * 100;
+                            const newValue = currentValue % 5 === 0 
+                              ? Math.max(0, currentValue - 5)
+                              : Math.max(0, Math.floor(currentValue / 5) * 5);
+                            handleWeightChange('volatility', newValue);
+                          }}
+                          disabled={(params.volatilityWeight * 100) <= 0}
+                          className="w-8 h-8 p-0"
+                        >
+                          -
+                        </Button>
+                        <div className="flex-1 flex items-center space-x-2">
+                          <Progress value={params.volatilityWeight * 100} className="flex-1" />
+                          <span className="text-sm font-medium min-w-[40px] text-right">
+                            {(params.volatilityWeight * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const currentValue = params.volatilityWeight * 100;
+                            const newValue = currentValue % 5 === 0 
+                              ? Math.min(100, currentValue + 5)
+                              : Math.min(100, Math.ceil(currentValue / 5) * 5);
+                            handleWeightChange('volatility', newValue);
+                          }}
+                          disabled={(params.volatilityWeight * 100) >= 100}
+                          className="w-8 h-8 p-0"
+                        >
+                          +
+                        </Button>
                       </div>
                       <p className="text-xs text-gray-500 dark:text-gray-400">评估价格波动稳定性，适中波动率得分最高</p>
                     </div>
@@ -633,16 +712,42 @@ export default function BTCDOM2Dashboard() {
                     <div className="space-y-3">
                       <Label className="text-sm font-medium">资金费率权重</Label>
                       <div className="flex items-center space-x-3">
-                        <Slider
-                          value={[params.fundingRateWeight * 100]}
-                          onValueChange={(value) => handleWeightChange('fundingRate', value[0])}
-                          max={100}
-                          step={5}
-                          className="flex-1"
-                        />
-                        <span className="text-sm font-medium w-12 text-right bg-gray-50 dark:bg-gray-700 px-2 py-1 rounded">
-                          {(params.fundingRateWeight * 100).toFixed(0)}%
-                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const currentValue = params.fundingRateWeight * 100;
+                            const newValue = currentValue % 5 === 0 
+                              ? Math.max(0, currentValue - 5)
+                              : Math.max(0, Math.floor(currentValue / 5) * 5);
+                            handleWeightChange('fundingRate', newValue);
+                          }}
+                          disabled={(params.fundingRateWeight * 100) <= 0}
+                          className="w-8 h-8 p-0"
+                        >
+                          -
+                        </Button>
+                        <div className="flex-1 flex items-center space-x-2">
+                          <Progress value={params.fundingRateWeight * 100} className="flex-1" />
+                          <span className="text-sm font-medium min-w-[40px] text-right">
+                            {(params.fundingRateWeight * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const currentValue = params.fundingRateWeight * 100;
+                            const newValue = currentValue % 5 === 0 
+                              ? Math.min(100, currentValue + 5)
+                              : Math.min(100, Math.ceil(currentValue / 5) * 5);
+                            handleWeightChange('fundingRate', newValue);
+                          }}
+                          disabled={(params.fundingRateWeight * 100) >= 100}
+                          className="w-8 h-8 p-0"
+                        >
+                          +
+                        </Button>
                       </div>
                       <p className="text-xs text-gray-500 dark:text-gray-400">评估做空成本和收益，正费率对做空有利</p>
                     </div>
