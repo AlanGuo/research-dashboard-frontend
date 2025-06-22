@@ -12,11 +12,11 @@ import {
   TimePeriod,
   ValidationMetrics
 } from './types';
-import { 
-  PositionAllocationStrategy, 
-  BTCDOM2StrategyParams, 
-  BTCDOM2ApiResponse, 
-  BTCDOM2BacktestResult 
+import {
+  PositionAllocationStrategy,
+  BTCDOM2StrategyParams,
+  BTCDOM2ApiResponse,
+  BTCDOM2BacktestResult
 } from '@/types/btcdom2';
 
 export class ParameterOptimizer {
@@ -24,7 +24,7 @@ export class ParameterOptimizer {
   private static readonly MAX_CONCURRENT_REQUESTS = 3; // 最大并发请求数
   private static readonly RETRY_ATTEMPTS = 3; // 重试次数
   private static readonly RETRY_DELAY = 1000; // 重试延迟(ms)
-  
+
   private currentTask: OptimizationTask | null = null;
   private progressCallback?: (progress: OptimizationProgress) => void;
   private abortController?: AbortController;
@@ -41,7 +41,7 @@ export class ParameterOptimizer {
     // 如果未指定选择范围，使用更大的时间范围
     const defaultSelectionStart = selectionStartDate || '2022-01-01';
     const defaultSelectionEnd = selectionEndDate || '2024-12-31';
-    
+
     return {
       enabled: true,
       validationPeriods: 2,
@@ -394,7 +394,7 @@ export class ParameterOptimizer {
     if (config.crossValidation?.enabled) {
       return this.evaluateCombinationWithCrossValidation(combination, config);
     }
-    
+
     // 原有的单时间段评估逻辑
     const startTime = Date.now();
 
@@ -521,15 +521,15 @@ export class ParameterOptimizer {
    * 带重试机制的优化API调用
    */
   private async callOptimizeAPIWithRetry(
-    params: BTCDOM2StrategyParams, 
+    params: BTCDOM2StrategyParams,
     combinationId: string
   ): Promise<BTCDOM2ApiResponse<BTCDOM2BacktestResult> | null> {
     let lastError: Error | null = null;
-    
+
     for (let attempt = 1; attempt <= ParameterOptimizer.RETRY_ATTEMPTS; attempt++) {
       try {
         console.log(`调用优化API (组合 ${combinationId}, 尝试 ${attempt}/${ParameterOptimizer.RETRY_ATTEMPTS})`);
-        
+
         const response = await fetch('/api/btcdom2/optimize', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -558,25 +558,25 @@ export class ParameterOptimizer {
       } catch (error) {
         lastError = error as Error;
         console.warn(`API调用失败 (组合 ${combinationId}, 尝试 ${attempt}/${ParameterOptimizer.RETRY_ATTEMPTS}):`, error);
-        
+
         // 如果是取消信号，直接抛出错误
         if (error instanceof Error && error.name === 'AbortError') {
           this.releaseSlot();
           throw error;
         }
-        
+
         // 最后一次尝试失败，释放槽位并返回null
         if (attempt === ParameterOptimizer.RETRY_ATTEMPTS) {
           this.releaseSlot();
           console.error(`API调用最终失败 (组合 ${combinationId}):`, lastError);
           return null;
         }
-        
+
         // 等待后重试
         await new Promise(resolve => setTimeout(resolve, ParameterOptimizer.RETRY_DELAY * attempt));
       }
     }
-    
+
     // 不应该到达这里，但为了类型安全
     this.releaseSlot();
     return null;
@@ -922,6 +922,10 @@ export class ParameterOptimizer {
    * 比较两个优化结果
    */
   private compareResults(a: OptimizationResult, b: OptimizationResult): number {
+    // 如果启用了交叉验证，使用综合评分排序；否则使用目标值排序
+    if (a.crossValidation && b.crossValidation) {
+      return b.crossValidation.compositeScore - a.crossValidation.compositeScore;
+    }
     // 降序排列，目标值越大越好
     return b.objectiveValue - a.objectiveValue;
   }
@@ -1210,11 +1214,11 @@ export class ParameterOptimizer {
     const selectionEnd = new Date(config.selectionRange.endDate);
     const trainingStart = new Date(trainingPeriod.startDate);
     const trainingEnd = new Date(trainingPeriod.endDate);
-    
+
     for (let i = 0; i < config.validationPeriods; i++) {
       let attempts = 0;
       const maxAttempts = 100;
-      
+
       while (attempts < maxAttempts) {
         // 确定时间段长度
         let periodDays: number;
@@ -1224,15 +1228,15 @@ export class ParameterOptimizer {
           const range = config.periodLength.randomRange!;
           periodDays = Math.floor(Math.random() * (range.maxDays - range.minDays + 1)) + range.minDays;
         }
-        
+
         // 随机选择开始日期
         const maxStartTime = selectionEnd.getTime() - (periodDays * 24 * 60 * 60 * 1000);
-        const randomStartTime = selectionStart.getTime() + 
+        const randomStartTime = selectionStart.getTime() +
           Math.random() * (maxStartTime - selectionStart.getTime());
-        
+
         const periodStart = new Date(randomStartTime);
         const periodEnd = new Date(periodStart.getTime() + (periodDays * 24 * 60 * 60 * 1000));
-        
+
         // 检查是否与训练时间段重叠（如果不允许重叠）
         if (!config.selectionRange.allowOverlap) {
           const hasOverlap = (periodStart <= trainingEnd && periodEnd >= trainingStart);
@@ -1241,14 +1245,14 @@ export class ParameterOptimizer {
             continue;
           }
         }
-        
+
         // 检查是否与已选择的时间段重叠
         const hasConflict = periods.some(existingPeriod => {
           const existingStart = new Date(existingPeriod.startDate);
           const existingEnd = new Date(existingPeriod.endDate);
           return periodStart <= existingEnd && periodEnd >= existingStart;
         });
-        
+
         if (!hasConflict) {
           periods.push({
             startDate: periodStart.toISOString().split('T')[0],
@@ -1257,15 +1261,15 @@ export class ParameterOptimizer {
           });
           break;
         }
-        
+
         attempts++;
       }
-      
+
       if (attempts >= maxAttempts) {
         console.warn(`无法为验证期${i + 1}找到合适的时间段，跳过`);
       }
     }
-    
+
     return periods;
   }
 
@@ -1280,41 +1284,41 @@ export class ParameterOptimizer {
       // 如果未启用交叉验证，使用原有逻辑
       return this.evaluateCombination(combination, config);
     }
-    
+
     const crossValidationConfig = config.crossValidation;
     const startTime = Date.now();
-    
+
     // 预验证参数组合
     const validation = this.validateParameters(combination);
     if (validation.errors.length > 0) {
       console.log(`跳过无效参数组合 ${combination.id}:`, validation.errors);
       return null;
     }
-    
+
     // 训练时间段
     const trainingPeriod: TimePeriod = {
       startDate: config.baseParams.startDate,
       endDate: config.baseParams.endDate,
       label: '训练期'
     };
-    
+
     // 生成随机验证时间段
     const validationPeriods = this.generateRandomTimePeriods(crossValidationConfig, trainingPeriod);
-    
+
     if (validationPeriods.length === 0) {
       console.warn(`无法生成验证时间段，回退到常规评估`);
       return this.evaluateCombination(combination, config);
     }
-    
+
     // 评估训练时间段
     console.log(`评估组合 ${combination.id} 在训练时间段 ${trainingPeriod.startDate} - ${trainingPeriod.endDate}`);
     const trainingResult = await this.evaluatePeriod(combination, config, trainingPeriod);
-    
+
     if (!trainingResult) {
       console.warn(`训练时间段评估失败，跳过组合 ${combination.id}`);
       return null;
     }
-    
+
     // 评估验证时间段
     const validationResults = [];
     for (const period of validationPeriods) {
@@ -1324,7 +1328,7 @@ export class ParameterOptimizer {
         validationResults.push(result);
       }
     }
-    
+
     if (validationResults.length === 0) {
       console.warn(`所有验证时间段评估失败，使用训练结果`);
       return {
@@ -1334,17 +1338,17 @@ export class ParameterOptimizer {
         executionTime: Date.now() - startTime
       };
     }
-    
+
     // 计算综合评分
     const compositeScore = this.calculateCompositeScore(
       trainingResult,
       validationResults,
       crossValidationConfig
     );
-    
+
     // 计算一致性指标
     const consistency = this.calculateConsistencyMetrics([trainingResult, ...validationResults]);
-    
+
     // 构建交叉验证结果
     const crossValidationResult: CrossValidationResult = {
       trainingResult: {
@@ -1360,11 +1364,11 @@ export class ParameterOptimizer {
       compositeScore,
       consistency
     };
-    
+
     return {
       combination,
       metrics: trainingResult.metrics, // 使用训练时间段的指标作为主要指标
-      objectiveValue: compositeScore,  // 使用综合评分作为目标值
+      objectiveValue: trainingResult.objectiveValue,  // 保持原始目标值（如卡玛比率）
       executionTime: Date.now() - startTime,
       crossValidation: crossValidationResult
     };
@@ -1380,7 +1384,7 @@ export class ParameterOptimizer {
   ): Promise<{ metrics: ValidationMetrics; objectiveValue: number } | null> {
     // 并发控制
     await this.waitForAvailableSlot();
-    
+
     // 构建策略参数，使用指定的时间段
     const strategyParams = {
       ...config.baseParams,
@@ -1394,17 +1398,17 @@ export class ParameterOptimizer {
       allocationStrategy: combination.allocationStrategy,
       granularityHours: config.baseParams.granularityHours || 8
     };
-    
+
     // 调用优化API
     const apiResponse = await this.callOptimizeAPIWithRetry(strategyParams, `${combination.id}-${period.label}`);
-    
+
     if (!apiResponse || !apiResponse.success || !apiResponse.data?.performance) {
       console.warn(`时间段 ${period.label} 评估失败:`, apiResponse?.error);
       return null;
     }
-    
+
     const performance = apiResponse.data.performance;
-    
+
     // 计算目标函数值
     let objectiveValue: number;
     switch (config.objective) {
@@ -1429,7 +1433,7 @@ export class ParameterOptimizer {
         objectiveValue = performance.sharpeRatio || 0;
         break;
     }
-    
+
     return {
       metrics: {
         totalReturn: performance.totalReturn || 0,
@@ -1452,9 +1456,9 @@ export class ParameterOptimizer {
     config: CrossValidationConfig
   ): number {
     const trainingScore = trainingResult.objectiveValue * config.scoreWeights.training;
-    const validationScore = validationResults.reduce((sum, result) => 
+    const validationScore = validationResults.reduce((sum, result) =>
       sum + result.objectiveValue, 0) / validationResults.length * config.scoreWeights.validation;
-    
+
     return trainingScore + validationScore;
   }
 
@@ -1466,20 +1470,20 @@ export class ParameterOptimizer {
   ): { standardDeviation: number; range: number; stabilityScore: number } {
     const values = results.map(r => r.objectiveValue);
     const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
-    
+
     // 标准差
     const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
     const standardDeviation = Math.sqrt(variance);
-    
+
     // 范围
     const min = Math.min(...values);
     const max = Math.max(...values);
     const range = max - min;
-    
+
     // 稳定性评分 (变异系数的倒数，归一化到0-1)
     const coefficientOfVariation = mean !== 0 ? standardDeviation / Math.abs(mean) : 1;
     const stabilityScore = Math.max(0, Math.min(1, 1 / (1 + coefficientOfVariation)));
-    
+
     return {
       standardDeviation,
       range,
