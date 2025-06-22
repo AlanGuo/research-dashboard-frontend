@@ -55,7 +55,7 @@ export class ParameterOptimizer {
       selectionRange: {
         startDate: defaultSelectionStart,
         endDate: defaultSelectionEnd,
-        allowOverlap: false
+        allowOverlap: true
       },
       scoreWeights: {
         training: 0.6,
