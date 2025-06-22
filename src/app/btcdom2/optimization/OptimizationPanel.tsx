@@ -67,8 +67,6 @@ export default function OptimizationPanel({
   // 交叉验证配置状态
   const [crossValidationConfig, setCrossValidationConfig] = useState<CrossValidationConfig>(
     ParameterOptimizer.createDefaultCrossValidationConfig(
-      config.baseParams.startDate,
-      config.baseParams.endDate,
       '2020-01-01',
       '2025-06-20'
     )
@@ -85,10 +83,10 @@ export default function OptimizationPanel({
   // 参数范围配置
   const [parameterRange, setParameterRange] = useState<ParameterRange>({
     weights: {
-      priceChangeWeight: { min: 0, max: 1, step: 0.1 },
-      volumeWeight: { min: 0, max: 1, step: 0.1 },
-      volatilityWeight: { min: 0, max: 1, step: 0.1 },
-      fundingRateWeight: { min: 0, max: 1, step: 0.1 }
+      priceChangeWeight: { min: 0, max: 1, step: 0.05 },
+      volumeWeight: { min: 0, max: 1, step: 0.05 },
+      volatilityWeight: { min: 0, max: 1, step: 0.05 },
+      fundingRateWeight: { min: 0, max: 1, step: 0.05 }
     },
     maxShortPositions: { min: 5, max: 20, step: 1 },
 

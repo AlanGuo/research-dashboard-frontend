@@ -35,8 +35,6 @@ export class ParameterOptimizer {
    * 创建默认交叉验证配置
    */
   static createDefaultCrossValidationConfig(
-    trainingStartDate: string,
-    trainingEndDate: string,
     selectionStartDate?: string,
     selectionEndDate?: string
   ): CrossValidationConfig {
