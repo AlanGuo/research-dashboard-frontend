@@ -7,7 +7,6 @@ import {
   YAxis, 
   CartesianGrid, 
   Tooltip,
-  Legend, 
   ResponsiveContainer,
   ComposedChart
 } from 'recharts';
@@ -28,7 +27,7 @@ interface BTCDOM2ChartProps {
   params?: BTCDOM2StrategyParams;
 }
 
-export function BTCDOM2Chart({ data, params }: BTCDOM2ChartProps) {
+export function BTCDOM2Chart({ data }: BTCDOM2ChartProps) {
   // 图表可见性状态
   const [visibility, setVisibility] = useState({
     btcPrice: true,
