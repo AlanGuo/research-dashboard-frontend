@@ -4,14 +4,14 @@ import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { TrendingUp, TrendingDown, Calendar, MousePointer } from 'lucide-react';
+import { TrendingUp, MousePointer } from 'lucide-react';
 import { StrategySnapshot } from '@/types/btcdom2';
 
 interface PnlTrendSegment {
@@ -35,8 +35,7 @@ interface PnlTrendAnalysisProps {
 
 export const PnlTrendAnalysis: React.FC<PnlTrendAnalysisProps> = ({
   snapshots,
-  onJumpToPeriod,
-  initialCapital
+  onJumpToPeriod
 }) => {
   const [dataSource, setDataSource] = useState<'totalPnl' | 'periodPnl'>('periodPnl');
   const [minConsecutivePeriods, setMinConsecutivePeriods] = useState(3);
@@ -53,33 +52,6 @@ export const PnlTrendAnalysis: React.FC<PnlTrendAnalysisProps> = ({
     return date.getUTCFullYear().toString();
   };
 
-  // 格式化时间范围
-  const formatTimeRange = (startDate: string, endDate: string): { dateRange: string; year: string } => {
-    const startYear = getYear(startDate);
-    const endYear = getYear(endDate);
-    
-    if (startDate === endDate) {
-      return {
-        dateRange: formatPeriodTime(startDate),
-        year: startYear
-      };
-    }
-    
-    // 如果是同一年，只显示一个年份
-    if (startYear === endYear) {
-      return {
-        dateRange: `${formatPeriodTime(startDate)}~${formatPeriodTime(endDate)}`,
-        year: startYear
-      };
-    } else {
-      // 跨年的情况，显示年份范围
-      return {
-        dateRange: `${formatPeriodTime(startDate)}~${formatPeriodTime(endDate)}`,
-        year: `${startYear}~${endYear}`
-      };
-    }
-  };
-
   // 格式化金额
   const formatAmount = (amount: number): string => {
     const sign = amount > 0 ? '+' : '';
@@ -91,7 +63,7 @@ export const PnlTrendAnalysis: React.FC<PnlTrendAnalysisProps> = ({
     // 获取起始日的资金总额
     const startTotalValue = startSnapshot.totalValue;
     const percent = (amount / startTotalValue) * 100;
-    
+
     // 对于金额，负号放在$符号前面
     let formattedAmount;
     if (amount > 0) {
@@ -258,7 +230,7 @@ export const PnlTrendAnalysis: React.FC<PnlTrendAnalysisProps> = ({
             <MousePointer className="w-3 h-3" />
             点击时间段可跳转到对应期数
           </div>
-          
+
           {trendSegments.length === 0 ? (
             <div className="text-center py-6 text-muted-foreground text-sm">
               未找到符合条件的连续趋势段（最小{minConsecutivePeriods}期）
@@ -269,24 +241,24 @@ export const PnlTrendAnalysis: React.FC<PnlTrendAnalysisProps> = ({
               <div className="text-sm font-medium text-muted-foreground">
                 时间段（可横向滚动）：
               </div>
-              
+
               {/* 横向滚动容器 */}
               <div className="overflow-x-scroll scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
                 <div className="relative">
                   {/* 卡片容器 */}
-                  <div className="flex gap-4 min-w-max">
+                  <div className="flex gap-2 min-w-max">
                     {trendSegments.map((segment, index) => {
                       // 固定卡片宽度，使其更窄
                       const segmentWidth = 140;
-                      
+
                       return (
                         <Card
                           key={index}
                           className={`
                             cursor-pointer transition-all duration-200 hover:shadow-md flex-shrink-0
                             border-2 hover:scale-[1.02]
-                            ${segment.type === 'profit' 
-                              ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/30' 
+                            ${segment.type === 'profit'
+                              ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/30'
                               : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30'
                             }
                           `}
@@ -307,25 +279,25 @@ export const PnlTrendAnalysis: React.FC<PnlTrendAnalysisProps> = ({
                                   })()}
                                 </div>
                               </div>
-                              
+
                               {/* 连续期数 */}
                               <div className="text-center">
                                 <div className="text-xs text-muted-foreground">
                                   {segment.periods}期
                                 </div>
                               </div>
-                              
+
                               {/* 总金额 */}
                               <div className="text-center">
                                 <div className={`text-xs font-bold ${
-                                  segment.type === 'profit' 
-                                    ? 'text-green-600 dark:text-green-400' 
+                                  segment.type === 'profit'
+                                    ? 'text-green-600 dark:text-green-400'
                                     : 'text-red-600 dark:text-red-400'
                                 }`}>
                                   {formatAmountWithPercent(segment.totalPnl, snapshots[segment.startIndex])}
                                 </div>
                               </div>
-                              
+
                               {/* 平均金额 */}
                               <div className="text-center">
                                 <div className="text-xs text-muted-foreground">
@@ -338,7 +310,7 @@ export const PnlTrendAnalysis: React.FC<PnlTrendAnalysisProps> = ({
                       );
                     })}
                   </div>
-                  
+
                   {/* 年份时间轴（底部） */}
                   <div className="flex gap-4 min-w-max relative">
                     {(() => {
@@ -346,12 +318,12 @@ export const PnlTrendAnalysis: React.FC<PnlTrendAnalysisProps> = ({
                       const yearMarkers: { year: string; left: number }[] = [];
                       let currentLeft = 0;
                       let lastYear = '';
-                      
+
                       trendSegments.forEach((segment, index) => {
                         const segmentWidth = 140;
                         const gap = index > 0 ? 16 : 0; // 16px = gap-4
                         const startYear = getYear(segment.startDate);
-                        
+
                         // 如果是新的年份，记录位置
                         if (startYear !== lastYear) {
                           yearMarkers.push({
@@ -360,15 +332,15 @@ export const PnlTrendAnalysis: React.FC<PnlTrendAnalysisProps> = ({
                           });
                           lastYear = startYear;
                         }
-                        
+
                         currentLeft += gap + segmentWidth;
                       });
-                      
+
                       return yearMarkers.map((marker, index) => (
                         <div
                           key={index}
                           className="absolute bottom-0 flex items-center"
-                          style={{ 
+                          style={{
                             left: `${marker.left}px`,
                             height: '20px'
                           }}
@@ -382,7 +354,7 @@ export const PnlTrendAnalysis: React.FC<PnlTrendAnalysisProps> = ({
                   </div>
                 </div>
               </div>
-              
+
               {/* 年份快速跳转 */}
               <div>
                 <div className="grid grid-cols-auto-fit gap-10" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(60px, 1fr))' }}>
@@ -391,16 +363,16 @@ export const PnlTrendAnalysis: React.FC<PnlTrendAnalysisProps> = ({
                     const uniqueYears = Array.from(new Set(
                       trendSegments.map(segment => getYear(segment.startDate))
                     )).sort();
-                    
+
                     return uniqueYears.map(year => (
                       <button
                         key={year}
-                        className="px-3 py-1 text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 
-                                 border border-blue-200 dark:border-blue-800 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/30 
+                        className="px-3 py-1 text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400
+                                 border border-blue-200 dark:border-blue-800 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/30
                                  transition-colors duration-200 text-center"
                         onClick={() => {
                           // 找到该年份第一张卡片的位置并滚动
-                          const firstSegmentOfYear = trendSegments.find(segment => 
+                          const firstSegmentOfYear = trendSegments.find(segment =>
                             getYear(segment.startDate) === year
                           );
                           if (firstSegmentOfYear) {
@@ -408,7 +380,7 @@ export const PnlTrendAnalysis: React.FC<PnlTrendAnalysisProps> = ({
                             const segmentWidth = 140;
                             const gap = 16; // gap-4 = 16px
                             const scrollLeft = segmentIndex * (segmentWidth + gap);
-                            
+
                             // 平滑滚动到目标位置
                             const scrollContainer = document.querySelector('.overflow-x-scroll') as HTMLElement;
                             if (scrollContainer) {
@@ -426,12 +398,12 @@ export const PnlTrendAnalysis: React.FC<PnlTrendAnalysisProps> = ({
                   })()}
                 </div>
               </div>
-              
+
               {/* 说明文字 */}
               <div className="text-xs text-muted-foreground text-center">
                 绿色卡片表示连续盈利期，红色卡片表示连续亏损期
               </div>
-              
+
             </div>
           )}
         </div>
