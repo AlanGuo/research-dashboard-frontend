@@ -1122,7 +1122,7 @@ export default function BTCDOM2Dashboard() {
             {backtestResult && backtestResult.snapshots && backtestResult.snapshots.length > 0 && (
               <PnlTrendAnalysis
                 snapshots={backtestResult.snapshots}
-                onJumpToPeriod={(index) => setSelectedSnapshotIndex(index)}
+                onJumpToPeriod={(periodNumber) => handleSnapshotSelection(periodNumber - 1)}
                 initialCapital={params.initialCapital}
               />
             )}

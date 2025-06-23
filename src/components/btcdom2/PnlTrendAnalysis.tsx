@@ -29,7 +29,7 @@ interface PnlTrendSegment {
 
 interface PnlTrendAnalysisProps {
   snapshots: StrategySnapshot[];
-  onJumpToPeriod: (index: number) => void;
+  onJumpToPeriod: (periodNumber: number) => void; // 期数（从1开始）
   initialCapital: number;
 }
 
@@ -41,10 +41,43 @@ export const PnlTrendAnalysis: React.FC<PnlTrendAnalysisProps> = ({
   const [dataSource, setDataSource] = useState<'totalPnl' | 'periodPnl'>('periodPnl');
   const [minConsecutivePeriods, setMinConsecutivePeriods] = useState(3);
 
-  // 格式化时间（使用UTC+0时区）
+  // 格式化时间（月-日）
   const formatPeriodTime = (timestamp: string): string => {
     const date = new Date(timestamp);
-    return `${date.getUTCFullYear()}-${(date.getUTCMonth() + 1).toString().padStart(2, '0')}-${date.getUTCDate().toString().padStart(2, '0')} ${date.getUTCHours().toString().padStart(2, '0')}:${date.getUTCMinutes().toString().padStart(2, '0')}`;
+    return `${(date.getUTCMonth() + 1).toString().padStart(2, '0')}-${date.getUTCDate().toString().padStart(2, '0')}`;
+  };
+
+  // 获取年份
+  const getYear = (timestamp: string): string => {
+    const date = new Date(timestamp);
+    return date.getUTCFullYear().toString();
+  };
+
+  // 格式化时间范围
+  const formatTimeRange = (startDate: string, endDate: string): { dateRange: string; year: string } => {
+    const startYear = getYear(startDate);
+    const endYear = getYear(endDate);
+    
+    if (startDate === endDate) {
+      return {
+        dateRange: formatPeriodTime(startDate),
+        year: startYear
+      };
+    }
+    
+    // 如果是同一年，只显示一个年份
+    if (startYear === endYear) {
+      return {
+        dateRange: `${formatPeriodTime(startDate)}~${formatPeriodTime(endDate)}`,
+        year: startYear
+      };
+    } else {
+      // 跨年的情况，显示年份范围
+      return {
+        dateRange: `${formatPeriodTime(startDate)}~${formatPeriodTime(endDate)}`,
+        year: `${startYear}~${endYear}`
+      };
+    }
   };
 
   // 格式化金额
@@ -145,7 +178,9 @@ export const PnlTrendAnalysis: React.FC<PnlTrendAnalysisProps> = ({
   }, [trendSegments]);
 
   const handleSegmentClick = (segment: PnlTrendSegment) => {
-    onJumpToPeriod(segment.startIndex);
+    // 传递期数（从1开始）- 使用中间期数，让用户看到趋势段的代表性时间点
+    const middlePeriod = Math.round((segment.startPeriod + segment.endPeriod) / 2);
+    onJumpToPeriod(middlePeriod);
   };
 
   if (!snapshots || snapshots.length === 0) {
@@ -218,8 +253,8 @@ export const PnlTrendAnalysis: React.FC<PnlTrendAnalysisProps> = ({
           </Card>
         </div>
 
-        {/* 时间轴 */}
-        <div className="space-y-2">
+        {/* 横向时间轴 */}
+        <div className="space-y-3">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <MousePointer className="w-3 h-3" />
             点击时间段可跳转到对应期数
@@ -230,60 +265,146 @@ export const PnlTrendAnalysis: React.FC<PnlTrendAnalysisProps> = ({
               未找到符合条件的连续趋势段（最小{minConsecutivePeriods}期）
             </div>
           ) : (
-            <div className="space-y-1.5 max-h-96 overflow-y-auto pr-2">
-              {trendSegments.map((segment, index) => (
-                <Card
-                  key={index}
-                  className={`
-                    cursor-pointer transition-all duration-200 hover:shadow-sm border
-                    ${segment.type === 'profit' 
-                      ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/30' 
-                      : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30'
-                    }
-                  `}
-                  onClick={() => handleSegmentClick(segment)}
-                >
-                  <CardContent className="p-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        {segment.type === 'profit' ? (
-                          <TrendingUp className="w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0" />
-                        ) : (
-                          <TrendingDown className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0" />
-                        )}
-                        <div className="min-w-0">
-                          <div className={`font-medium text-sm ${
-                            segment.type === 'profit' 
-                              ? 'text-green-700 dark:text-green-400' 
-                              : 'text-red-700 dark:text-red-400'
-                          }`}>
-                            连续{segment.type === 'profit' ? '盈利' : '亏损'} {segment.periods} 期
+            <div className="space-y-3">
+              {/* 时间段标题 */}
+              <div className="text-sm font-medium text-muted-foreground">
+                时间段（可横向滚动）：
+              </div>
+              
+              {/* 横向滚动容器 */}
+              <div className="overflow-x-scroll scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pb-4">
+                <div className="relative">
+                  {/* 卡片容器 */}
+                  <div className="flex gap-4 min-w-max mb-6">
+                    {trendSegments.map((segment, index) => {
+                      // 固定卡片宽度，使其更窄
+                      const segmentWidth = 140;
+                      
+                      return (
+                        <Card
+                          key={index}
+                          className={`
+                            cursor-pointer transition-all duration-200 hover:shadow-md flex-shrink-0
+                            border-2 hover:scale-[1.02]
+                            ${segment.type === 'profit' 
+                              ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/30' 
+                              : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30'
+                            }
+                          `}
+                          style={{ width: `${segmentWidth}px` }}
+                          onClick={() => handleSegmentClick(segment)}
+                        >
+                          <CardContent className="p-3">
+                            {/* 垂直排列的内容 */}
+                            <div className="space-y-2">
+                              {/* 时间范围（不包含年份） */}
+                              <div className="text-center">
+                                <div className="text-xs font-semibold text-foreground">
+                                  {(() => {
+                                    if (segment.startDate === segment.endDate) {
+                                      return formatPeriodTime(segment.startDate);
+                                    }
+                                    return `${formatPeriodTime(segment.startDate)}~${formatPeriodTime(segment.endDate)}`;
+                                  })()}
+                                </div>
+                              </div>
+                              
+                              {/* 连续期数 */}
+                              <div className="text-center">
+                                <div className="text-xs text-muted-foreground">
+                                  {segment.periods}期
+                                </div>
+                              </div>
+                              
+                              {/* 总金额 */}
+                              <div className="text-center">
+                                <div className={`text-xs font-bold ${
+                                  segment.type === 'profit' 
+                                    ? 'text-green-600 dark:text-green-400' 
+                                    : 'text-red-600 dark:text-red-400'
+                                }`}>
+                                  {formatAmountWithPercent(segment.totalPnl, snapshots[segment.startIndex])}
+                                </div>
+                              </div>
+                              
+                              {/* 平均金额 */}
+                              <div className="text-center">
+                                <div className="text-xs text-muted-foreground">
+                                  平均: {formatAmount(segment.avgPnl)}
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                  
+                  {/* 年份时间轴（底部） */}
+                  <div className="flex gap-4 min-w-max relative">
+                    {(() => {
+                      // 获取所有年份并计算位置
+                      const yearPositions: { year: string; left: number; width: number }[] = [];
+                      let currentLeft = 0;
+                      
+                      trendSegments.forEach((segment, index) => {
+                        const segmentWidth = 140;
+                        const gap = index > 0 ? 16 : 0; // 16px = gap-4
+                        const startYear = getYear(segment.startDate);
+                        const endYear = getYear(segment.endDate);
+                        
+                        // 检查是否需要添加新的年份标记
+                        const existingYear = yearPositions.find(y => y.year === startYear);
+                        if (!existingYear) {
+                          yearPositions.push({
+                            year: startYear,
+                            left: currentLeft + gap,
+                            width: segmentWidth
+                          });
+                        } else {
+                          // 扩展现有年份的宽度
+                          existingYear.width += gap + segmentWidth;
+                        }
+                        
+                        // 如果跨年，也处理结束年份
+                        if (startYear !== endYear) {
+                          const existingEndYear = yearPositions.find(y => y.year === endYear);
+                          if (!existingEndYear) {
+                            yearPositions.push({
+                              year: endYear,
+                              left: currentLeft + gap + segmentWidth / 2,
+                              width: segmentWidth / 2
+                            });
+                          }
+                        }
+                        
+                        currentLeft += gap + segmentWidth;
+                      });
+                      
+                      return yearPositions.map((yearPos, index) => (
+                        <div
+                          key={index}
+                          className="absolute bottom-0 flex items-center justify-center"
+                          style={{ 
+                            left: `${yearPos.left}px`, 
+                            width: `${yearPos.width}px`,
+                            height: '20px'
+                          }}
+                        >
+                          <div className="text-xs text-muted-foreground font-medium bg-background/80 px-2 py-1 rounded border">
+                            {yearPos.year}
                           </div>
-                          <div className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Calendar className="w-3 h-3" />
-                            第{segment.startPeriod}期 ~ 第{segment.endPeriod}期
-                          </div>
                         </div>
-                      </div>
-                      <div className="text-right flex-shrink-0">
-                        <div className={`font-semibold text-sm ${
-                          segment.type === 'profit' 
-                            ? 'text-green-600 dark:text-green-400' 
-                            : 'text-red-600 dark:text-red-400'
-                        }`}>
-                          {dataSource === 'totalPnl' ? '累计' : '总计'}: {formatAmountWithPercent(segment.totalPnl, snapshots[segment.startIndex])}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          平均: {formatAmount(segment.avgPnl)}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="mt-1.5 text-xs text-muted-foreground">
-                      {formatPeriodTime(segment.startDate)} ~ {formatPeriodTime(segment.endDate)}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                      ));
+                    })()}
+                  </div>
+                </div>
+              </div>
+              
+              {/* 说明文字 */}
+              <div className="text-xs text-muted-foreground text-center">
+                绿色卡片表示连续盈利期，红色卡片表示连续亏损期
+              </div>
             </div>
           )}
         </div>
