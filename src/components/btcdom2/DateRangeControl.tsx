@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
+import { devConsole } from '@/utils/devLogger';
 
 interface DateRangeControlProps {
   startDate: string;
@@ -30,7 +31,7 @@ export const DateRangeControl = memo(function DateRangeControl({
   const lastStartDateExternalValueRef = useRef<string>(startDate);
   const lastEndDateExternalValueRef = useRef<string>(endDate);
 
-  console.log('🔄 DateRangeControl render:', {
+  devConsole.log('🔄 DateRangeControl render:', {
     propsStartDate: startDate,
     propsEndDate: endDate,
     displayStartDate: displayStartDate,
@@ -48,7 +49,7 @@ export const DateRangeControl = memo(function DateRangeControl({
       const day = date.getDate().toString().padStart(2, '0');
       const dateString = `${year}-${month}-${day}`;
       
-      console.log('⌨️  开始日期用户输入:', dateString, '当前显示值:', displayStartDate);
+      devConsole.log('⌨️  开始日期用户输入:', dateString, '当前显示值:', displayStartDate);
       
       // 立即更新显示值，保证UI响应性
       setDisplayStartDate(dateString);
@@ -56,20 +57,20 @@ export const DateRangeControl = memo(function DateRangeControl({
       // 清除之前的防抖定时器
       if (startDateDebounceTimerRef.current) {
         clearTimeout(startDateDebounceTimerRef.current);
-        console.log('⏱️  清除开始日期防抖定时器');
+        devConsole.log('⏱️  清除开始日期防抖定时器');
       }
       
       // 防抖处理：延迟通知父组件
       startDateDebounceTimerRef.current = setTimeout(() => {
-        console.log('🚀 开始日期防抖触发，处理数值:', dateString);
+        devConsole.log('🚀 开始日期防抖触发，处理数值:', dateString);
         
         // 更新记录值，避免下次外部值同步时覆盖用户输入
         lastStartDateExternalValueRef.current = dateString;
-        console.log('✅ 通知父组件更新开始日期:', dateString);
+        devConsole.log('✅ 通知父组件更新开始日期:', dateString);
         onStartDateChange(dateString);
       }, 200); // 200ms 防抖，日期选择响应要快一些
     } else {
-      console.log('⌨️  开始日期清空');
+      devConsole.log('⌨️  开始日期清空');
       setDisplayStartDate('');
       lastStartDateExternalValueRef.current = '';
       onStartDateChange('');
@@ -85,7 +86,7 @@ export const DateRangeControl = memo(function DateRangeControl({
       const day = date.getDate().toString().padStart(2, '0');
       const dateString = `${year}-${month}-${day}`;
       
-      console.log('⌨️  结束日期用户输入:', dateString, '当前显示值:', displayEndDate);
+      devConsole.log('⌨️  结束日期用户输入:', dateString, '当前显示值:', displayEndDate);
       
       // 立即更新显示值，保证UI响应性
       setDisplayEndDate(dateString);
@@ -93,20 +94,20 @@ export const DateRangeControl = memo(function DateRangeControl({
       // 清除之前的防抖定时器
       if (endDateDebounceTimerRef.current) {
         clearTimeout(endDateDebounceTimerRef.current);
-        console.log('⏱️  清除结束日期防抖定时器');
+        devConsole.log('⏱️  清除结束日期防抖定时器');
       }
       
       // 防抖处理：延迟通知父组件
       endDateDebounceTimerRef.current = setTimeout(() => {
-        console.log('🚀 结束日期防抖触发，处理数值:', dateString);
+        devConsole.log('🚀 结束日期防抖触发，处理数值:', dateString);
         
         // 更新记录值，避免下次外部值同步时覆盖用户输入
         lastEndDateExternalValueRef.current = dateString;
-        console.log('✅ 通知父组件更新结束日期:', dateString);
+        devConsole.log('✅ 通知父组件更新结束日期:', dateString);
         onEndDateChange(dateString);
       }, 200); // 200ms 防抖，日期选择响应要快一些
     } else {
-      console.log('⌨️  结束日期清空');
+      devConsole.log('⌨️  结束日期清空');
       setDisplayEndDate('');
       lastEndDateExternalValueRef.current = '';
       onEndDateChange('');
@@ -115,7 +116,7 @@ export const DateRangeControl = memo(function DateRangeControl({
 
   // 只在外部值真正变化时同步（避免用户输入时被覆盖）
   useEffect(() => {
-    console.log('📥 开始日期外部值同步检查:', {
+    devConsole.log('📥 开始日期外部值同步检查:', {
       newValue: startDate,
       lastExternal: lastStartDateExternalValueRef.current,
       same: startDate === lastStartDateExternalValueRef.current
@@ -123,16 +124,16 @@ export const DateRangeControl = memo(function DateRangeControl({
     
     // 只有当外部值与记录值不同时才更新显示值
     if (startDate !== lastStartDateExternalValueRef.current) {
-      console.log('🔄 开始日期外部值变化，更新显示值:', startDate);
+      devConsole.log('🔄 开始日期外部值变化，更新显示值:', startDate);
       setDisplayStartDate(startDate);
       lastStartDateExternalValueRef.current = startDate;
     } else {
-      console.log('⏭️  开始日期外部值未变化，跳过更新');
+      devConsole.log('⏭️  开始日期外部值未变化，跳过更新');
     }
   }, [startDate]);
 
   useEffect(() => {
-    console.log('📥 结束日期外部值同步检查:', {
+    devConsole.log('📥 结束日期外部值同步检查:', {
       newValue: endDate,
       lastExternal: lastEndDateExternalValueRef.current,
       same: endDate === lastEndDateExternalValueRef.current
@@ -140,11 +141,11 @@ export const DateRangeControl = memo(function DateRangeControl({
     
     // 只有当外部值与记录值不同时才更新显示值
     if (endDate !== lastEndDateExternalValueRef.current) {
-      console.log('🔄 结束日期外部值变化，更新显示值:', endDate);
+      devConsole.log('🔄 结束日期外部值变化，更新显示值:', endDate);
       setDisplayEndDate(endDate);
       lastEndDateExternalValueRef.current = endDate;
     } else {
-      console.log('⏭️  结束日期外部值未变化，跳过更新');
+      devConsole.log('⏭️  结束日期外部值未变化，跳过更新');
     }
   }, [endDate]);
 

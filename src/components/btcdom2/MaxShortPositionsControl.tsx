@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect, memo } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { devConsole } from '@/utils/devLogger';
 
 interface MaxShortPositionsControlProps {
   value: number; // 整数值
@@ -25,7 +26,7 @@ const MaxShortPositionsControl = memo<MaxShortPositionsControlProps>(({
   // 标记是否是内部变化（用户输入导致的）
   const isInternalChangeRef = useRef<boolean>(false);
   
-  console.log('🔄 MaxShortPositionsControl render:', {
+  devConsole.log('🔄 MaxShortPositionsControl render:', {
     propsValue: value,
     displayValue: displayValue,
     lastExternalValue: lastExternalValueRef.current
@@ -33,7 +34,7 @@ const MaxShortPositionsControl = memo<MaxShortPositionsControlProps>(({
 
   // 处理输入变化 - 防抖版本
   const handleChange = useCallback((inputValue: string) => {
-    console.log('⌨️  用户输入:', inputValue, '当前显示值:', displayValue);
+    devConsole.log('⌨️  用户输入:', inputValue, '当前显示值:', displayValue);
     
     const numValue = parseInt(inputValue) || 0;
     const clampedValue = Math.min(Math.max(numValue, 1), 50); // 限制在1-50范围内
@@ -48,20 +49,20 @@ const MaxShortPositionsControl = memo<MaxShortPositionsControlProps>(({
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = null;
-      console.log('⏱️  清除之前的防抖定时器');
+      devConsole.log('⏱️  清除之前的防抖定时器');
     }
 
     // 设置新的防抖定时器
     debounceTimerRef.current = setTimeout(() => {
-      console.log('🚀 防抖触发，处理数值:', clampedValue);
+      devConsole.log('🚀 防抖触发，处理数值:', clampedValue);
       
       // 只有值真正变化时才通知父组件
       if (Math.abs(clampedValue - lastExternalValueRef.current) > 0.5) { // 整数比较用0.5
         lastExternalValueRef.current = clampedValue;
-        console.log('✅ 通知父组件更新:', clampedValue);
+        devConsole.log('✅ 通知父组件更新:', clampedValue);
         onValueChange(clampedValue);
       } else {
-        console.log('⏭️  值未变化，跳过通知');
+        devConsole.log('⏭️  值未变化，跳过通知');
       }
       
       debounceTimerRef.current = null;
@@ -70,7 +71,7 @@ const MaxShortPositionsControl = memo<MaxShortPositionsControlProps>(({
 
   // 同步外部值变化
   useEffect(() => {
-    console.log('📥 外部值同步检查:', {
+    devConsole.log('📥 外部值同步检查:', {
       newValue: value,
       lastExternal: lastExternalValueRef.current,
       difference: Math.abs(value - lastExternalValueRef.current)
@@ -83,17 +84,17 @@ const MaxShortPositionsControl = memo<MaxShortPositionsControlProps>(({
     if (isInternalChangeRef.current && isExternalChange) {
       lastExternalValueRef.current = value; // 更新外部值引用
       isInternalChangeRef.current = false; // 重置标记
-      console.log('⏭️  内部变化导致的外部值更新，跳过同步');
+      devConsole.log('⏭️  内部变化导致的外部值更新，跳过同步');
       return;
     }
     
     // 处理真正的外部值变化（非用户输入导致的）
     if (isExternalChange && !isInternalChangeRef.current) {
-      console.log('🔄 外部值变化，更新显示值:', value);
+      devConsole.log('🔄 外部值变化，更新显示值:', value);
       setDisplayValue(value);
       lastExternalValueRef.current = value;
     } else {
-      console.log('⏭️  外部值未变化，跳过更新');
+      devConsole.log('⏭️  外部值未变化，跳过更新');
     }
   }, [value]);
 

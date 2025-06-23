@@ -2,6 +2,7 @@
 
 import React, { memo, useCallback, useState, useEffect, useRef } from 'react';
 import { WeightControl } from './WeightControl';
+import { devConsole } from '@/utils/devLogger';
 
 interface WeightControlGroupProps {
   priceChangeWeight: number;
@@ -18,9 +19,7 @@ export const WeightControlGroup = memo(function WeightControlGroup({
   fundingRateWeight,
   onWeightChange
 }: WeightControlGroupProps) {
-
-
-  // 本地状态管理 - 用于UI响应性
+  // 完全自管理的显示状态
   const [localWeights, setLocalWeights] = useState({
     priceChangeWeight,
     volumeWeight,
@@ -30,19 +29,45 @@ export const WeightControlGroup = memo(function WeightControlGroup({
 
   // 防抖定时器
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const isInternalChangeRef = useRef(false);
+  
+  // 记录上次外部传入的值，避免循环更新
+  const lastExternalWeightsRef = useRef({
+    priceChangeWeight,
+    volumeWeight,
+    volatilityWeight,
+    fundingRateWeight
+  });
 
-  // 同步外部值变化到本地状态
+  devConsole.log('🔄 WeightControlGroup render:', {
+    propsWeights: { priceChangeWeight, volumeWeight, volatilityWeight, fundingRateWeight },
+    localWeights: localWeights,
+    lastExternalWeights: lastExternalWeightsRef.current
+  });
+
+  // 只在外部值真正变化时同步（避免用户输入时被覆盖）
   useEffect(() => {
-    if (!isInternalChangeRef.current) {
-      setLocalWeights({
-        priceChangeWeight,
-        volumeWeight,
-        volatilityWeight,
-        fundingRateWeight
-      });
+    const newWeights = { priceChangeWeight, volumeWeight, volatilityWeight, fundingRateWeight };
+    const lastWeights = lastExternalWeightsRef.current;
+    
+    devConsole.log('📥 WeightControlGroup 外部值同步检查:', {
+      newWeights: newWeights,
+      lastWeights: lastWeights
+    });
+    
+    // 检查是否有权重发生了真正的变化
+    const hasChanges = 
+      Math.abs(newWeights.priceChangeWeight - lastWeights.priceChangeWeight) > 0.001 ||
+      Math.abs(newWeights.volumeWeight - lastWeights.volumeWeight) > 0.001 ||
+      Math.abs(newWeights.volatilityWeight - lastWeights.volatilityWeight) > 0.001 ||
+      Math.abs(newWeights.fundingRateWeight - lastWeights.fundingRateWeight) > 0.001;
+    
+    if (hasChanges) {
+      devConsole.log('🔄 WeightControlGroup 外部权重变化，更新本地状态:', newWeights);
+      setLocalWeights(newWeights);
+      lastExternalWeightsRef.current = newWeights;
+    } else {
+      devConsole.log('⏭️  WeightControlGroup 外部权重未变化，跳过更新');
     }
-    isInternalChangeRef.current = false;
   }, [priceChangeWeight, volumeWeight, volatilityWeight, fundingRateWeight]);
 
   // 防抖的最终值变化处理
@@ -50,11 +75,21 @@ export const WeightControlGroup = memo(function WeightControlGroup({
     // 清除之前的定时器
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
+      devConsole.log(`⏱️  清除权重[${type}]防抖定时器`);
     }
 
     // 设置新的防抖定时器
     debounceTimerRef.current = setTimeout(() => {
-
+      devConsole.log(`🚀 权重[${type}]防抖触发，处理数值:`, value);
+      
+      // 更新记录值，避免外部值同步时覆盖
+      const weightKey = `${type}Weight` as keyof typeof lastExternalWeightsRef.current;
+      lastExternalWeightsRef.current = {
+        ...lastExternalWeightsRef.current,
+        [weightKey]: value
+      };
+      
+      devConsole.log(`✅ 通知父组件更新权重[${type}]:`, value);
       onWeightChange(type, value);
       debounceTimerRef.current = null;
     }, 300); // 300ms 防抖延迟
@@ -62,8 +97,7 @@ export const WeightControlGroup = memo(function WeightControlGroup({
 
   // 处理权重变化
   const handleWeightChange = useCallback((type: 'priceChange' | 'volume' | 'volatility' | 'fundingRate', value: number) => {
-    isInternalChangeRef.current = true;
-    
+    devConsole.log(`⌨️  WeightControlGroup 权重[${type}]变化:`, value);
     // 立即更新本地状态以保持UI响应性
     setLocalWeights(prev => ({
       ...prev,

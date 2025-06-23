@@ -143,6 +143,29 @@ export default function OptimizationPanel({
     });
   }, [optimizer]);
 
+  // 获取排序后的结果
+  const getSortedResults = useCallback(() => {
+    const sortedResults = [...results];
+    
+    if (sortBy === 'composite') {
+      // 按综合评分排序（只有有交叉验证结果的项目才参与排序）
+      return sortedResults
+        .filter(result => result.crossValidation?.compositeScore !== undefined)
+        .sort((a, b) => (b.crossValidation?.compositeScore || 0) - (a.crossValidation?.compositeScore || 0));
+    } else {
+      // 按目标值排序（原有逻辑）
+      return sortedResults.sort((a, b) => {
+        if (config.objective === 'maxDrawdown') {
+          // 最大回撤：绝对值越小越好
+          return Math.abs(a.objectiveValue) - Math.abs(b.objectiveValue);
+        } else {
+          // 其他指标：值越大越好
+          return b.objectiveValue - a.objectiveValue;
+        }
+      });
+    }
+  }, [results, sortBy, config.objective]);
+
   // 当结果更新时，自动选中第一个有交叉验证数据的结果
   useEffect(() => {
     if (results.length > 0 && selectedResultIndex === null) {
@@ -152,7 +175,7 @@ export default function OptimizationPanel({
         setSelectedResultIndex(firstValidationIndex);
       }
     }
-  }, [results, selectedResultIndex, sortBy]);
+  }, [results, selectedResultIndex, sortBy, getSortedResults]);
 
   // 组件卸载时清理资源
   useEffect(() => {
@@ -539,29 +562,6 @@ export default function OptimizationPanel({
         </div>
       </div>
     );
-  };
-
-  // 获取排序后的结果
-  const getSortedResults = () => {
-    const sortedResults = [...results];
-    
-    if (sortBy === 'composite') {
-      // 按综合评分排序（只有有交叉验证结果的项目才参与排序）
-      return sortedResults
-        .filter(result => result.crossValidation?.compositeScore !== undefined)
-        .sort((a, b) => (b.crossValidation?.compositeScore || 0) - (a.crossValidation?.compositeScore || 0));
-    } else {
-      // 按目标值排序（原有逻辑）
-      return sortedResults.sort((a, b) => {
-        if (config.objective === 'maxDrawdown') {
-          // 最大回撤：绝对值越小越好
-          return Math.abs(a.objectiveValue) - Math.abs(b.objectiveValue);
-        } else {
-          // 其他指标：值越大越好
-          return b.objectiveValue - a.objectiveValue;
-        }
-      });
-    }
   };
 
   // 检查是否有交叉验证结果

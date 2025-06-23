@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PositionAllocationStrategy } from '@/types/btcdom2';
+import { devConsole } from '@/utils/devLogger';
 
 interface AllocationStrategyControlProps {
   value: PositionAllocationStrategy;
@@ -15,39 +16,69 @@ export const AllocationStrategyControl = memo(function AllocationStrategyControl
   onValueChange,
   disabled = false
 }: AllocationStrategyControlProps) {
-  // 独立的显示状态 - 完全隔离，不受其他参数影响
+  // 完全自管理的显示状态
   const [displayValue, setDisplayValue] = useState<PositionAllocationStrategy>(value);
 
-  // 防抖定时器 - 使用 useRef 避免重新创建函数
+  // 防抖定时器
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // 记录上次外部传入的值，避免循环更新
+  const lastExternalValueRef = useRef<PositionAllocationStrategy>(value);
 
-  // 初始化显示值（只在组件挂载时同步一次）
+  devConsole.log('🔄 AllocationStrategyControl render:', {
+    propsValue: value,
+    displayValue: displayValue,
+    lastExternalValue: lastExternalValueRef.current
+  });
+
+  // 只在外部值真正变化时同步（避免用户输入时被覆盖）
   useEffect(() => {
-    setDisplayValue(value);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // 只在组件挂载时执行一次
+    devConsole.log('📥 AllocationStrategyControl 外部值同步检查:', {
+      newValue: value,
+      lastExternal: lastExternalValueRef.current
+    });
+    
+    if (value !== lastExternalValueRef.current) {
+      devConsole.log('🔄 AllocationStrategyControl 外部值变化，更新显示值:', value);
+      setDisplayValue(value);
+      lastExternalValueRef.current = value;
+    } else {
+      devConsole.log('⏭️  AllocationStrategyControl 外部值未变化，跳过更新');
+    }
+  }, [value]);
 
-  // 仓位分配策略处理函数 - 完全隔离，不影响其他参数
+  // 防抖的最终值变化处理
+  const triggerFinalChange = useCallback((newValue: PositionAllocationStrategy) => {
+    // 清除之前的定时器
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      devConsole.log('⏱️  清除 allocationStrategy 防抖定时器');
+    }
+
+    // 设置新的防抖定时器
+    debounceTimerRef.current = setTimeout(() => {
+      devConsole.log('🚀 allocationStrategy 防抖触发，处理数值:', newValue);
+      
+      // 更新记录值，避免外部值同步时覆盖
+      lastExternalValueRef.current = newValue;
+      
+      devConsole.log('✅ 通知父组件更新 allocationStrategy:', newValue);
+      onValueChange(newValue);
+      debounceTimerRef.current = null;
+    }, 150); // 150ms 防抖延迟
+  }, [onValueChange]);
+
+  // 仓位分配策略处理函数
   const handleValueChange = useCallback((selectedValue: string) => {
     const strategyValue = selectedValue as PositionAllocationStrategy;
-    console.log('仓位分配策略显示值变化:', strategyValue);
+    devConsole.log('⌨️  AllocationStrategyControl 用户选择策略:', strategyValue);
     
     // 立即更新显示值
     setDisplayValue(strategyValue);
     
-    // 清除之前的防抖定时器
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = null;
-    }
-    
-    // 设置新的防抖定时器
-    debounceTimerRef.current = setTimeout(() => {
-      console.log('仓位分配策略实际值更新:', strategyValue);
-      onValueChange(strategyValue);
-      debounceTimerRef.current = null;
-    }, 150); // 150ms 防抖，策略选择响应要快一些
-  }, [onValueChange]);
+    // 防抖触发最终变化
+    triggerFinalChange(strategyValue);
+  }, [triggerFinalChange]);
 
   // 清理定时器
   useEffect(() => {

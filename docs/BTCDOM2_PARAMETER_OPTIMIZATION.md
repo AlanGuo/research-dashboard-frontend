@@ -21,13 +21,7 @@
 - **验证**：0-1% 范围验证
 - **显示**：实时百分比显示
 
-### 3. 策略选择控制组件 (`StrategySelectionControl.tsx`)
-- **功能**：做多BTC和做空ALT策略选择
-- **防抖**：150ms 防抖，策略选择响应较快
-- **隔离**：两个策略选择完全独立
-- **动态显示**：根据BTC占比动态显示资金分配
-
-### 4. 日期范围控制组件 (`DateRangeControl.tsx`)
+### 3. 日期范围控制组件 (`DateRangeControl.tsx`)
 - **功能**：开始和结束日期选择
 - **防抖**：200ms 防抖，日期选择响应较快
 - **隔离**：开始和结束日期独立控制
@@ -133,3 +127,33 @@ const tradingParamsValidation = useMemo(() => { ... }, [交易参数]);
 2. **参数预设**：添加常用参数组合的快速设置
 3. **参数历史**：记录和恢复参数设置历史
 4. **批量操作**：支持批量参数更新的高级功能
+
+## 开发环境日志管理
+
+### 日志工具 (`/src/utils/devLogger.ts`)
+- **开发环境专用**：只在 `NODE_ENV === 'development'` 时输出日志
+- **生产环境安全**：生产环境下不产生任何日志输出
+- **性能优化**：避免生产环境下的不必要日志开销
+
+### 使用方式
+```tsx
+import { devConsole, devLog } from '@/utils/devLogger';
+
+// 快速替换方式 - 兼容原有 console.log
+devConsole.log('⌨️  用户操作:', value);
+
+// 结构化日志方式 - 推荐用于新代码
+devLog.render('ComponentName', data);
+devLog.userAction('ComponentName', 'paramName', value);
+```
+
+### 已更新的组件
+所有参数控制组件都已更新为使用开发环境日志：
+- ✅ InitialCapitalControl
+- ✅ BtcRatioControl  
+- ✅ MaxShortPositionsControl
+- ✅ TradingFeesControl
+- ✅ DateRangeControl
+- ✅ WeightControl
+- ✅ WeightControlGroup
+- ✅ AllocationStrategyControl

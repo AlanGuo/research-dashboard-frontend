@@ -24,7 +24,6 @@ import BtcRatioControl from '@/components/btcdom2/BtcRatioControl';
 import MaxShortPositionsControl from '@/components/btcdom2/MaxShortPositionsControl';
 import { TradingFeesControl } from '@/components/btcdom2/TradingFeesControl';
 import { InitialCapitalControl } from '@/components/btcdom2/InitialCapitalControl';
-import { StrategySelectionControl } from '@/components/btcdom2/StrategySelectionControl';
 import { DateRangeControl } from '@/components/btcdom2/DateRangeControl';
 import { AllocationStrategyControl } from '@/components/btcdom2/AllocationStrategyControl';
 import { AlertCircle, Play, Settings, TrendingUp, TrendingDown, Clock, Loader2, Eye, Info, Bitcoin, ArrowDown, Zap } from 'lucide-react';
@@ -46,8 +45,8 @@ export default function BTCDOM2Dashboard() {
     maxShortPositions: 5,
     spotTradingFeeRate: 0.0008, // 0.08% 现货手续费
     futuresTradingFeeRate: 0.0002, // 0.02% 期货手续费
-    longBtc: true,
-    shortAlt: true,
+    longBtc: true,      // 固定为做多BTC
+    shortAlt: true,     // 固定为做空ALT
     allocationStrategy: PositionAllocationStrategy.BY_VOLUME
   });
 
@@ -77,8 +76,6 @@ export default function BTCDOM2Dashboard() {
   const [isolatedInitialCapital, setIsolatedInitialCapital] = useState<number>(params.initialCapital);
   const [isolatedSpotTradingFeeRate, setIsolatedSpotTradingFeeRate] = useState<number>(params.spotTradingFeeRate);
   const [isolatedFuturesTradingFeeRate, setIsolatedFuturesTradingFeeRate] = useState<number>(params.futuresTradingFeeRate);
-  const [isolatedLongBtc, setIsolatedLongBtc] = useState<boolean>(params.longBtc);
-  const [isolatedShortAlt, setIsolatedShortAlt] = useState<boolean>(params.shortAlt);
   const [isolatedStartDate, setIsolatedStartDate] = useState<string>(params.startDate);
   const [isolatedEndDate, setIsolatedEndDate] = useState<string>(params.endDate);
   const [isolatedAllocationStrategy, setIsolatedAllocationStrategy] = useState<PositionAllocationStrategy>(params.allocationStrategy);
@@ -171,12 +168,10 @@ export default function BTCDOM2Dashboard() {
       errors.btcRatio = 'BTC占比必须在0-1之间';
     }
 
-    if (!params.longBtc && !params.shortAlt) {
-      errors.strategySelection = '至少需要选择一种策略：做多BTC或做空ALT';
-    }
+    // 策略已固定为做多BTC和做空ALT，无需验证策略选择
 
     return errors;
-  }, [params.btcRatio, params.longBtc, params.shortAlt]);
+  }, [params.btcRatio]);
 
   // 交易参数验证 - 只依赖交易参数
   const tradingParamsValidation = useMemo(() => {
@@ -285,8 +280,6 @@ export default function BTCDOM2Dashboard() {
     setIsolatedInitialCapital(params.initialCapital);
     setIsolatedSpotTradingFeeRate(params.spotTradingFeeRate);
     setIsolatedFuturesTradingFeeRate(params.futuresTradingFeeRate);
-    setIsolatedLongBtc(params.longBtc);
-    setIsolatedShortAlt(params.shortAlt);
     setIsolatedStartDate(params.startDate);
     setIsolatedEndDate(params.endDate);
     setIsolatedAllocationStrategy(params.allocationStrategy);
@@ -356,18 +349,6 @@ export default function BTCDOM2Dashboard() {
   const handleIsolatedFuturesTradingFeeRateChange = useCallback((value: number) => {
     setIsolatedFuturesTradingFeeRate(value);
     setParams(prev => ({ ...prev, futuresTradingFeeRate: value }));
-  }, []);
-
-  // 独立做多BTC处理函数
-  const handleIsolatedLongBtcChange = useCallback((value: boolean) => {
-    setIsolatedLongBtc(value);
-    setParams(prev => ({ ...prev, longBtc: value }));
-  }, []);
-
-  // 独立做空ALT处理函数
-  const handleIsolatedShortAltChange = useCallback((value: boolean) => {
-    setIsolatedShortAlt(value);
-    setParams(prev => ({ ...prev, shortAlt: value }));
   }, []);
 
   // 独立开始日期处理函数
@@ -720,16 +701,6 @@ export default function BTCDOM2Dashboard() {
                   />
 
                 </div>
-
-                {/* 策略选择 */}
-                <StrategySelectionControl
-                  longBtc={isolatedLongBtc}
-                  shortAlt={isolatedShortAlt}
-                  btcRatio={isolatedBtcRatio}
-                  onLongBtcChange={handleIsolatedLongBtcChange}
-                  onShortAltChange={handleIsolatedShortAltChange}
-                  disabled={loading}
-                />
               </div>
             )}
 

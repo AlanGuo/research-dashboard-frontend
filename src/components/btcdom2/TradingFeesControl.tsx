@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { devConsole } from '@/utils/devLogger';
 
 interface TradingFeesControlProps {
   spotFeeRate: number;
@@ -31,7 +32,7 @@ export const TradingFeesControl = memo(function TradingFeesControl({
   const lastSpotExternalValueRef = useRef<number>(spotFeeRate);
   const lastFuturesExternalValueRef = useRef<number>(futuresFeeRate);
 
-  console.log('🔄 TradingFeesControl render:', {
+  devConsole.log('🔄 TradingFeesControl render:', {
     propsSpotValue: spotFeeRate,
     propsFuturesValue: futuresFeeRate,
     displaySpotValue: displaySpotFee,
@@ -42,7 +43,7 @@ export const TradingFeesControl = memo(function TradingFeesControl({
 
   // 现货手续费处理函数
   const handleSpotFeeChange = useCallback((inputValue: string) => {
-    console.log('⌨️  现货手续费用户输入:', inputValue, '当前显示值:', displaySpotFee);
+    devConsole.log('⌨️  现货手续费用户输入:', inputValue, '当前显示值:', displaySpotFee);
     
     // 立即更新显示值，保证UI响应性
     setDisplaySpotFee(inputValue);
@@ -50,30 +51,30 @@ export const TradingFeesControl = memo(function TradingFeesControl({
     // 清除之前的防抖定时器
     if (spotDebounceTimerRef.current) {
       clearTimeout(spotDebounceTimerRef.current);
-      console.log('⏱️  清除现货手续费防抖定时器');
+      devConsole.log('⏱️  清除现货手续费防抖定时器');
     }
     
     // 防抖处理：延迟通知父组件
     spotDebounceTimerRef.current = setTimeout(() => {
       const numericValue = parseFloat(inputValue);
       
-      console.log('🚀 现货手续费防抖触发，处理数值:', numericValue);
+      devConsole.log('🚀 现货手续费防抖触发，处理数值:', numericValue);
       
       // 验证并通知父组件
       if (!isNaN(numericValue) && numericValue >= 0 && numericValue <= 0.01) {
         // 更新记录值，避免下次外部值同步时覆盖用户输入
         lastSpotExternalValueRef.current = numericValue;
-        console.log('✅ 通知父组件更新现货手续费:', numericValue);
+        devConsole.log('✅ 通知父组件更新现货手续费:', numericValue);
         onSpotFeeChange(numericValue);
       } else {
-        console.log('❌ 现货手续费值无效，跳过通知');
+        devConsole.log('❌ 现货手续费值无效，跳过通知');
       }
     }, 300);
   }, [onSpotFeeChange, displaySpotFee]);
 
   // 期货手续费处理函数
   const handleFuturesFeeChange = useCallback((inputValue: string) => {
-    console.log('⌨️  期货手续费用户输入:', inputValue, '当前显示值:', displayFuturesFee);
+    devConsole.log('⌨️  期货手续费用户输入:', inputValue, '当前显示值:', displayFuturesFee);
     
     // 立即更新显示值，保证UI响应性
     setDisplayFuturesFee(inputValue);
@@ -81,30 +82,30 @@ export const TradingFeesControl = memo(function TradingFeesControl({
     // 清除之前的防抖定时器
     if (futuresDebounceTimerRef.current) {
       clearTimeout(futuresDebounceTimerRef.current);
-      console.log('⏱️  清除期货手续费防抖定时器');
+      devConsole.log('⏱️  清除期货手续费防抖定时器');
     }
     
     // 防抖处理：延迟通知父组件
     futuresDebounceTimerRef.current = setTimeout(() => {
       const numericValue = parseFloat(inputValue);
       
-      console.log('🚀 期货手续费防抖触发，处理数值:', numericValue);
+      devConsole.log('🚀 期货手续费防抖触发，处理数值:', numericValue);
       
       // 验证并通知父组件
       if (!isNaN(numericValue) && numericValue >= 0 && numericValue <= 0.01) {
         // 更新记录值，避免下次外部值同步时覆盖用户输入
         lastFuturesExternalValueRef.current = numericValue;
-        console.log('✅ 通知父组件更新期货手续费:', numericValue);
+        devConsole.log('✅ 通知父组件更新期货手续费:', numericValue);
         onFuturesFeeChange(numericValue);
       } else {
-        console.log('❌ 期货手续费值无效，跳过通知');
+        devConsole.log('❌ 期货手续费值无效，跳过通知');
       }
     }, 300);
   }, [onFuturesFeeChange, displayFuturesFee]);
 
   // 只在外部值真正变化时同步（避免用户输入时被覆盖）
   useEffect(() => {
-    console.log('📥 现货手续费外部值同步检查:', {
+    devConsole.log('📥 现货手续费外部值同步检查:', {
       newValue: spotFeeRate,
       lastExternal: lastSpotExternalValueRef.current,
       difference: Math.abs(spotFeeRate - lastSpotExternalValueRef.current)
@@ -112,16 +113,16 @@ export const TradingFeesControl = memo(function TradingFeesControl({
     
     // 只有当外部值与记录值不同时才更新显示值
     if (Math.abs(spotFeeRate - lastSpotExternalValueRef.current) > 0.0001) {
-      console.log('🔄 现货手续费外部值变化，更新显示值:', spotFeeRate);
+      devConsole.log('🔄 现货手续费外部值变化，更新显示值:', spotFeeRate);
       setDisplaySpotFee(spotFeeRate.toString());
       lastSpotExternalValueRef.current = spotFeeRate;
     } else {
-      console.log('⏭️  现货手续费外部值未变化，跳过更新');
+      devConsole.log('⏭️  现货手续费外部值未变化，跳过更新');
     }
   }, [spotFeeRate]);
 
   useEffect(() => {
-    console.log('📥 期货手续费外部值同步检查:', {
+    devConsole.log('📥 期货手续费外部值同步检查:', {
       newValue: futuresFeeRate,
       lastExternal: lastFuturesExternalValueRef.current,
       difference: Math.abs(futuresFeeRate - lastFuturesExternalValueRef.current)
@@ -129,11 +130,11 @@ export const TradingFeesControl = memo(function TradingFeesControl({
     
     // 只有当外部值与记录值不同时才更新显示值
     if (Math.abs(futuresFeeRate - lastFuturesExternalValueRef.current) > 0.0001) {
-      console.log('🔄 期货手续费外部值变化，更新显示值:', futuresFeeRate);
+      devConsole.log('🔄 期货手续费外部值变化，更新显示值:', futuresFeeRate);
       setDisplayFuturesFee(futuresFeeRate.toString());
       lastFuturesExternalValueRef.current = futuresFeeRate;
     } else {
-      console.log('⏭️  期货手续费外部值未变化，跳过更新');
+      devConsole.log('⏭️  期货手续费外部值未变化，跳过更新');
     }
   }, [futuresFeeRate]);
 
