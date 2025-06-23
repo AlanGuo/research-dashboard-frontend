@@ -21,7 +21,9 @@ const MaxShortPositionsControl = memo<MaxShortPositionsControlProps>(({
   const [displayValue, setDisplayValue] = useState<number>(value);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastExternalValueRef = useRef<number>(value);
-  const currentInputValueRef = useRef<number>(value); // 记录当前输入的最新值
+  
+  // 标记是否是内部变化（用户输入导致的）
+  const isInternalChangeRef = useRef<boolean>(false);
   
   console.log('MaxShortPositionsControl render:', { 
     value, 
@@ -36,9 +38,11 @@ const MaxShortPositionsControl = memo<MaxShortPositionsControlProps>(({
     
     console.log('MaxShortPositions input:', { inputValue, numValue, clampedValue });
     
-    // 立即更新显示值和记录当前输入值
+    // 标记这是内部变化
+    isInternalChangeRef.current = true;
+    
+    // 立即更新显示值
     setDisplayValue(clampedValue);
-    currentInputValueRef.current = clampedValue;
     
     // 清除之前的定时器
     if (debounceTimerRef.current) {
@@ -49,13 +53,11 @@ const MaxShortPositionsControl = memo<MaxShortPositionsControlProps>(({
 
     // 设置新的防抖定时器
     debounceTimerRef.current = setTimeout(() => {
-      const latestValue = currentInputValueRef.current;
-      console.log('MaxShortPositions: 输入停止，发送最终值给父组件', latestValue);
+      console.log('MaxShortPositions: 输入停止，发送最终值给父组件', clampedValue);
       
       // 只有值真正变化时才通知父组件
-      if (Math.abs(latestValue - lastExternalValueRef.current) > 0.5) { // 整数比较用0.5
-        lastExternalValueRef.current = latestValue;
-        onValueChange(latestValue);
+      if (Math.abs(clampedValue - lastExternalValueRef.current) > 0.5) { // 整数比较用0.5
+        onValueChange(clampedValue);
         console.log('MaxShortPositions: 最终值已变化，通知父组件');
       } else {
         console.log('MaxShortPositions: 最终值未变化，跳过通知');
@@ -71,20 +73,27 @@ const MaxShortPositionsControl = memo<MaxShortPositionsControlProps>(({
       value,
       displayValue,
       lastExternal: lastExternalValueRef.current,
-      currentInput: currentInputValueRef.current
+      isInternalChange: isInternalChangeRef.current
     });
     
-    // 只在外部值真正变化且不同于当前输入值时才更新显示值
+    // 检查是否是真正的外部值变化
     const isExternalChange = Math.abs(value - lastExternalValueRef.current) > 0.5;
-    const isDifferentFromInput = Math.abs(value - currentInputValueRef.current) > 0.5;
     
-    if (isExternalChange && isDifferentFromInput) {
+    // 如果是内部变化导致的更新，只更新 ref，不同步显示值
+    if (isInternalChangeRef.current && isExternalChange) {
+      lastExternalValueRef.current = value; // 更新外部值引用
+      isInternalChangeRef.current = false; // 重置标记
+      console.log('MaxShortPositions: 内部变化导致的外部值更新，跳过同步');
+      return;
+    }
+    
+    // 处理真正的外部值变化（非用户输入导致的）
+    if (isExternalChange && !isInternalChangeRef.current) {
       console.log('MaxShortPositions: 外部值变化，更新显示值', value);
       setDisplayValue(value);
       lastExternalValueRef.current = value;
-      currentInputValueRef.current = value; // 同步当前输入值
     }
-  }, [value]);
+  }, [value, displayValue]);
 
   // 清理定时器
   useEffect(() => {

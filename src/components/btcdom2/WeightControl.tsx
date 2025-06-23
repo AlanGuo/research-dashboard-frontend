@@ -1,6 +1,6 @@
 'use client';
 
-import React, { memo, useCallback, useRef, useState, useEffect } from 'react';
+import React, { memo, useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Label } from '@/components/ui/label';
@@ -22,29 +22,15 @@ export const WeightControl = memo(function WeightControl({
 }: WeightControlProps) {
   // 本地显示状态
   const [displayValue, setDisplayValue] = useState<number>(value);
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const lastExternalValueRef = useRef<number>(value);
 
-  console.log('WeightControl render:', { label, value, displayValue });
 
-  // 防抖的值变化处理
-  const triggerValueChange = useCallback((newValue: number) => {
-    // 清除之前的定时器
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = null;
+
+  // 同步外部值变化
+  useEffect(() => {
+    if (Math.abs(value - displayValue) > 0.001) {
+      setDisplayValue(value);
     }
-
-    // 设置新的防抖定时器
-    debounceTimerRef.current = setTimeout(() => {
-      if (Math.abs(newValue - lastExternalValueRef.current) > 0.001) {
-        lastExternalValueRef.current = newValue;
-        onValueChange(newValue);
-        console.log('WeightControl 防抖触发:', { label, newValue });
-      }
-      debounceTimerRef.current = null;
-    }, 150); // 150ms 防抖延迟
-  }, [onValueChange, label]);
+  }, [value, label, displayValue]);
 
   const handleDecrease = useCallback(() => {
     const currentPercentage = displayValue * 100;
@@ -53,10 +39,9 @@ export const WeightControl = memo(function WeightControl({
       : Math.max(0, Math.floor(currentPercentage / 5) * 5);
     const newValue = newPercentage / 100;
     
-    console.log('WeightControl decrease:', { label, currentPercentage, newPercentage, newValue });
     setDisplayValue(newValue);
-    triggerValueChange(newValue);
-  }, [displayValue, triggerValueChange, label]);
+    onValueChange(newValue);
+  }, [displayValue, onValueChange]);
 
   const handleIncrease = useCallback(() => {
     const currentPercentage = displayValue * 100;
@@ -65,28 +50,9 @@ export const WeightControl = memo(function WeightControl({
       : Math.min(100, Math.ceil(currentPercentage / 5) * 5);
     const newValue = newPercentage / 100;
     
-    console.log('WeightControl increase:', { label, currentPercentage, newPercentage, newValue });
     setDisplayValue(newValue);
-    triggerValueChange(newValue);
-  }, [displayValue, triggerValueChange, label]);
-
-  // 同步外部值变化
-  useEffect(() => {
-    if (Math.abs(value - lastExternalValueRef.current) > 0.001) {
-      console.log('WeightControl 外部值变化:', { label, value, displayValue });
-      setDisplayValue(value);
-      lastExternalValueRef.current = value;
-    }
-  }, [value, label]);
-
-  // 清理定时器
-  useEffect(() => {
-    return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
-    };
-  }, []);
+    onValueChange(newValue);
+  }, [displayValue, onValueChange]);
 
   const percentage = displayValue * 100;
 

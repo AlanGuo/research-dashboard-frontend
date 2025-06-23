@@ -15,7 +15,6 @@ export const InitialCapitalControl = memo(function InitialCapitalControl({
   onValueChange,
   disabled = false
 }: InitialCapitalControlProps) {
-  // 独立的显示状态 - 完全隔离，不受其他参数影响，确保为整数
   const [displayValue, setDisplayValue] = useState<string>(Math.round(value).toString());
 
   // 防抖定时器 - 使用 useRef 避免重新创建函数
@@ -56,6 +55,7 @@ export const InitialCapitalControl = memo(function InitialCapitalControl({
       if (numericValue > 0) {
         console.log('初始本金实际值更新:', numericValue, '步长变化:', numericValue - parseFloat(displayValue || '0'));
         onValueChange(numericValue);
+        // 注意：不在这里更新 lastExternalValueRef，让 useEffect 来处理
       } else if (numericValue === 0 && inputValue === '') {
         // 允许清空，设为默认值
         console.log('初始本金清空，设为默认值: 10000');
@@ -64,6 +64,26 @@ export const InitialCapitalControl = memo(function InitialCapitalControl({
       debounceTimerRef.current = null;
     }, 300); // 300ms 防抖
   }, [onValueChange]);
+
+  // 同步外部值变化 - 优化版本
+  useEffect(() => {
+    const newDisplayValue = value.toString();
+    
+    console.log('InitialCapital useEffect:', {
+      value,
+      displayValue,
+      isInteger: Number.isInteger(value)
+    });
+    
+    // 只在外部值真正变化且不同于当前输入值时才更新显示值
+    const isExternalChange = Math.abs(value - parseFloat(displayValue || '0')) > 0.001;
+    
+    // 只有当外部值变化时，才更新显示值
+    if (isExternalChange) {
+      console.log('InitialCapital: 外部值变化，更新显示值', newDisplayValue);
+      setDisplayValue(newDisplayValue);
+    }
+  }, [value, displayValue]);
 
   // 清理定时器
   useEffect(() => {
