@@ -15,75 +15,72 @@ export const InitialCapitalControl = memo(function InitialCapitalControl({
   onValueChange,
   disabled = false
 }: InitialCapitalControlProps) {
-  const [displayValue, setDisplayValue] = useState<string>(Math.round(value).toString());
-
-  // 防抖定时器 - 使用 useRef 避免重新创建函数
+  // 完全自管理的显示状态
+  const [displayValue, setDisplayValue] = useState<string>(value.toString());
+  
+  // 防抖定时器
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // 记录上次外部传入的值，避免循环更新
+  const lastExternalValueRef = useRef<number>(value);
 
-  console.log('InitialCapitalControl render:', {
+  console.log('🔄 InitialCapitalControl render:', {
     propsValue: value,
     displayValue: displayValue,
-    isInteger: Number.isInteger(value),
-    rounded: Math.round(value)
+    lastExternalValue: lastExternalValueRef.current
   });
 
-  // 初始化显示值（只在组件挂载时同步一次）
-  useEffect(() => {
-    const roundedValue = Math.round(value);
-    setDisplayValue(roundedValue.toString());
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // 只在组件挂载时执行一次
-
-  // 初始本金处理函数 - 完全隔离，不影响其他参数
-  const handleValueChange = useCallback((inputValue: string) => {
-    console.log('初始本金显示值变化:', inputValue, '当前显示值:', displayValue);
+  // 输入处理函数 - 立即更新显示，防抖通知父组件
+  const handleInputChange = useCallback((inputValue: string) => {
+    console.log('⌨️  用户输入:', inputValue, '当前显示值:', displayValue);
     
-    // 立即更新显示值
+    // 立即更新显示值，保证UI响应性
     setDisplayValue(inputValue);
     
     // 清除之前的防抖定时器
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = null;
+      console.log('⏱️  清除之前的防抖定时器');
     }
     
-    // 设置新的防抖定时器
+    // 防抖处理：延迟通知父组件
     debounceTimerRef.current = setTimeout(() => {
-      const numericValue = parseFloat(inputValue) || 0;
+      const numericValue = parseFloat(inputValue);
       
-      // 基础验证：必须为正数
-      if (numericValue > 0) {
-        console.log('初始本金实际值更新:', numericValue, '步长变化:', numericValue - parseFloat(displayValue || '0'));
+      console.log('🚀 防抖触发，处理数值:', numericValue);
+      
+      // 验证并通知父组件
+      if (!isNaN(numericValue) && numericValue > 0) {
+        // 更新记录值，避免下次外部值同步时覆盖用户输入
+        lastExternalValueRef.current = numericValue;
+        console.log('✅ 通知父组件更新:', numericValue);
         onValueChange(numericValue);
-        // 注意：不在这里更新 lastExternalValueRef，让 useEffect 来处理
-      } else if (numericValue === 0 && inputValue === '') {
-        // 允许清空，设为默认值
-        console.log('初始本金清空，设为默认值: 10000');
-        onValueChange(10000);
+      } else if (inputValue === '' || numericValue === 0) {
+        // 空值或0时设为默认值
+        const defaultValue = 10000;
+        lastExternalValueRef.current = defaultValue;
+        console.log('🔄 设置默认值:', defaultValue);
+        onValueChange(defaultValue);
       }
-      debounceTimerRef.current = null;
-    }, 300); // 300ms 防抖
-  }, [onValueChange]);
+    }, 300);
+  }, [onValueChange, displayValue]);
 
-  // 同步外部值变化 - 优化版本
+  // 只在外部值真正变化时同步（避免用户输入时被覆盖）
   useEffect(() => {
-    const newDisplayValue = value.toString();
-    
-    console.log('InitialCapital useEffect:', {
-      value,
-      displayValue,
-      isInteger: Number.isInteger(value)
+    console.log('📥 外部值同步检查:', {
+      newValue: value,
+      lastExternal: lastExternalValueRef.current,
+      difference: Math.abs(value - lastExternalValueRef.current)
     });
     
-    // 只在外部值真正变化且不同于当前输入值时才更新显示值
-    const isExternalChange = Math.abs(value - parseFloat(displayValue || '0')) > 0.001;
-    
-    // 只有当外部值变化时，才更新显示值
-    if (isExternalChange) {
-      console.log('InitialCapital: 外部值变化，更新显示值', newDisplayValue);
-      setDisplayValue(newDisplayValue);
+    // 只有当外部值与记录值不同时才更新显示值
+    if (Math.abs(value - lastExternalValueRef.current) > 0.001) {
+      console.log('🔄 外部值变化，更新显示值:', value);
+      setDisplayValue(value.toString());
+      lastExternalValueRef.current = value;
+    } else {
+      console.log('⏭️  外部值未变化，跳过更新');
     }
-  }, [value, displayValue]);
+  }, [value]);
 
   // 清理定时器
   useEffect(() => {
@@ -103,7 +100,7 @@ export const InitialCapitalControl = memo(function InitialCapitalControl({
         min="0"
         step="1000"
         value={displayValue}
-        onChange={(e) => handleValueChange(e.target.value)}
+        onChange={(e) => handleInputChange(e.target.value)}
         className="w-full"
         placeholder="10000"
         disabled={disabled}

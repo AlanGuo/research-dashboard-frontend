@@ -25,18 +25,18 @@ const MaxShortPositionsControl = memo<MaxShortPositionsControlProps>(({
   // 标记是否是内部变化（用户输入导致的）
   const isInternalChangeRef = useRef<boolean>(false);
   
-  console.log('MaxShortPositionsControl render:', { 
-    value, 
-    displayValue,
-    lastExternal: lastExternalValueRef.current
+  console.log('🔄 MaxShortPositionsControl render:', {
+    propsValue: value,
+    displayValue: displayValue,
+    lastExternalValue: lastExternalValueRef.current
   });
 
   // 处理输入变化 - 防抖版本
   const handleChange = useCallback((inputValue: string) => {
+    console.log('⌨️  用户输入:', inputValue, '当前显示值:', displayValue);
+    
     const numValue = parseInt(inputValue) || 0;
     const clampedValue = Math.min(Math.max(numValue, 1), 50); // 限制在1-50范围内
-    
-    console.log('MaxShortPositions input:', { inputValue, numValue, clampedValue });
     
     // 标记这是内部变化
     isInternalChangeRef.current = true;
@@ -48,32 +48,32 @@ const MaxShortPositionsControl = memo<MaxShortPositionsControlProps>(({
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = null;
-      console.log('MaxShortPositions: 清除防抖定时器，重新计时');
+      console.log('⏱️  清除之前的防抖定时器');
     }
 
     // 设置新的防抖定时器
     debounceTimerRef.current = setTimeout(() => {
-      console.log('MaxShortPositions: 输入停止，发送最终值给父组件', clampedValue);
+      console.log('🚀 防抖触发，处理数值:', clampedValue);
       
       // 只有值真正变化时才通知父组件
       if (Math.abs(clampedValue - lastExternalValueRef.current) > 0.5) { // 整数比较用0.5
+        lastExternalValueRef.current = clampedValue;
+        console.log('✅ 通知父组件更新:', clampedValue);
         onValueChange(clampedValue);
-        console.log('MaxShortPositions: 最终值已变化，通知父组件');
       } else {
-        console.log('MaxShortPositions: 最终值未变化，跳过通知');
+        console.log('⏭️  值未变化，跳过通知');
       }
       
       debounceTimerRef.current = null;
     }, 300); // 300ms防抖延迟
-  }, [onValueChange]);
+  }, [onValueChange, displayValue]);
 
   // 同步外部值变化
   useEffect(() => {
-    console.log('MaxShortPositions useEffect:', {
-      value,
-      displayValue,
+    console.log('📥 外部值同步检查:', {
+      newValue: value,
       lastExternal: lastExternalValueRef.current,
-      isInternalChange: isInternalChangeRef.current
+      difference: Math.abs(value - lastExternalValueRef.current)
     });
     
     // 检查是否是真正的外部值变化
@@ -83,17 +83,19 @@ const MaxShortPositionsControl = memo<MaxShortPositionsControlProps>(({
     if (isInternalChangeRef.current && isExternalChange) {
       lastExternalValueRef.current = value; // 更新外部值引用
       isInternalChangeRef.current = false; // 重置标记
-      console.log('MaxShortPositions: 内部变化导致的外部值更新，跳过同步');
+      console.log('⏭️  内部变化导致的外部值更新，跳过同步');
       return;
     }
     
     // 处理真正的外部值变化（非用户输入导致的）
     if (isExternalChange && !isInternalChangeRef.current) {
-      console.log('MaxShortPositions: 外部值变化，更新显示值', value);
+      console.log('🔄 外部值变化，更新显示值:', value);
       setDisplayValue(value);
       lastExternalValueRef.current = value;
+    } else {
+      console.log('⏭️  外部值未变化，跳过更新');
     }
-  }, [value, displayValue]);
+  }, [value]);
 
   // 清理定时器
   useEffect(() => {

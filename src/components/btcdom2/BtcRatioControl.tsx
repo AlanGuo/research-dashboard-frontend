@@ -25,21 +25,19 @@ const BtcRatioControl = memo<BtcRatioControlProps>(({
   // 标记是否是内部变化（用户输入导致的）
   const isInternalChangeRef = useRef<boolean>(false);
   
-  console.log('BtcRatioControl render:', { 
-    value, 
-    displayValue,
-    lastExternal: lastExternalValueRef.current
+  console.log('🔄 BtcRatioControl render:', {
+    propsValue: value,
+    displayValue: displayValue,
+    lastExternalValue: lastExternalValueRef.current
   });
 
   // 真正的防抖处理 - 只在停止输入后触发一次
   const handleChange = useCallback((inputValue: string) => {
-    console.time('IsolatedBtcRatio-handleChange');
+    console.log('⌨️  用户输入:', inputValue, '当前显示值:', displayValue);
     
     const numValue = parseFloat(inputValue) || 0;
     const clampedValue = Math.min(Math.max(numValue, 0), 100);
     const decimalValue = clampedValue / 100;
-    
-    console.log('IsolatedBtcRatio input:', { inputValue, clampedValue, decimalValue });
     
     // 标记这是内部变化
     isInternalChangeRef.current = true;
@@ -51,41 +49,35 @@ const BtcRatioControl = memo<BtcRatioControlProps>(({
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = null;
-      console.log('IsolatedBtcRatio: 清除防抖定时器，重新计时');
+      console.log('⏱️  清除之前的防抖定时器');
     }
 
     // 设置新的防抖定时器 - 只有这个定时器完成才会触发回调
     debounceTimerRef.current = setTimeout(() => {
-      console.time('IsolatedBtcRatio-onValueChange');
-      
-      console.log('IsolatedBtcRatio: 输入停止，发送最终值给父组件', decimalValue);
+      console.log('🚀 防抖触发，处理数值:', decimalValue);
       
       // 只有值真正变化时才通知父组件
       if (Math.abs(decimalValue - lastExternalValueRef.current) > 0.001) {
+        lastExternalValueRef.current = decimalValue;
+        console.log('✅ 通知父组件更新:', decimalValue);
         onValueChange(decimalValue);
-        console.log('IsolatedBtcRatio: 最终值已变化，通知父组件');
       } else {
-        console.log('IsolatedBtcRatio: 最终值未变化，跳过通知');
+        console.log('⏭️  值未变化，跳过通知');
       }
       
       // 清理定时器引用
       debounceTimerRef.current = null;
-      console.timeEnd('IsolatedBtcRatio-onValueChange');
     }, 300); // 增加到300ms，确保用户真正停止输入
-    
-    console.timeEnd('IsolatedBtcRatio-handleChange');
   }, [onValueChange]);
 
   // 同步外部值变化 - 优化版本
   React.useEffect(() => {
     const newDisplayValue = value * 100;
     
-    console.log('IsolatedBtcRatio useEffect:', {
-      value,
-      newDisplayValue,
-      currentDisplayValue: displayValue,
+    console.log('📥 外部值同步检查:', {
+      newValue: value,
       lastExternal: lastExternalValueRef.current,
-      isInternalChange: isInternalChangeRef.current
+      difference: Math.abs(value - lastExternalValueRef.current)
     });
     
     // 检查是否是真正的外部值变化
@@ -95,17 +87,19 @@ const BtcRatioControl = memo<BtcRatioControlProps>(({
     if (isInternalChangeRef.current && isExternalChange) {
       lastExternalValueRef.current = value; // 更新外部值引用
       isInternalChangeRef.current = false; // 重置标记
-      console.log('IsolatedBtcRatio: 内部变化导致的外部值更新，跳过同步');
+      console.log('⏭️  内部变化导致的外部值更新，跳过同步');
       return;
     }
     
     // 处理真正的外部值变化（非用户输入导致的）
     if (isExternalChange && !isInternalChangeRef.current) {
-      console.log('IsolatedBtcRatio: 外部值变化，更新显示值', newDisplayValue);
+      console.log('🔄 外部值变化，更新显示值:', newDisplayValue);
       setDisplayValue(newDisplayValue);
       lastExternalValueRef.current = value;
+    } else {
+      console.log('⏭️  外部值未变化，跳过更新');
     }
-  }, [value, displayValue]);
+  }, [value]);
 
   // 清理定时器
   React.useEffect(() => {

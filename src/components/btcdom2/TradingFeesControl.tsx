@@ -19,76 +19,123 @@ export const TradingFeesControl = memo(function TradingFeesControl({
   onFuturesFeeChange,
   disabled = false
 }: TradingFeesControlProps) {
-  // 独立的显示状态 - 完全隔离，不受其他参数影响
+  // 完全自管理的显示状态
   const [displaySpotFee, setDisplaySpotFee] = useState<string>(spotFeeRate.toString());
   const [displayFuturesFee, setDisplayFuturesFee] = useState<string>(futuresFeeRate.toString());
 
-  // 防抖定时器 - 使用 useRef 避免重新创建函数
+  // 防抖定时器
   const spotDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const futuresDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // 记录上次外部传入的值，避免循环更新
+  const lastSpotExternalValueRef = useRef<number>(spotFeeRate);
+  const lastFuturesExternalValueRef = useRef<number>(futuresFeeRate);
 
-  // 初始化显示值（只在组件挂载时同步一次）
-  useEffect(() => {
-    setDisplaySpotFee(spotFeeRate.toString());
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // 只在组件挂载时执行一次
+  console.log('🔄 TradingFeesControl render:', {
+    propsSpotValue: spotFeeRate,
+    propsFuturesValue: futuresFeeRate,
+    displaySpotValue: displaySpotFee,
+    displayFuturesValue: displayFuturesFee,
+    lastSpotExternal: lastSpotExternalValueRef.current,
+    lastFuturesExternal: lastFuturesExternalValueRef.current
+  });
 
-  useEffect(() => {
-    setDisplayFuturesFee(futuresFeeRate.toString());
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // 只在组件挂载时执行一次
-
-  // 现货手续费处理函数 - 完全隔离，不影响其他参数
-  const handleSpotFeeChange = useCallback((value: string) => {
-    console.log('现货手续费显示值变化:', value);
+  // 现货手续费处理函数
+  const handleSpotFeeChange = useCallback((inputValue: string) => {
+    console.log('⌨️  现货手续费用户输入:', inputValue, '当前显示值:', displaySpotFee);
     
-    // 立即更新显示值
-    setDisplaySpotFee(value);
+    // 立即更新显示值，保证UI响应性
+    setDisplaySpotFee(inputValue);
     
     // 清除之前的防抖定时器
     if (spotDebounceTimerRef.current) {
       clearTimeout(spotDebounceTimerRef.current);
-      spotDebounceTimerRef.current = null;
+      console.log('⏱️  清除现货手续费防抖定时器');
     }
     
-    // 设置新的防抖定时器
+    // 防抖处理：延迟通知父组件
     spotDebounceTimerRef.current = setTimeout(() => {
-      const numericValue = parseFloat(value) || 0;
+      const numericValue = parseFloat(inputValue);
       
-      // 基础验证：必须在0-1%之间
-      if (numericValue >= 0 && numericValue <= 0.01) {
-        console.log('现货手续费实际值更新:', numericValue);
+      console.log('🚀 现货手续费防抖触发，处理数值:', numericValue);
+      
+      // 验证并通知父组件
+      if (!isNaN(numericValue) && numericValue >= 0 && numericValue <= 0.01) {
+        // 更新记录值，避免下次外部值同步时覆盖用户输入
+        lastSpotExternalValueRef.current = numericValue;
+        console.log('✅ 通知父组件更新现货手续费:', numericValue);
         onSpotFeeChange(numericValue);
+      } else {
+        console.log('❌ 现货手续费值无效，跳过通知');
       }
-      spotDebounceTimerRef.current = null;
-    }, 300); // 300ms 防抖
-  }, [onSpotFeeChange]);
+    }, 300);
+  }, [onSpotFeeChange, displaySpotFee]);
 
-  // 期货手续费处理函数 - 完全隔离，不影响其他参数
-  const handleFuturesFeeChange = useCallback((value: string) => {
-    console.log('期货手续费显示值变化:', value);
+  // 期货手续费处理函数
+  const handleFuturesFeeChange = useCallback((inputValue: string) => {
+    console.log('⌨️  期货手续费用户输入:', inputValue, '当前显示值:', displayFuturesFee);
     
-    // 立即更新显示值
-    setDisplayFuturesFee(value);
+    // 立即更新显示值，保证UI响应性
+    setDisplayFuturesFee(inputValue);
     
     // 清除之前的防抖定时器
     if (futuresDebounceTimerRef.current) {
       clearTimeout(futuresDebounceTimerRef.current);
-      futuresDebounceTimerRef.current = null;
+      console.log('⏱️  清除期货手续费防抖定时器');
     }
     
-    // 设置新的防抖定时器
+    // 防抖处理：延迟通知父组件
     futuresDebounceTimerRef.current = setTimeout(() => {
-      const numericValue = parseFloat(value) || 0;
+      const numericValue = parseFloat(inputValue);
       
-      // 基础验证：必须在0-1%之间
-      if (numericValue >= 0 && numericValue <= 0.01) {
-        console.log('期货手续费实际值更新:', numericValue);
+      console.log('🚀 期货手续费防抖触发，处理数值:', numericValue);
+      
+      // 验证并通知父组件
+      if (!isNaN(numericValue) && numericValue >= 0 && numericValue <= 0.01) {
+        // 更新记录值，避免下次外部值同步时覆盖用户输入
+        lastFuturesExternalValueRef.current = numericValue;
+        console.log('✅ 通知父组件更新期货手续费:', numericValue);
         onFuturesFeeChange(numericValue);
+      } else {
+        console.log('❌ 期货手续费值无效，跳过通知');
       }
-      futuresDebounceTimerRef.current = null;
-    }, 300); // 300ms 防抖
-  }, [onFuturesFeeChange]);
+    }, 300);
+  }, [onFuturesFeeChange, displayFuturesFee]);
+
+  // 只在外部值真正变化时同步（避免用户输入时被覆盖）
+  useEffect(() => {
+    console.log('📥 现货手续费外部值同步检查:', {
+      newValue: spotFeeRate,
+      lastExternal: lastSpotExternalValueRef.current,
+      difference: Math.abs(spotFeeRate - lastSpotExternalValueRef.current)
+    });
+    
+    // 只有当外部值与记录值不同时才更新显示值
+    if (Math.abs(spotFeeRate - lastSpotExternalValueRef.current) > 0.0001) {
+      console.log('🔄 现货手续费外部值变化，更新显示值:', spotFeeRate);
+      setDisplaySpotFee(spotFeeRate.toString());
+      lastSpotExternalValueRef.current = spotFeeRate;
+    } else {
+      console.log('⏭️  现货手续费外部值未变化，跳过更新');
+    }
+  }, [spotFeeRate]);
+
+  useEffect(() => {
+    console.log('📥 期货手续费外部值同步检查:', {
+      newValue: futuresFeeRate,
+      lastExternal: lastFuturesExternalValueRef.current,
+      difference: Math.abs(futuresFeeRate - lastFuturesExternalValueRef.current)
+    });
+    
+    // 只有当外部值与记录值不同时才更新显示值
+    if (Math.abs(futuresFeeRate - lastFuturesExternalValueRef.current) > 0.0001) {
+      console.log('🔄 期货手续费外部值变化，更新显示值:', futuresFeeRate);
+      setDisplayFuturesFee(futuresFeeRate.toString());
+      lastFuturesExternalValueRef.current = futuresFeeRate;
+    } else {
+      console.log('⏭️  期货手续费外部值未变化，跳过更新');
+    }
+  }, [futuresFeeRate]);
 
   // 清理定时器
   useEffect(() => {
