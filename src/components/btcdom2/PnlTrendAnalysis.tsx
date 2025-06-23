@@ -178,9 +178,8 @@ export const PnlTrendAnalysis: React.FC<PnlTrendAnalysisProps> = ({
   }, [trendSegments]);
 
   const handleSegmentClick = (segment: PnlTrendSegment) => {
-    // 传递期数（从1开始）- 使用中间期数，让用户看到趋势段的代表性时间点
-    const middlePeriod = Math.round((segment.startPeriod + segment.endPeriod) / 2);
-    onJumpToPeriod(middlePeriod);
+    // 传递期数（从1开始）- 跳转到连续盈利或亏损段的首期
+    onJumpToPeriod(segment.startPeriod);
   };
 
   if (!snapshots || snapshots.length === 0) {
@@ -272,7 +271,7 @@ export const PnlTrendAnalysis: React.FC<PnlTrendAnalysisProps> = ({
               </div>
               
               {/* 横向滚动容器 */}
-              <div className="overflow-x-scroll scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pb-4">
+              <div className="overflow-x-scroll scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
                 <div className="relative">
                   {/* 卡片容器 */}
                   <div className="flex gap-4 min-w-max mb-6">
@@ -384,10 +383,55 @@ export const PnlTrendAnalysis: React.FC<PnlTrendAnalysisProps> = ({
                 </div>
               </div>
               
+              {/* 年份快速跳转 */}
+              <div>
+                <div className="grid grid-cols-auto-fit gap-10" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(60px, 1fr))' }}>
+                  {(() => {
+                    // 获取所有唯一年份
+                    const uniqueYears = Array.from(new Set(
+                      trendSegments.map(segment => getYear(segment.startDate))
+                    )).sort();
+                    
+                    return uniqueYears.map(year => (
+                      <button
+                        key={year}
+                        className="px-3 py-1 text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 
+                                 border border-blue-200 dark:border-blue-800 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900/30 
+                                 transition-colors duration-200 text-center"
+                        onClick={() => {
+                          // 找到该年份第一张卡片的位置并滚动
+                          const firstSegmentOfYear = trendSegments.find(segment => 
+                            getYear(segment.startDate) === year
+                          );
+                          if (firstSegmentOfYear) {
+                            const segmentIndex = trendSegments.indexOf(firstSegmentOfYear);
+                            const segmentWidth = 140;
+                            const gap = 16; // gap-4 = 16px
+                            const scrollLeft = segmentIndex * (segmentWidth + gap);
+                            
+                            // 平滑滚动到目标位置
+                            const scrollContainer = document.querySelector('.overflow-x-scroll') as HTMLElement;
+                            if (scrollContainer) {
+                              scrollContainer.scrollTo({
+                                left: scrollLeft,
+                                behavior: 'smooth'
+                              });
+                            }
+                          }
+                        }}
+                      >
+                        {year}
+                      </button>
+                    ));
+                  })()}
+                </div>
+              </div>
+              
               {/* 说明文字 */}
               <div className="text-xs text-muted-foreground text-center">
                 绿色卡片表示连续盈利期，红色卡片表示连续亏损期
               </div>
+              
             </div>
           )}
         </div>
