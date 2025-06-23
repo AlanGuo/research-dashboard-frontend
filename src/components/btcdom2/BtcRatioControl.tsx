@@ -23,7 +23,7 @@ const BtcRatioControl: React.FC<BtcRatioControlProps> = ({
   const lastExternalValueRef = useRef<number>(value);
   const currentInputValueRef = useRef<number>(value); // 记录当前输入的最新值
   
-  console.log('IsolatedBtcRatioControl render:', { 
+  console.log('BtcRatioControl render:', { 
     value, 
     displayValue,
     lastExternal: lastExternalValueRef.current
