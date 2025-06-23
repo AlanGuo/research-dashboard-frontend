@@ -26,6 +26,8 @@ import {
 import { BTCDOM2Chart } from '@/components/btcdom2/btcdom2-chart';
 import { BTCDOM2PositionTable } from '@/components/btcdom2/btcdom2-position-table';
 import { WeightControl } from '@/components/btcdom2/WeightControl';
+import IsolatedBtcRatioControl from '@/components/btcdom2/IsolatedBtcRatioControl';
+import MaxShortPositionsControl from '@/components/btcdom2/MaxShortPositionsControl';
 import { AlertCircle, Play, Settings, TrendingUp, TrendingDown, Clock, Loader2, Eye, Info, Bitcoin, ArrowDown, Zap } from 'lucide-react';
 
 export default function BTCDOM2Dashboard() {
@@ -62,15 +64,14 @@ export default function BTCDOM2Dashboard() {
   const [showAdvancedSettings, setShowAdvancedSettings] = useState<boolean>(false);
   const [showOptimization, setShowOptimization] = useState<boolean>(false);
 
-  // 防抖相关状态
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const btcRatioDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const [displayParams, setDisplayParams] = useState<BTCDOM2StrategyParams>(params); // 用于立即显示的参数
-  const [displayBtcRatio, setDisplayBtcRatio] = useState<number>(params.btcRatio * 100); // BTC占比的显示状态（百分比形式）
-  const [isUserInputting, setIsUserInputting] = useState<boolean>(false); // 用户是否正在输入BTC占比
-
-  // 优化：缓存BTC占比的显示值，避免每次render都计算
-  const displayBtcRatioValue = useMemo(() => displayBtcRatio.toFixed(0), [displayBtcRatio]);
+  // 显示参数状态（保持UI响应性）
+  const [displayParams, setDisplayParams] = useState<BTCDOM2StrategyParams>(params); 
+  
+  // 独立的BTC占比状态管理 - 完全隔离，不受其他参数影响
+  const [isolatedBtcRatio, setIsolatedBtcRatio] = useState<number>(params.btcRatio);
+  
+  // 独立的最多做空标的数量状态管理 - 完全隔离，不受其他参数影响
+  const [isolatedMaxShortPositions, setIsolatedMaxShortPositions] = useState<number>(params.maxShortPositions);
 
   // 工具函数：格式化时间（使用UTC+0时区）
   const formatPeriodTime = (timestamp: string): string => {
@@ -241,29 +242,27 @@ export default function BTCDOM2Dashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 空依赖数组，只在组件挂载时执行一次
 
-  // 清理防抖定时器
+  // 清理函数（组件内防抖已处理，此处无需清理）
   useEffect(() => {
     return () => {
-      if (debounceTimerRef.current) {
-        clearTimeout(debounceTimerRef.current);
-      }
-      if (btcRatioDebounceTimerRef.current) {
-        clearTimeout(btcRatioDebounceTimerRef.current);
-      }
+      // 组件卸载时的清理逻辑（如果需要）
     };
   }, []);
 
   // 保持显示参数与实际参数同步（当外部更新params时）
   useEffect(() => {
     setDisplayParams(params);
-  }, [params]);
+  }, [params.priceChangeWeight, params.volumeWeight, params.volatilityWeight, params.fundingRateWeight]);
 
-  // 单独处理BTC占比的同步，避免被权重参数更新干扰，但不在用户输入时更新
+  // 独立BTC占比同步 - 简化版本，只在初始化时同步
   useEffect(() => {
-    if (!isUserInputting) {
-      setDisplayBtcRatio(params.btcRatio * 100);
-    }
-  }, [params.btcRatio, isUserInputting]);
+    setIsolatedBtcRatio(params.btcRatio);
+  }, []); // 只在组件挂载时执行一次
+
+  // 独立最多做空标的数量同步 - 简化版本，只在初始化时同步
+  useEffect(() => {
+    setIsolatedMaxShortPositions(params.maxShortPositions);
+  }, []); // 只在组件挂载时执行一次
 
   // 参数更新处理 - 优化版本
   const handleParamChange = useCallback((key: keyof BTCDOM2StrategyParams, value: string | number | boolean) => {
@@ -275,48 +274,49 @@ export default function BTCDOM2Dashboard() {
     setDisplayParams(newParams); // 同时更新显示参数
   }, [params]);
 
-  // 权重调整处理 - 添加防抖优化
+  // 权重调整处理 - 简化版本，防抖逻辑已移到组件内
   const handleWeightChange = useCallback((type: 'priceChange' | 'volume' | 'volatility' | 'fundingRate', value: number) => {
-    const weight = value / 100;
-    const newDisplayParams = {
-      ...displayParams,
-      [`${type}Weight`]: weight
+    console.log('页面权重变化:', { type, value });
+    
+    const newParams = {
+      ...params,
+      [`${type}Weight`]: value
     };
 
-    // 立即更新显示参数，提供即时的UI反馈
-    setDisplayParams(newDisplayParams);
+    // 直接更新参数，不需要防抖（组件内已处理）
+    setParams(newParams);
+    setDisplayParams(newParams);
+  }, [params]);
 
-    // 清除之前的定时器
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-    }
+  // 独立BTC占比处理函数 - 完全隔离，不影响其他参数
+  const handleIsolatedBtcRatioChange = useCallback((value: number) => {
+    console.time('handleIsolatedBtcRatioChange');
+    console.log('独立BTC占比变化:', value);
+    
+    // 立即更新独立状态
+    setIsolatedBtcRatio(value);
+    
+    // 同时更新实际参数中的BTC占比
+    setParams(prev => ({
+      ...prev,
+      btcRatio: value
+    }));
+    
+    console.timeEnd('handleIsolatedBtcRatioChange');
+  }, []);
 
-    // 设置新的定时器，延迟更新实际参数
-    debounceTimerRef.current = setTimeout(() => {
-      setParams(newDisplayParams);
-    }, 50); // 50ms 防抖延迟
-  }, [displayParams]);
-
-  // BTC占比防抖处理函数 - 优化版本
-  const handleBtcRatioChange = useCallback((value: number) => {
-    // 立即更新显示状态，提供即时的UI反馈
-    setDisplayBtcRatio(value);
-    setIsUserInputting(true);
-
-    // 清除之前的定时器
-    if (btcRatioDebounceTimerRef.current) {
-      clearTimeout(btcRatioDebounceTimerRef.current);
-    }
-
-    // 设置新的定时器，延迟更新实际参数
-    btcRatioDebounceTimerRef.current = setTimeout(() => {
-      const btcRatio = value / 100; // 转换为小数
-      setParams(prev => ({
-        ...prev,
-        btcRatio
-      }));
-      setIsUserInputting(false); // 标记输入完成
-    }, 50); // 优化：进一步减少防抖延迟到50ms，提升响应速度
+  // 独立最多做空标的数量处理函数 - 完全隔离，不影响其他参数
+  const handleIsolatedMaxShortPositionsChange = useCallback((value: number) => {
+    console.log('独立最多做空标的数量变化:', value);
+    
+    // 立即更新独立状态
+    setIsolatedMaxShortPositions(value);
+    
+    // 同时更新实际参数中的最多做空标的数量
+    setParams(prev => ({
+      ...prev,
+      maxShortPositions: value
+    }));
   }, []);
 
   // 标准化权重 - 将所有权重按比例调整使总和为1
@@ -334,12 +334,6 @@ export default function BTCDOM2Dashboard() {
 
     setParams(normalizedParams);
     setDisplayParams(normalizedParams);
-
-    // 清除防抖定时器，因为我们立即应用了标准化
-    if (debounceTimerRef.current) {
-      clearTimeout(debounceTimerRef.current);
-      debounceTimerRef.current = null;
-    }
   }, [displayParams, params]);
 
   // 处理优化完成
@@ -612,42 +606,11 @@ export default function BTCDOM2Dashboard() {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="btcRatio">BTC占比</Label>
-                <div className="relative">
-                  <Input
-                    id="btcRatio"
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="5"
-                    value={displayBtcRatioValue}
-                    onChange={(e) => {
-                      // 优化：直接获取原始值，避免不必要的转换
-                      const rawValue = e.target.value;
-
-                      // 允许空值和正在输入的情况
-                      if (rawValue === '' || rawValue === '.') {
-                        setDisplayBtcRatio(0);
-                        setIsUserInputting(true);
-                        return;
-                      }
-
-                      const value = parseFloat(rawValue);
-
-                      // 只有在值有效且在范围内时才更新
-                      if (!isNaN(value) && value >= 0 && value <= 100) {
-                        handleBtcRatioChange(value);
-                      }
-                    }}
-                    placeholder="BTC占比(%)"
-                    className="pr-8"
-                  />
-                  <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-sm text-gray-500 pointer-events-none">
-                    %
-                  </span>
-                </div>
-              </div>
+              <IsolatedBtcRatioControl
+                value={isolatedBtcRatio}
+                onValueChange={handleIsolatedBtcRatioChange}
+                disabled={loading}
+              />
             </div>
 
             {/* 高级设置 */}
@@ -753,19 +716,11 @@ export default function BTCDOM2Dashboard() {
 
                 {/* 最多做空标的数量 */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-3">
-                    <Label htmlFor="maxShortPositions" className="text-sm font-medium">最多做空标的数量</Label>
-                    <Input
-                      id="maxShortPositions"
-                      type="number"
-                      min="1"
-                      max="50"
-                      value={params.maxShortPositions}
-                      onChange={(e) => handleParamChange('maxShortPositions', parseInt(e.target.value) || 0)}
-                      placeholder="请输入1-50的数字"
-                    />
-                    <p className="text-xs text-gray-500 dark:text-gray-400">控制同时做空的币种数量</p>
-                  </div>
+                  <MaxShortPositionsControl
+                    value={isolatedMaxShortPositions}
+                    onValueChange={handleIsolatedMaxShortPositionsChange}
+                    disabled={loading}
+                  />
                 </div>
 
                 {/* 其他配置 */}
