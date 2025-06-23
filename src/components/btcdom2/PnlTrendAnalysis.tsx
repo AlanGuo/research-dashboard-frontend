@@ -274,7 +274,7 @@ export const PnlTrendAnalysis: React.FC<PnlTrendAnalysisProps> = ({
               <div className="overflow-x-scroll scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
                 <div className="relative">
                   {/* 卡片容器 */}
-                  <div className="flex gap-4 min-w-max mb-6">
+                  <div className="flex gap-4 min-w-max">
                     {trendSegments.map((segment, index) => {
                       // 固定卡片宽度，使其更窄
                       const segmentWidth = 140;
