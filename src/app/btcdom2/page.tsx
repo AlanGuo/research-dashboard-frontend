@@ -264,19 +264,6 @@ export default function BTCDOM2Dashboard() {
     runBacktest(params);
   };
 
-  // 页面首次加载时自动执行一次回测
-  useEffect(() => {
-    runBacktest();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // 空依赖数组，只在组件挂载时执行一次
-
-  // 清理函数（组件内防抖已处理，此处无需清理）
-  useEffect(() => {
-    return () => {
-      // 组件卸载时的清理逻辑（如果需要）
-    };
-  }, []);
-
   // 保持显示参数与实际参数同步（当外部更新params时）
   useEffect(() => {
     setDisplayParams(params);
