@@ -109,7 +109,7 @@ const BtcRatioControl: React.FC<BtcRatioControlProps> = ({
 
   return (
     <div className="space-y-2">
-      <Label htmlFor="isolatedBtcRatio">BTC占比 (独立测试版)</Label>
+      <Label htmlFor="isolatedBtcRatio">BTC占比</Label>
       <div className="relative">
         <Input
           id="isolatedBtcRatio"
