@@ -19,6 +19,7 @@ import {
 } from '@/types/btcdom2';
 import { BTCDOM2Chart } from '@/components/btcdom2/Btcdom2Chart';
 import { BTCDOM2PositionTable } from '@/components/btcdom2/Btcdom2PositionTable';
+import { PnlTrendAnalysis } from '@/components/btcdom2/PnlTrendAnalysis';
 import { WeightControlGroup } from '@/components/btcdom2/WeightControlGroup';
 import BtcRatioControl from '@/components/btcdom2/BtcRatioControl';
 import MaxShortPositionsControl from '@/components/btcdom2/MaxShortPositionsControl';
@@ -1116,6 +1117,14 @@ export default function BTCDOM2Dashboard() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* 盈亏趋势分析 */}
+            {backtestResult && backtestResult.snapshots && backtestResult.snapshots.length > 0 && (
+              <PnlTrendAnalysis
+                snapshots={backtestResult.snapshots}
+                onJumpToPeriod={(index) => setSelectedSnapshotIndex(index)}
+              />
+            )}
 
             {/* 历史持仓查看 */}
             {backtestResult && backtestResult.snapshots && backtestResult.snapshots.length > 0 && (
