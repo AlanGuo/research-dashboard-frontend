@@ -343,56 +343,39 @@ export const PnlTrendAnalysis: React.FC<PnlTrendAnalysisProps> = ({
                   {/* 年份时间轴（底部） */}
                   <div className="flex gap-4 min-w-max relative">
                     {(() => {
-                      // 获取所有年份并计算位置
-                      const yearPositions: { year: string; left: number; width: number }[] = [];
+                      // 计算每年第一张卡片的位置
+                      const yearMarkers: { year: string; left: number }[] = [];
                       let currentLeft = 0;
+                      let lastYear = '';
                       
                       trendSegments.forEach((segment, index) => {
                         const segmentWidth = 140;
                         const gap = index > 0 ? 16 : 0; // 16px = gap-4
                         const startYear = getYear(segment.startDate);
-                        const endYear = getYear(segment.endDate);
                         
-                        // 检查是否需要添加新的年份标记
-                        const existingYear = yearPositions.find(y => y.year === startYear);
-                        if (!existingYear) {
-                          yearPositions.push({
+                        // 如果是新的年份，记录位置
+                        if (startYear !== lastYear) {
+                          yearMarkers.push({
                             year: startYear,
-                            left: currentLeft + gap,
-                            width: segmentWidth
+                            left: currentLeft + gap
                           });
-                        } else {
-                          // 扩展现有年份的宽度
-                          existingYear.width += gap + segmentWidth;
-                        }
-                        
-                        // 如果跨年，也处理结束年份
-                        if (startYear !== endYear) {
-                          const existingEndYear = yearPositions.find(y => y.year === endYear);
-                          if (!existingEndYear) {
-                            yearPositions.push({
-                              year: endYear,
-                              left: currentLeft + gap + segmentWidth / 2,
-                              width: segmentWidth / 2
-                            });
-                          }
+                          lastYear = startYear;
                         }
                         
                         currentLeft += gap + segmentWidth;
                       });
                       
-                      return yearPositions.map((yearPos, index) => (
+                      return yearMarkers.map((marker, index) => (
                         <div
                           key={index}
-                          className="absolute bottom-0 flex items-center justify-center"
+                          className="absolute bottom-0 flex items-center"
                           style={{ 
-                            left: `${yearPos.left}px`, 
-                            width: `${yearPos.width}px`,
+                            left: `${marker.left}px`,
                             height: '20px'
                           }}
                         >
                           <div className="text-xs text-muted-foreground font-medium bg-background/80 px-2 py-1 rounded border">
-                            {yearPos.year}
+                            {marker.year}
                           </div>
                         </div>
                       ));
