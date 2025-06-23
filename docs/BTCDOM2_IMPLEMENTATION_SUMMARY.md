@@ -57,12 +57,12 @@
 - 更新handleParamChange支持布尔值
 - 增强界面显示逻辑
 
-#### `btcdom2-chart.tsx`
+#### `Btcdom2Chart.tsx`
 - 接受策略参数作为props
 - 根据策略选择条件显示图表区域
 - 动态调整资产配置图显示
 
-#### `btcdom2-position-table.tsx`
+#### `Btcdom2PositionTable.tsx`
 - 接受策略参数作为props
 - 根据策略选择过滤持仓显示
 - 正确处理卖出持仓的分类显示

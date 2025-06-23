@@ -17,8 +17,8 @@ import {
   PositionInfo,
   PositionAllocationStrategy
 } from '@/types/btcdom2';
-import { BTCDOM2Chart } from '@/components/btcdom2/btcdom2-chart';
-import { BTCDOM2PositionTable } from '@/components/btcdom2/btcdom2-position-table';
+import { BTCDOM2Chart } from '@/components/btcdom2/Btcdom2Chart';
+import { BTCDOM2PositionTable } from '@/components/btcdom2/Btcdom2PositionTable';
 import { WeightControlGroup } from '@/components/btcdom2/WeightControlGroup';
 import BtcRatioControl from '@/components/btcdom2/BtcRatioControl';
 import MaxShortPositionsControl from '@/components/btcdom2/MaxShortPositionsControl';
