@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
@@ -12,7 +12,7 @@ interface TradingFeesControlProps {
   disabled?: boolean;
 }
 
-export function TradingFeesControl({
+export const TradingFeesControl = memo(function TradingFeesControl({
   spotFeeRate,
   futuresFeeRate,
   onSpotFeeChange,
@@ -23,17 +23,19 @@ export function TradingFeesControl({
   const [displaySpotFee, setDisplaySpotFee] = useState<string>(spotFeeRate.toString());
   const [displayFuturesFee, setDisplayFuturesFee] = useState<string>(futuresFeeRate.toString());
 
-  // 防抖定时器
-  const [spotDebounceTimer, setSpotDebounceTimer] = useState<NodeJS.Timeout | null>(null);
-  const [futuresDebounceTimer, setFuturesDebounceTimer] = useState<NodeJS.Timeout | null>(null);
+  // 防抖定时器 - 使用 useRef 避免重新创建函数
+  const spotDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const futuresDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 初始化显示值（只在挂载时同步一次）
+  // 初始化显示值（只在组件挂载时同步一次）
   useEffect(() => {
     setDisplaySpotFee(spotFeeRate.toString());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 只在组件挂载时执行一次
 
   useEffect(() => {
     setDisplayFuturesFee(futuresFeeRate.toString());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 只在组件挂载时执行一次
 
   // 现货手续费处理函数 - 完全隔离，不影响其他参数
@@ -44,23 +46,23 @@ export function TradingFeesControl({
     setDisplaySpotFee(value);
     
     // 清除之前的防抖定时器
-    if (spotDebounceTimer) {
-      clearTimeout(spotDebounceTimer);
+    if (spotDebounceTimerRef.current) {
+      clearTimeout(spotDebounceTimerRef.current);
+      spotDebounceTimerRef.current = null;
     }
     
     // 设置新的防抖定时器
-    const timer = setTimeout(() => {
+    spotDebounceTimerRef.current = setTimeout(() => {
       const numericValue = parseFloat(value) || 0;
       
-      // 验证范围
+      // 基础验证：必须在0-1%之间
       if (numericValue >= 0 && numericValue <= 0.01) {
         console.log('现货手续费实际值更新:', numericValue);
         onSpotFeeChange(numericValue);
       }
+      spotDebounceTimerRef.current = null;
     }, 300); // 300ms 防抖
-    
-    setSpotDebounceTimer(timer);
-  }, [onSpotFeeChange, spotDebounceTimer]);
+  }, [onSpotFeeChange]);
 
   // 期货手续费处理函数 - 完全隔离，不影响其他参数
   const handleFuturesFeeChange = useCallback((value: string) => {
@@ -70,35 +72,35 @@ export function TradingFeesControl({
     setDisplayFuturesFee(value);
     
     // 清除之前的防抖定时器
-    if (futuresDebounceTimer) {
-      clearTimeout(futuresDebounceTimer);
+    if (futuresDebounceTimerRef.current) {
+      clearTimeout(futuresDebounceTimerRef.current);
+      futuresDebounceTimerRef.current = null;
     }
     
     // 设置新的防抖定时器
-    const timer = setTimeout(() => {
+    futuresDebounceTimerRef.current = setTimeout(() => {
       const numericValue = parseFloat(value) || 0;
       
-      // 验证范围
+      // 基础验证：必须在0-1%之间
       if (numericValue >= 0 && numericValue <= 0.01) {
         console.log('期货手续费实际值更新:', numericValue);
         onFuturesFeeChange(numericValue);
       }
+      futuresDebounceTimerRef.current = null;
     }, 300); // 300ms 防抖
-    
-    setFuturesDebounceTimer(timer);
-  }, [onFuturesFeeChange, futuresDebounceTimer]);
+  }, [onFuturesFeeChange]);
 
   // 清理定时器
   useEffect(() => {
     return () => {
-      if (spotDebounceTimer) {
-        clearTimeout(spotDebounceTimer);
+      if (spotDebounceTimerRef.current) {
+        clearTimeout(spotDebounceTimerRef.current);
       }
-      if (futuresDebounceTimer) {
-        clearTimeout(futuresDebounceTimer);
+      if (futuresDebounceTimerRef.current) {
+        clearTimeout(futuresDebounceTimerRef.current);
       }
     };
-  }, [spotDebounceTimer, futuresDebounceTimer]);
+  }, []);
 
   // 计算显示的百分比值
   const spotFeePercent = (parseFloat(displaySpotFee) || 0) * 100;
@@ -161,4 +163,4 @@ export function TradingFeesControl({
       <p className="text-xs text-gray-500 dark:text-gray-400">现货手续费通常高于期货手续费</p>
     </div>
   );
-}
+});

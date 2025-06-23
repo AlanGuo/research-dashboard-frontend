@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Bitcoin, ArrowDown } from 'lucide-react';
@@ -14,7 +14,7 @@ interface StrategySelectionControlProps {
   disabled?: boolean;
 }
 
-export function StrategySelectionControl({
+export const StrategySelectionControl = memo(function StrategySelectionControl({
   longBtc,
   shortAlt,
   btcRatio,
@@ -26,17 +26,19 @@ export function StrategySelectionControl({
   const [displayLongBtc, setDisplayLongBtc] = useState<boolean>(longBtc);
   const [displayShortAlt, setDisplayShortAlt] = useState<boolean>(shortAlt);
 
-  // 防抖定时器
-  const [longBtcDebounceTimer, setLongBtcDebounceTimer] = useState<NodeJS.Timeout | null>(null);
-  const [shortAltDebounceTimer, setShortAltDebounceTimer] = useState<NodeJS.Timeout | null>(null);
+  // 防抖定时器 - 使用 useRef 避免重新创建函数
+  const longBtcDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const shortAltDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 初始化显示值（只在挂载时同步一次）
+  // 初始化显示值（只在组件挂载时同步一次）
   useEffect(() => {
     setDisplayLongBtc(longBtc);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 只在组件挂载时执行一次
 
   useEffect(() => {
     setDisplayShortAlt(shortAlt);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 只在组件挂载时执行一次
 
   // 做多BTC处理函数 - 完全隔离，不影响其他参数
@@ -47,18 +49,18 @@ export function StrategySelectionControl({
     setDisplayLongBtc(checked);
     
     // 清除之前的防抖定时器
-    if (longBtcDebounceTimer) {
-      clearTimeout(longBtcDebounceTimer);
+    if (longBtcDebounceTimerRef.current) {
+      clearTimeout(longBtcDebounceTimerRef.current);
+      longBtcDebounceTimerRef.current = null;
     }
     
     // 设置新的防抖定时器
-    const timer = setTimeout(() => {
+    longBtcDebounceTimerRef.current = setTimeout(() => {
       console.log('做多BTC实际值更新:', checked);
       onLongBtcChange(checked);
-    }, 150); // 150ms 防抖，策略选择响应要快一些
-    
-    setLongBtcDebounceTimer(timer);
-  }, [onLongBtcChange, longBtcDebounceTimer]);
+      longBtcDebounceTimerRef.current = null;
+    }, 150); // 150ms 防抖，复选框响应要快一些
+  }, [onLongBtcChange]);
 
   // 做空ALT处理函数 - 完全隔离，不影响其他参数
   const handleShortAltChange = useCallback((checked: boolean) => {
@@ -68,30 +70,30 @@ export function StrategySelectionControl({
     setDisplayShortAlt(checked);
     
     // 清除之前的防抖定时器
-    if (shortAltDebounceTimer) {
-      clearTimeout(shortAltDebounceTimer);
+    if (shortAltDebounceTimerRef.current) {
+      clearTimeout(shortAltDebounceTimerRef.current);
+      shortAltDebounceTimerRef.current = null;
     }
     
     // 设置新的防抖定时器
-    const timer = setTimeout(() => {
+    shortAltDebounceTimerRef.current = setTimeout(() => {
       console.log('做空ALT实际值更新:', checked);
       onShortAltChange(checked);
-    }, 150); // 150ms 防抖，策略选择响应要快一些
-    
-    setShortAltDebounceTimer(timer);
-  }, [onShortAltChange, shortAltDebounceTimer]);
+      shortAltDebounceTimerRef.current = null;
+    }, 150); // 150ms 防抖，复选框响应要快一些
+  }, [onShortAltChange]);
 
   // 清理定时器
   useEffect(() => {
     return () => {
-      if (longBtcDebounceTimer) {
-        clearTimeout(longBtcDebounceTimer);
+      if (longBtcDebounceTimerRef.current) {
+        clearTimeout(longBtcDebounceTimerRef.current);
       }
-      if (shortAltDebounceTimer) {
-        clearTimeout(shortAltDebounceTimer);
+      if (shortAltDebounceTimerRef.current) {
+        clearTimeout(shortAltDebounceTimerRef.current);
       }
     };
-  }, [longBtcDebounceTimer, shortAltDebounceTimer]);
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -135,4 +137,4 @@ export function StrategySelectionControl({
       </div>
     </div>
   );
-}
+});

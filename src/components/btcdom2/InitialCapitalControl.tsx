@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
@@ -10,59 +10,69 @@ interface InitialCapitalControlProps {
   disabled?: boolean;
 }
 
-export function InitialCapitalControl({
+export const InitialCapitalControl = memo(function InitialCapitalControl({
   value,
   onValueChange,
   disabled = false
 }: InitialCapitalControlProps) {
-  // 独立的显示状态 - 完全隔离，不受其他参数影响
-  const [displayValue, setDisplayValue] = useState<string>(value.toString());
+  // 独立的显示状态 - 完全隔离，不受其他参数影响，确保为整数
+  const [displayValue, setDisplayValue] = useState<string>(Math.round(value).toString());
 
-  // 防抖定时器
-  const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(null);
+  // 防抖定时器 - 使用 useRef 避免重新创建函数
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 初始化显示值（只在挂载时同步一次）
+  console.log('InitialCapitalControl render:', {
+    propsValue: value,
+    displayValue: displayValue,
+    isInteger: Number.isInteger(value),
+    rounded: Math.round(value)
+  });
+
+  // 初始化显示值（只在组件挂载时同步一次）
   useEffect(() => {
-    setDisplayValue(value.toString());
+    const roundedValue = Math.round(value);
+    setDisplayValue(roundedValue.toString());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 只在组件挂载时执行一次
 
   // 初始本金处理函数 - 完全隔离，不影响其他参数
   const handleValueChange = useCallback((inputValue: string) => {
-    console.log('初始本金显示值变化:', inputValue);
+    console.log('初始本金显示值变化:', inputValue, '当前显示值:', displayValue);
     
     // 立即更新显示值
     setDisplayValue(inputValue);
     
     // 清除之前的防抖定时器
-    if (debounceTimer) {
-      clearTimeout(debounceTimer);
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
     }
     
     // 设置新的防抖定时器
-    const timer = setTimeout(() => {
+    debounceTimerRef.current = setTimeout(() => {
       const numericValue = parseFloat(inputValue) || 0;
       
       // 基础验证：必须为正数
       if (numericValue > 0) {
-        console.log('初始本金实际值更新:', numericValue);
+        console.log('初始本金实际值更新:', numericValue, '步长变化:', numericValue - parseFloat(displayValue || '0'));
         onValueChange(numericValue);
       } else if (numericValue === 0 && inputValue === '') {
         // 允许清空，设为默认值
+        console.log('初始本金清空，设为默认值: 10000');
         onValueChange(10000);
       }
+      debounceTimerRef.current = null;
     }, 300); // 300ms 防抖
-    
-    setDebounceTimer(timer);
-  }, [onValueChange, debounceTimer]);
+  }, [onValueChange]);
 
   // 清理定时器
   useEffect(() => {
     return () => {
-      if (debounceTimer) {
-        clearTimeout(debounceTimer);
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [debounceTimer]);
+  }, []);
 
   return (
     <div className="space-y-2">
@@ -70,7 +80,7 @@ export function InitialCapitalControl({
       <Input
         id="initialCapital"
         type="number"
-        min="1"
+        min="0"
         step="1000"
         value={displayValue}
         onChange={(e) => handleValueChange(e.target.value)}
@@ -80,4 +90,4 @@ export function InitialCapitalControl({
       />
     </div>
   );
-}
+});

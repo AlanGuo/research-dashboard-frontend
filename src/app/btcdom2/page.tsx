@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,7 @@ import {
 } from '@/types/btcdom2';
 import { BTCDOM2Chart } from '@/components/btcdom2/btcdom2-chart';
 import { BTCDOM2PositionTable } from '@/components/btcdom2/btcdom2-position-table';
-import { WeightControl } from '@/components/btcdom2/WeightControl';
+import { WeightControlGroup } from '@/components/btcdom2/WeightControlGroup';
 import BtcRatioControl from '@/components/btcdom2/BtcRatioControl';
 import MaxShortPositionsControl from '@/components/btcdom2/MaxShortPositionsControl';
 import { TradingFeesControl } from '@/components/btcdom2/TradingFeesControl';
@@ -64,8 +64,16 @@ export default function BTCDOM2Dashboard() {
   const [showOptimization, setShowOptimization] = useState<boolean>(false);
 
   // 显示参数状态（保持UI响应性）
-  const [displayParams, setDisplayParams] = useState<BTCDOM2StrategyParams>(params); 
-  
+  const [displayParams, setDisplayParams] = useState<BTCDOM2StrategyParams>(params);
+
+  // 使用 useMemo 来稳定 displayParams 对象引用
+  const memoizedDisplayParams = useMemo(() => displayParams, [
+    displayParams.priceChangeWeight,
+    displayParams.volumeWeight,
+    displayParams.volatilityWeight,
+    displayParams.fundingRateWeight
+  ]);
+
   // 独立的参数状态管理 - 每个参数完全隔离，不受其他参数影响
   const [isolatedBtcRatio, setIsolatedBtcRatio] = useState<number>(params.btcRatio);
   const [isolatedMaxShortPositions, setIsolatedMaxShortPositions] = useState<number>(params.maxShortPositions);
@@ -120,14 +128,14 @@ export default function BTCDOM2Dashboard() {
     return `${formattedAmount} (${formattedPercent})`;
   };
   // 验证参数 - 分组验证，最小影响范围
-  
+
   // 权重验证 - 只依赖权重参数，不受其他参数影响
   const weightValidation = useMemo(() => {
-    const displaySum = displayParams.priceChangeWeight + displayParams.volumeWeight + 
+    const displaySum = displayParams.priceChangeWeight + displayParams.volumeWeight +
                       displayParams.volatilityWeight + displayParams.fundingRateWeight;
-    const actualSum = params.priceChangeWeight + params.volumeWeight + 
+    const actualSum = params.priceChangeWeight + params.volumeWeight +
                      params.volatilityWeight + params.fundingRateWeight;
-    
+
     return {
       displayValid: Math.abs(displaySum - 1) <= 0.001,
       actualValid: Math.abs(actualSum - 1) <= 0.001,
@@ -135,16 +143,16 @@ export default function BTCDOM2Dashboard() {
       actualSumPercent: (actualSum * 100).toFixed(0)
     };
   }, [
-    displayParams.priceChangeWeight, displayParams.volumeWeight, 
+    displayParams.priceChangeWeight, displayParams.volumeWeight,
     displayParams.volatilityWeight, displayParams.fundingRateWeight,
-    params.priceChangeWeight, params.volumeWeight, 
+    params.priceChangeWeight, params.volumeWeight,
     params.volatilityWeight, params.fundingRateWeight
   ]);
 
   // 基础参数验证 - 只依赖基础参数
   const baseParamsValidation = useMemo(() => {
     const errors: Record<string, string> = {};
-    
+
     if (params.initialCapital <= 0) {
       errors.initialCapital = '初始本金必须大于0';
     }
@@ -161,7 +169,7 @@ export default function BTCDOM2Dashboard() {
   // 策略参数验证 - 只依赖策略参数
   const strategyParamsValidation = useMemo(() => {
     const errors: Record<string, string> = {};
-    
+
     if (params.btcRatio < 0 || params.btcRatio > 1) {
       errors.btcRatio = 'BTC占比必须在0-1之间';
     }
@@ -176,7 +184,7 @@ export default function BTCDOM2Dashboard() {
   // 交易参数验证 - 只依赖交易参数
   const tradingParamsValidation = useMemo(() => {
     const errors: Record<string, string> = {};
-    
+
     if (params.maxShortPositions <= 0 || params.maxShortPositions > 50) {
       errors.maxShortPositions = '做空标的数量必须在1-50之间';
     }
@@ -208,9 +216,7 @@ export default function BTCDOM2Dashboard() {
     return allErrors;
   }, [baseParamsValidation, strategyParamsValidation, tradingParamsValidation, weightValidation.actualValid]);
 
-  // 兼容性别名 - 保持原有接口
-  const isWeightsValid = weightValidation.displayValid;
-  const getWeightSumPercent = weightValidation.displaySumPercent;
+  // 兼容性别名已移除 - 不再需要
 
   // 执行回测
   const runBacktest = useCallback(async (currentParams?: BTCDOM2StrategyParams) => {
@@ -264,10 +270,32 @@ export default function BTCDOM2Dashboard() {
     runBacktest(params);
   };
 
-  // 保持显示参数与实际参数同步（当外部更新params时）
+  // 保持显示参数与实际参数同步（当外部更新params时）- 只同步权重相关参数
   useEffect(() => {
-    setDisplayParams(params);
+    console.log('displayParams 权重同步 useEffect 触发:', {
+      priceChangeWeight: params.priceChangeWeight,
+      volumeWeight: params.volumeWeight,
+      volatilityWeight: params.volatilityWeight,
+      fundingRateWeight: params.fundingRateWeight
+    });
+    setDisplayParams(prev => ({
+      ...prev,
+      priceChangeWeight: params.priceChangeWeight,
+      volumeWeight: params.volumeWeight,
+      volatilityWeight: params.volatilityWeight,
+      fundingRateWeight: params.fundingRateWeight
+    }));
   }, [params.priceChangeWeight, params.volumeWeight, params.volatilityWeight, params.fundingRateWeight]);
+
+  // 调试：跟踪 displayParams 引用变化
+  useEffect(() => {
+    console.log('memoizedDisplayParams 引用变化:', {
+      priceChangeWeight: memoizedDisplayParams.priceChangeWeight,
+      volumeWeight: memoizedDisplayParams.volumeWeight,
+      volatilityWeight: memoizedDisplayParams.volatilityWeight,
+      fundingRateWeight: memoizedDisplayParams.fundingRateWeight
+    });
+  }, [memoizedDisplayParams]);
 
   // 独立参数同步 - 只在初始化时同步，避免循环依赖
   useEffect(() => {
@@ -281,59 +309,65 @@ export default function BTCDOM2Dashboard() {
     setIsolatedStartDate(params.startDate);
     setIsolatedEndDate(params.endDate);
     setIsolatedAllocationStrategy(params.allocationStrategy);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 只在组件挂载时执行一次
 
   // 权重调整处理 - 完全隔离，不依赖其他参数
   const handleWeightChange = useCallback((type: 'priceChange' | 'volume' | 'volatility' | 'fundingRate', value: number) => {
     console.log('页面权重变化:', { type, value });
-    
+
     // 只更新权重相关的参数，不影响其他参数
     const weightKey = `${type}Weight` as keyof BTCDOM2StrategyParams;
-    
+
     setParams(prev => ({
       ...prev,
       [weightKey]: value
     }));
-    
+
     setDisplayParams(prev => ({
       ...prev,
       [weightKey]: value
     }));
   }, []); // 空依赖数组，避免因其他参数变化而重新创建
 
+  // 权重处理函数传递给子组件
+
   // 独立参数处理函数 - 完全隔离，每个参数只影响自己，避免相互重新渲染
-  
+
   // 独立初始本金处理函数
   const handleIsolatedInitialCapitalChange = useCallback((value: number) => {
     console.log('独立初始本金变化:', value);
     setIsolatedInitialCapital(value);
-    setParams(prev => ({ ...prev, initialCapital: value }));
+    setParams(prev => {
+      const newParams = { ...prev, initialCapital: value };
+      return newParams;
+    });
   }, []);
 
   // 独立BTC占比处理函数 - 完全隔离，不影响其他参数
   const handleIsolatedBtcRatioChange = useCallback((value: number) => {
     console.time('handleIsolatedBtcRatioChange');
     console.log('独立BTC占比变化:', value);
-    
+
     // 立即更新独立状态
     setIsolatedBtcRatio(value);
-    
+
     // 同时更新实际参数中的BTC占比
     setParams(prev => ({
       ...prev,
       btcRatio: value
     }));
-    
+
     console.timeEnd('handleIsolatedBtcRatioChange');
   }, []);
 
   // 独立最多做空标的数量处理函数 - 完全隔离，不影响其他参数
   const handleIsolatedMaxShortPositionsChange = useCallback((value: number) => {
     console.log('独立最多做空标的数量变化:', value);
-    
+
     // 立即更新独立状态
     setIsolatedMaxShortPositions(value);
-    
+
     // 同时更新实际参数中的最多做空标的数量
     setParams(prev => ({
       ...prev,
@@ -679,35 +713,13 @@ export default function BTCDOM2Dashboard() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <WeightControl
-                      label="跌幅权重"
-                      value={displayParams.priceChangeWeight}
-                      onValueChange={(value) => handleWeightChange('priceChange', value)}
-                      description="评估价格下跌程度，跌幅越大分数越高"
-                    />
-
-                    <WeightControl
-                      label="成交量权重"
-                      value={displayParams.volumeWeight}
-                      onValueChange={(value) => handleWeightChange('volume', value)}
-                      description="评估交易活跃度和流动性，确保足够流动性"
-                    />
-
-                    <WeightControl
-                      label="波动率权重"
-                      value={displayParams.volatilityWeight}
-                      onValueChange={(value) => handleWeightChange('volatility', value)}
-                      description="评估价格波动稳定性，适中波动率得分最高"
-                    />
-
-                    <WeightControl
-                      label="资金费率权重"
-                      value={displayParams.fundingRateWeight}
-                      onValueChange={(value) => handleWeightChange('fundingRate', value)}
-                      description="评估做空成本和收益，正费率对做空有利"
-                    />
-                  </div>
+                  <WeightControlGroup
+                    priceChangeWeight={memoizedDisplayParams.priceChangeWeight}
+                    volumeWeight={memoizedDisplayParams.volumeWeight}
+                    volatilityWeight={memoizedDisplayParams.volatilityWeight}
+                    fundingRateWeight={memoizedDisplayParams.fundingRateWeight}
+                    onWeightChange={handleWeightChange}
+                  />
                 </div>
 
                 {/* 仓位配置策略 */}

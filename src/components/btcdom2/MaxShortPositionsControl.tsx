@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, memo } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 
@@ -12,7 +12,7 @@ interface MaxShortPositionsControlProps {
  * 独立的最多做空标的数量控制组件
  * 具有防抖功能，优化输入体验
  */
-const MaxShortPositionsControl: React.FC<MaxShortPositionsControlProps> = ({
+const MaxShortPositionsControl = memo<MaxShortPositionsControlProps>(({
   value,
   onValueChange,
   disabled = false
@@ -111,6 +111,8 @@ const MaxShortPositionsControl: React.FC<MaxShortPositionsControlProps> = ({
       <p className="text-xs text-gray-500 dark:text-gray-400">控制同时做空的币种数量</p>
     </div>
   );
-};
+});
+
+MaxShortPositionsControl.displayName = 'MaxShortPositionsControl';
 
 export default MaxShortPositionsControl;

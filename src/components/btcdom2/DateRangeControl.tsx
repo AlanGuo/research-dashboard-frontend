@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 
@@ -12,28 +12,29 @@ interface DateRangeControlProps {
   disabled?: boolean;
 }
 
-export function DateRangeControl({
+export const DateRangeControl = memo(function DateRangeControl({
   startDate,
   endDate,
   onStartDateChange,
-  onEndDateChange,
-  disabled = false
+  onEndDateChange
 }: DateRangeControlProps) {
   // 独立的显示状态 - 完全隔离，不受其他参数影响
   const [displayStartDate, setDisplayStartDate] = useState<string>(startDate);
   const [displayEndDate, setDisplayEndDate] = useState<string>(endDate);
 
-  // 防抖定时器
-  const [startDateDebounceTimer, setStartDateDebounceTimer] = useState<NodeJS.Timeout | null>(null);
-  const [endDateDebounceTimer, setEndDateDebounceTimer] = useState<NodeJS.Timeout | null>(null);
+  // 防抖定时器 - 使用 useRef 避免重新创建函数
+  const startDateDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const endDateDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 初始化显示值（只在挂载时同步一次）
+  // 初始化显示值（只在组件挂载时同步一次）
   useEffect(() => {
     setDisplayStartDate(startDate);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 只在组件挂载时执行一次
 
   useEffect(() => {
     setDisplayEndDate(endDate);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 只在组件挂载时执行一次
 
   // 开始日期处理函数 - 完全隔离，不影响其他参数
@@ -51,22 +52,22 @@ export function DateRangeControl({
       setDisplayStartDate(dateString);
       
       // 清除之前的防抖定时器
-      if (startDateDebounceTimer) {
-        clearTimeout(startDateDebounceTimer);
+      if (startDateDebounceTimerRef.current) {
+        clearTimeout(startDateDebounceTimerRef.current);
+        startDateDebounceTimerRef.current = null;
       }
       
       // 设置新的防抖定时器
-      const timer = setTimeout(() => {
+      startDateDebounceTimerRef.current = setTimeout(() => {
         console.log('开始日期实际值更新:', dateString);
         onStartDateChange(dateString);
+        startDateDebounceTimerRef.current = null;
       }, 200); // 200ms 防抖，日期选择响应要快一些
-      
-      setStartDateDebounceTimer(timer);
     } else {
       setDisplayStartDate('');
       onStartDateChange('');
     }
-  }, [onStartDateChange, startDateDebounceTimer]);
+  }, [onStartDateChange]);
 
   // 结束日期处理函数 - 完全隔离，不影响其他参数
   const handleEndDateChange = useCallback((date: Date | undefined) => {
@@ -83,34 +84,34 @@ export function DateRangeControl({
       setDisplayEndDate(dateString);
       
       // 清除之前的防抖定时器
-      if (endDateDebounceTimer) {
-        clearTimeout(endDateDebounceTimer);
+      if (endDateDebounceTimerRef.current) {
+        clearTimeout(endDateDebounceTimerRef.current);
+        endDateDebounceTimerRef.current = null;
       }
       
       // 设置新的防抖定时器
-      const timer = setTimeout(() => {
+      endDateDebounceTimerRef.current = setTimeout(() => {
         console.log('结束日期实际值更新:', dateString);
         onEndDateChange(dateString);
+        endDateDebounceTimerRef.current = null;
       }, 200); // 200ms 防抖，日期选择响应要快一些
-      
-      setEndDateDebounceTimer(timer);
     } else {
       setDisplayEndDate('');
       onEndDateChange('');
     }
-  }, [onEndDateChange, endDateDebounceTimer]);
+  }, [onEndDateChange]);
 
   // 清理定时器
   useEffect(() => {
     return () => {
-      if (startDateDebounceTimer) {
-        clearTimeout(startDateDebounceTimer);
+      if (startDateDebounceTimerRef.current) {
+        clearTimeout(startDateDebounceTimerRef.current);
       }
-      if (endDateDebounceTimer) {
-        clearTimeout(endDateDebounceTimer);
+      if (endDateDebounceTimerRef.current) {
+        clearTimeout(endDateDebounceTimerRef.current);
       }
     };
-  }, [startDateDebounceTimer, endDateDebounceTimer]);
+  }, []);
 
   return (
     <>
@@ -133,4 +134,4 @@ export function DateRangeControl({
       </div>
     </>
   );
-}
+});

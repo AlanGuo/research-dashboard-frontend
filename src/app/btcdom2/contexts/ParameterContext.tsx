@@ -46,7 +46,7 @@ export function useParameter() {
 
 interface ParameterProviderProps {
   children: ReactNode;
-  onParameterChange: (key: string, value: any) => void;
+  onParameterChange: (key: string, value: unknown) => void;
   initialValues: {
     priceChangeWeight: number;
     volumeWeight: number;

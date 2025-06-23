@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
 import { PositionAllocationStrategy } from '@/types/btcdom2';
 
 interface AllocationStrategyControlProps {
@@ -11,7 +10,7 @@ interface AllocationStrategyControlProps {
   disabled?: boolean;
 }
 
-export function AllocationStrategyControl({
+export const AllocationStrategyControl = memo(function AllocationStrategyControl({
   value,
   onValueChange,
   disabled = false
@@ -19,12 +18,13 @@ export function AllocationStrategyControl({
   // 独立的显示状态 - 完全隔离，不受其他参数影响
   const [displayValue, setDisplayValue] = useState<PositionAllocationStrategy>(value);
 
-  // 防抖定时器
-  const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(null);
+  // 防抖定时器 - 使用 useRef 避免重新创建函数
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 初始化显示值（只在挂载时同步一次）
+  // 初始化显示值（只在组件挂载时同步一次）
   useEffect(() => {
     setDisplayValue(value);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 只在组件挂载时执行一次
 
   // 仓位分配策略处理函数 - 完全隔离，不影响其他参数
@@ -36,27 +36,27 @@ export function AllocationStrategyControl({
     setDisplayValue(strategyValue);
     
     // 清除之前的防抖定时器
-    if (debounceTimer) {
-      clearTimeout(debounceTimer);
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
     }
     
     // 设置新的防抖定时器
-    const timer = setTimeout(() => {
+    debounceTimerRef.current = setTimeout(() => {
       console.log('仓位分配策略实际值更新:', strategyValue);
       onValueChange(strategyValue);
+      debounceTimerRef.current = null;
     }, 150); // 150ms 防抖，策略选择响应要快一些
-    
-    setDebounceTimer(timer);
-  }, [onValueChange, debounceTimer]);
+  }, [onValueChange]);
 
   // 清理定时器
   useEffect(() => {
     return () => {
-      if (debounceTimer) {
-        clearTimeout(debounceTimer);
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [debounceTimer]);
+  }, []);
 
   // 获取策略显示名称
   const getStrategyDisplayName = (strategy: PositionAllocationStrategy) => {
@@ -110,4 +110,4 @@ export function AllocationStrategyControl({
       </div>
     </div>
   );
-}
+});

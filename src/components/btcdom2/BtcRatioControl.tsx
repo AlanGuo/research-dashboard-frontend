@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, memo } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 
@@ -12,7 +12,7 @@ interface BtcRatioControlProps {
  * 完全独立的BTC占比控制组件
  * 专门用于测试性能，不受其他参数影响
  */
-const BtcRatioControl: React.FC<BtcRatioControlProps> = ({
+const BtcRatioControl = memo<BtcRatioControlProps>(({
   value,
   onValueChange,
   disabled = false
@@ -77,15 +77,7 @@ const BtcRatioControl: React.FC<BtcRatioControlProps> = ({
   // 同步外部值变化 - 优化版本
   React.useEffect(() => {
     const newDisplayValue = value * 100;
-    
-    console.log('IsolatedBtcRatio useEffect:', {
-      value,
-      newDisplayValue,
-      currentDisplayValue: displayValue,
-      lastExternal: lastExternalValueRef.current,
-      currentInput: currentInputValueRef.current
-    });
-    
+        
     // 只在外部值真正变化且不同于当前输入值时才更新显示值
     const isExternalChange = Math.abs(value - lastExternalValueRef.current) > 0.001;
     const isDifferentFromInput = Math.abs(value - currentInputValueRef.current) > 0.001;
@@ -129,6 +121,8 @@ const BtcRatioControl: React.FC<BtcRatioControlProps> = ({
       </div>
     </div>
   );
-};
+});
+
+BtcRatioControl.displayName = 'BtcRatioControl';
 
 export default BtcRatioControl;
