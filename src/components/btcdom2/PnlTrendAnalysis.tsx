@@ -4,6 +4,13 @@ import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { TrendingUp, TrendingDown, Calendar, MousePointer } from 'lucide-react';
 import { StrategySnapshot } from '@/types/btcdom2';
 
@@ -23,13 +30,15 @@ interface PnlTrendSegment {
 interface PnlTrendAnalysisProps {
   snapshots: StrategySnapshot[];
   onJumpToPeriod: (index: number) => void;
+  initialCapital: number;
 }
 
 export const PnlTrendAnalysis: React.FC<PnlTrendAnalysisProps> = ({
   snapshots,
-  onJumpToPeriod
+  onJumpToPeriod,
+  initialCapital
 }) => {
-  const [dataSource, setDataSource] = useState<'totalPnl' | 'periodPnl'>('totalPnl');
+  const [dataSource, setDataSource] = useState<'totalPnl' | 'periodPnl'>('periodPnl');
   const [minConsecutivePeriods, setMinConsecutivePeriods] = useState(3);
 
   // 格式化时间（使用UTC+0时区）
@@ -42,6 +51,29 @@ export const PnlTrendAnalysis: React.FC<PnlTrendAnalysisProps> = ({
   const formatAmount = (amount: number): string => {
     const sign = amount > 0 ? '+' : '';
     return `${sign}$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  // 格式化金额和百分比的组合显示（相对于起始资金总额）
+  const formatAmountWithPercent = (amount: number, startSnapshot: StrategySnapshot): string => {
+    // 获取起始日的资金总额
+    const startTotalValue = startSnapshot.totalValue;
+    const percent = (amount / startTotalValue) * 100;
+    
+    // 对于金额，负号放在$符号前面
+    let formattedAmount;
+    if (amount > 0) {
+      formattedAmount = `+$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    } else if (amount < 0) {
+      formattedAmount = `-$${Math.abs(amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    } else {
+      formattedAmount = `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+
+    // 对于百分比，如果是正数加+号，负数保持-号
+    const percentSign = percent > 0 ? '+' : '';
+    const formattedPercent = `${percentSign}${percent.toFixed(2)}%`;
+
+    return `${formattedAmount} (${formattedPercent})`;
   };
 
   // 分析盈亏趋势
@@ -121,29 +153,30 @@ export const PnlTrendAnalysis: React.FC<PnlTrendAnalysisProps> = ({
   }
 
   return (
-    <Card className="mb-6">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <TrendingUp className="w-5 h-5" />
+    <Card className="mb-4">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <TrendingUp className="w-4 h-4" />
           盈亏趋势分析
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
         {/* 控制面板 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <div className="space-y-2">
-            <Label htmlFor="dataSource">数据源</Label>
-            <select 
-              value={dataSource} 
-              onChange={(e) => setDataSource(e.target.value as 'totalPnl' | 'periodPnl')}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <option value="totalPnl">总盈亏</option>
-              <option value="periodPnl">当期盈亏</option>
-            </select>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label htmlFor="dataSource" className="text-xs">数据源</Label>
+            <Select value={dataSource} onValueChange={(value: 'totalPnl' | 'periodPnl') => setDataSource(value)}>
+              <SelectTrigger className="w-full h-8">
+                <SelectValue placeholder="选择数据源" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="totalPnl">总盈亏</SelectItem>
+                <SelectItem value="periodPnl">当期盈亏</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="minPeriods">最小连续期数: {minConsecutivePeriods}</Label>
+          <div className="space-y-1">
+            <Label htmlFor="minPeriods" className="text-xs">最小连续期数: {minConsecutivePeriods}</Label>
             <Slider
               value={[minConsecutivePeriods]}
               onValueChange={([value]) => setMinConsecutivePeriods(value)}
@@ -156,45 +189,53 @@ export const PnlTrendAnalysis: React.FC<PnlTrendAnalysisProps> = ({
         </div>
 
         {/* 统计概览 */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
-            <div className="text-sm text-gray-500 dark:text-gray-400">连续段数</div>
-            <div className="text-lg font-semibold">{stats.totalSegments}</div>
-          </div>
-          <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">
-            <div className="text-sm text-green-600 dark:text-green-400">盈利段数</div>
-            <div className="text-lg font-semibold text-green-600 dark:text-green-400">{stats.profitSegments}</div>
-          </div>
-          <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg">
-            <div className="text-sm text-red-600 dark:text-red-400">亏损段数</div>
-            <div className="text-lg font-semibold text-red-600 dark:text-red-400">{stats.lossSegments}</div>
-          </div>
-          <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
-            <div className="text-sm text-blue-600 dark:text-blue-400">最长连续</div>
-            <div className="text-lg font-semibold text-blue-600 dark:text-blue-400">
-              {Math.max(stats.longestProfitStreak, stats.longestLossStreak)}期
-            </div>
-          </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <Card className="border-none shadow-none bg-muted/30">
+            <CardContent className="p-2">
+              <div className="text-xs text-muted-foreground">连续段数</div>
+              <div className="text-sm font-semibold">{stats.totalSegments}</div>
+            </CardContent>
+          </Card>
+          <Card className="border-none shadow-none bg-green-50 dark:bg-green-900/10">
+            <CardContent className="p-2">
+              <div className="text-xs text-green-600 dark:text-green-400">盈利段数</div>
+              <div className="text-sm font-semibold text-green-600 dark:text-green-400">{stats.profitSegments}</div>
+            </CardContent>
+          </Card>
+          <Card className="border-none shadow-none bg-red-50 dark:bg-red-900/10">
+            <CardContent className="p-2">
+              <div className="text-xs text-red-600 dark:text-red-400">亏损段数</div>
+              <div className="text-sm font-semibold text-red-600 dark:text-red-400">{stats.lossSegments}</div>
+            </CardContent>
+          </Card>
+          <Card className="border-none shadow-none bg-blue-50 dark:bg-blue-900/10">
+            <CardContent className="p-2">
+              <div className="text-xs text-blue-600 dark:text-blue-400">最长连续</div>
+              <div className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+                {Math.max(stats.longestProfitStreak, stats.longestLossStreak)}期
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* 时间轴 */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-            <MousePointer className="w-4 h-4" />
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <MousePointer className="w-3 h-3" />
             点击时间段可跳转到对应期数
           </div>
           
           {trendSegments.length === 0 ? (
-            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+            <div className="text-center py-6 text-muted-foreground text-sm">
               未找到符合条件的连续趋势段（最小{minConsecutivePeriods}期）
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1.5 max-h-96 overflow-y-auto pr-2">
               {trendSegments.map((segment, index) => (
-                <div
+                <Card
                   key={index}
                   className={`
-                    p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 hover:shadow-md
+                    cursor-pointer transition-all duration-200 hover:shadow-sm border
                     ${segment.type === 'profit' 
                       ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 hover:bg-green-100 dark:hover:bg-green-900/30' 
                       : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/30'
@@ -202,44 +243,46 @@ export const PnlTrendAnalysis: React.FC<PnlTrendAnalysisProps> = ({
                   `}
                   onClick={() => handleSegmentClick(segment)}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      {segment.type === 'profit' ? (
-                        <TrendingUp className="w-5 h-5 text-green-600 dark:text-green-400" />
-                      ) : (
-                        <TrendingDown className="w-5 h-5 text-red-600 dark:text-red-400" />
-                      )}
-                      <div>
-                        <div className={`font-semibold ${
+                  <CardContent className="p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {segment.type === 'profit' ? (
+                          <TrendingUp className="w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0" />
+                        ) : (
+                          <TrendingDown className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0" />
+                        )}
+                        <div className="min-w-0">
+                          <div className={`font-medium text-sm ${
+                            segment.type === 'profit' 
+                              ? 'text-green-700 dark:text-green-400' 
+                              : 'text-red-700 dark:text-red-400'
+                          }`}>
+                            连续{segment.type === 'profit' ? '盈利' : '亏损'} {segment.periods} 期
+                          </div>
+                          <div className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            第{segment.startPeriod}期 ~ 第{segment.endPeriod}期
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <div className={`font-semibold text-sm ${
                           segment.type === 'profit' 
-                            ? 'text-green-700 dark:text-green-400' 
-                            : 'text-red-700 dark:text-red-400'
+                            ? 'text-green-600 dark:text-green-400' 
+                            : 'text-red-600 dark:text-red-400'
                         }`}>
-                          连续{segment.type === 'profit' ? '盈利' : '亏损'} {segment.periods} 期
+                          {dataSource === 'totalPnl' ? '累计' : '总计'}: {formatAmountWithPercent(segment.totalPnl, snapshots[segment.startIndex])}
                         </div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
-                          <Calendar className="w-4 h-4" />
-                          第{segment.startPeriod}期 ~ 第{segment.endPeriod}期
+                        <div className="text-xs text-muted-foreground">
+                          平均: {formatAmount(segment.avgPnl)}
                         </div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className={`font-bold text-lg ${
-                        segment.type === 'profit' 
-                          ? 'text-green-600 dark:text-green-400' 
-                          : 'text-red-600 dark:text-red-400'
-                      }`}>
-                        {dataSource === 'totalPnl' ? '累计' : '总计'}: {formatAmount(segment.totalPnl)}
-                      </div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">
-                        平均: {formatAmount(segment.avgPnl)}
-                      </div>
+                    <div className="mt-1.5 text-xs text-muted-foreground">
+                      {formatPeriodTime(segment.startDate)} ~ {formatPeriodTime(segment.endDate)}
                     </div>
-                  </div>
-                  <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                    {formatPeriodTime(segment.startDate)} ~ {formatPeriodTime(segment.endDate)}
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
               ))}
             </div>
           )}

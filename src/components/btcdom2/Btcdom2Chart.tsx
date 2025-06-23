@@ -9,8 +9,6 @@ import {
   Tooltip,
   Legend, 
   ResponsiveContainer,
-  Area,
-  AreaChart,
   ComposedChart
 } from 'recharts';
 import { BTCDOM2ChartData, BTCDOM2StrategyParams } from '@/types/btcdom2';
@@ -168,52 +166,6 @@ export function BTCDOM2Chart({ data, params }: BTCDOM2ChartProps) {
     return null;
   };
 
-  // 自定义AreaChart Tooltip
-  const CustomAreaTooltip = ({ active, payload, label }: { 
-    active?: boolean; 
-    payload?: Array<{
-      color: string;
-      name: string;
-      value: number;
-      payload: ProcessedChartData;
-    }>; 
-    label?: string 
-  }) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload;
-      return (
-        <div className="bg-white dark:bg-gray-900 p-3 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg backdrop-blur-sm">
-          <p className="font-medium text-gray-900 dark:text-gray-100 mb-2 border-b border-gray-200 dark:border-gray-700 pb-1">
-            {label}
-          </p>
-          <div className="space-y-1.5 text-sm">
-            {payload.map((entry, index) => (
-              <div key={index} className="flex justify-between gap-6">
-                <span className="text-gray-600 dark:text-gray-400 flex items-center gap-2">
-                  <div 
-                    className="w-3 h-3 rounded"
-                    style={{ backgroundColor: entry.color }}
-                  />
-                  {entry.name}:
-                </span>
-                <span className="font-medium text-gray-900 dark:text-gray-100">
-                  ${(entry.value * 1000).toLocaleString()}
-                </span>
-              </div>
-            ))}
-            <div className="flex justify-between gap-6 pt-1 border-t border-gray-200 dark:border-gray-700">
-              <span className="text-gray-600 dark:text-gray-400">总资产:</span>
-              <span className="font-medium text-gray-900 dark:text-gray-100">
-                ${data.totalValue.toLocaleString()}
-              </span>
-            </div>
-          </div>
-        </div>
-      );
-    }
-    return null;
-  };
-
   if (!data || data.length === 0) {
     return (
       <div className="h-96 flex items-center justify-center">
@@ -361,77 +313,6 @@ export function BTCDOM2Chart({ data, params }: BTCDOM2ChartProps) {
                 />
               )}
             </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* 资产配置变化 */}
-      <div>
-        <h4 className="font-medium mb-4 text-gray-900 dark:text-gray-100">资产配置变化</h4>
-        <div className="h-50">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData}>
-              <CartesianGrid 
-                strokeDasharray="3 3" 
-                stroke="rgba(156, 163, 175, 0.3)"
-              />
-              <XAxis 
-                dataKey="date" 
-                tick={{ fontSize: 12, fill: 'rgba(107, 114, 128, 0.8)' }}
-                stroke="rgba(107, 114, 128, 0.8)"
-                tickFormatter={(value) => value}
-              />
-              <YAxis 
-                tick={{ fontSize: 12, fill: 'rgba(107, 114, 128, 0.8)' }}
-                stroke="rgba(107, 114, 128, 0.8)"
-                label={{ 
-                  value: '资产价值 (千美元)', 
-                  angle: -90, 
-                  position: 'insideLeft',
-                  style: { textAnchor: 'middle', fill: 'rgba(107, 114, 128, 0.8)' }
-                }}
-              />
-              <Tooltip content={<CustomAreaTooltip />} />
-              <Legend 
-                wrapperStyle={{
-                  color: 'hsl(var(--muted-foreground))'
-                }}
-              />
-              
-              <Area
-                type="monotone"
-                dataKey="cashValue"
-                stackId="1"
-                stroke="#22c55e"
-                fill="#22c55e"
-                fillOpacity={0.6}
-                name="现金"
-              />
-              {/* 只在选择做多BTC时显示BTC持仓 */}
-              {(!params || params.longBtc) && (
-                <Area
-                  type="monotone"
-                  dataKey="btcValue"
-                  stackId="1"
-                  stroke="#f59e0b"
-                  fill="#f59e0b"
-                  fillOpacity={0.6}
-                  name="BTC持仓"
-                />
-              )}
-              {/* 只在选择做空ALT时显示做空持仓 */}
-              {(!params || params.shortAlt) && (
-                <Area
-                  type="monotone"
-                  dataKey="shortValue"
-                  stackId="1"
-                  stroke="#ef4444"
-                  fill="#ef4444"
-                  fillOpacity={0.6}
-                  name="做空持仓"
-                />
-              )}
-            </AreaChart>
           </ResponsiveContainer>
         </div>
       </div>
