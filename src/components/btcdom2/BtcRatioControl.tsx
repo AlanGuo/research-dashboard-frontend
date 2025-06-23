@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 
-interface IsolatedBtcRatioControlProps {
+interface BtcRatioControlProps {
   value: number; // 0-1的小数值
   onValueChange: (value: number) => void; // 回调传递0-1的小数值
   disabled?: boolean;
@@ -12,7 +12,7 @@ interface IsolatedBtcRatioControlProps {
  * 完全独立的BTC占比控制组件
  * 专门用于测试性能，不受其他参数影响
  */
-const IsolatedBtcRatioControl: React.FC<IsolatedBtcRatioControlProps> = ({
+const BtcRatioControl: React.FC<BtcRatioControlProps> = ({
   value,
   onValueChange,
   disabled = false
@@ -127,11 +127,8 @@ const IsolatedBtcRatioControl: React.FC<IsolatedBtcRatioControlProps> = ({
           %
         </span>
       </div>
-      <p className="text-xs text-gray-500 dark:text-gray-400">
-        独立测试版本，不受其他参数影响
-      </p>
     </div>
   );
 };
 
-export default IsolatedBtcRatioControl;
+export default BtcRatioControl;
