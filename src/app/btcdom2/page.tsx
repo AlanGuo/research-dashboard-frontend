@@ -41,7 +41,7 @@ export default function BTCDOM2Dashboard() {
     startDate: '2020-01-01',
     endDate: '2025-06-24',
     initialCapital: 10000,
-    btcRatio: 0.6,
+    btcRatio: 0.5,
     priceChangeWeight: 0.15,
     volumeWeight: 0.35,
     volatilityWeight: 0.15,
