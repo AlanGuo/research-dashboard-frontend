@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { 
   Line, 
   XAxis, 
@@ -35,16 +35,17 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
     btcPrice: true,
     btcReturn: true,
     btcdomReturn: true,
-    strategyReturn: true
+    strategyReturn: true,
+    maxDrawdown: true
   });
 
-  // 切换曲线可见性
-  const toggleVisibility = (key: keyof typeof visibility) => {
+  // 切换曲线可见性 - 使用 useCallback 避免不必要的重新渲染
+  const toggleVisibility = useCallback((key: keyof typeof visibility) => {
     setVisibility(prev => ({
       ...prev,
       [key]: !prev[key]
     }));
-  };
+  }, []);
 
   // 处理图表数据
   const chartData = useMemo(() => {
@@ -272,7 +273,12 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
           </div>
           {/* 最大回撤区域图例 */}
           {maxDrawdownArea && (
-            <div className="flex items-center gap-2 px-2 py-1">
+            <div 
+              className={`flex items-center gap-2 cursor-pointer select-none transition-all duration-200 hover:scale-105 px-2 py-1 rounded ${
+                visibility.maxDrawdown ? 'opacity-100' : 'opacity-50'
+              }`}
+              onClick={() => toggleVisibility('maxDrawdown')}
+            >
               <div
                 className="w-3 h-3 rounded border border-red-400"
                 style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)' }}
@@ -308,7 +314,7 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
               />
               <Tooltip content={<CustomTooltip />} />
               {/* 最大回撤区域背景 */}
-              {maxDrawdownArea && (
+              {maxDrawdownArea && visibility.maxDrawdown && (
                 <ReferenceArea
                   yAxisId="right"
                   x1={maxDrawdownArea.startDate}
