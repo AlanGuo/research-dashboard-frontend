@@ -16,6 +16,10 @@ export interface OptimizationConfig {
     longBtc: boolean;
     shortAlt: boolean;
     granularityHours?: number;
+    // 温度计规则参数
+    useTemperatureRule?: boolean;
+    temperatureSymbol?: string;
+    temperatureThreshold?: number;
   };
   
   // 优化目标

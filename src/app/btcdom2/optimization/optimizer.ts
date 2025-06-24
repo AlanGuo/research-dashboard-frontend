@@ -418,7 +418,11 @@ export class ParameterOptimizer {
       maxShortPositions: combination.maxShortPositions,
       allocationStrategy: combination.allocationStrategy,
       // 确保必要的字段有默认值
-      granularityHours: config.baseParams.granularityHours || 8
+      granularityHours: config.baseParams.granularityHours || 8,
+      // 温度计规则参数默认值
+      useTemperatureRule: config.baseParams.useTemperatureRule ?? false,
+      temperatureSymbol: config.baseParams.temperatureSymbol ?? 'OTHERS',
+      temperatureThreshold: config.baseParams.temperatureThreshold ?? 60
     };
 
     console.log('调用优化API，参数:', strategyParams);
@@ -1396,7 +1400,11 @@ export class ParameterOptimizer {
       fundingRateWeight: combination.fundingRateWeight,
       maxShortPositions: combination.maxShortPositions,
       allocationStrategy: combination.allocationStrategy,
-      granularityHours: config.baseParams.granularityHours || 8
+      granularityHours: config.baseParams.granularityHours || 8,
+      // 温度计规则参数默认值
+      useTemperatureRule: config.baseParams.useTemperatureRule ?? false,
+      temperatureSymbol: config.baseParams.temperatureSymbol ?? 'OTHERS',
+      temperatureThreshold: config.baseParams.temperatureThreshold ?? 60
     };
 
     // 调用优化API

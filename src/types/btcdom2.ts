@@ -26,6 +26,12 @@ export interface BTCDOM2StrategyParams {
   allocationStrategy: PositionAllocationStrategy; // 仓位分配策略
   granularityHours?: number;  // 回测粒度（小时），默认8小时
   optimizeOnly?: boolean;     // 是否为优化模式（跳过图表数据生成以提升性能）
+  
+  // 温度计规则相关参数
+  useTemperatureRule: boolean;  // 是否启用温度计规则
+  temperatureSymbol: string;    // 温度计监控的Symbol (默认OTHERS)
+  temperatureThreshold: number; // 温度计阈值 (默认60)
+  temperaturePeriods?: TemperaturePeriod[]; // 温度计超阈值时期数据（运行时获取）
 }
 
 // 资金费率历史数据项
@@ -292,4 +298,31 @@ export interface ShortSelectionResult {
   rejectedCandidates: ShortCandidate[];
   totalCandidates: number;
   selectionReason: string;
+}
+
+// 温度计时间段数据
+export interface TemperaturePeriod {
+  start: string;      // 开始时间 ISO格式
+  end: string;        // 结束时间 ISO格式
+  maxValue: number;   // 该时间段内的最大温度值
+}
+
+// 温度计API响应数据
+export interface TemperaturePeriodsData {
+  symbol: string;
+  timeframe: string;
+  periods: TemperaturePeriod[];
+  totalPeriods: number;
+  threshold: number;
+  dateRange: {
+    start: string;
+    end: string;
+  };
+}
+
+// 温度计API响应结构
+export interface TemperaturePeriodsResponse {
+  success: boolean;
+  data?: TemperaturePeriodsData;
+  message?: string;
 }

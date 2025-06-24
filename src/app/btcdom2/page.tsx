@@ -15,7 +15,9 @@ import {
   BTCDOM2ChartData,
   StrategySnapshot,
   PositionInfo,
-  PositionAllocationStrategy
+  PositionAllocationStrategy,
+  TemperaturePeriodsResponse,
+  TemperaturePeriod
 } from '@/types/btcdom2';
 import { BTCDOM2Chart } from '@/components/btcdom2/Btcdom2Chart';
 import { BTCDOM2PositionTable } from '@/components/btcdom2/Btcdom2PositionTable';
@@ -27,6 +29,7 @@ import { TradingFeesControl } from '@/components/btcdom2/TradingFeesControl';
 import { InitialCapitalControl } from '@/components/btcdom2/InitialCapitalControl';
 import { DateRangeControl } from '@/components/btcdom2/DateRangeControl';
 import { AllocationStrategyControl } from '@/components/btcdom2/AllocationStrategyControl';
+import { TemperatureRuleControl } from '@/components/btcdom2/TemperatureRuleControl';
 import { AlertCircle, Play, Settings, TrendingUp, TrendingDown, Clock, Loader2, Eye, Info, Bitcoin, ArrowDown, Zap } from 'lucide-react';
 
 export default function BTCDOM2Dashboard() {
@@ -36,7 +39,7 @@ export default function BTCDOM2Dashboard() {
   // 策略参数状态
   const [params, setParams] = useState<BTCDOM2StrategyParams>({
     startDate: '2020-01-01',
-    endDate: '2025-06-21',
+    endDate: '2025-06-24',
     initialCapital: 10000,
     btcRatio: 0.6,
     priceChangeWeight: 0.15,
@@ -48,7 +51,11 @@ export default function BTCDOM2Dashboard() {
     futuresTradingFeeRate: 0.0002, // 0.02% 期货手续费
     longBtc: true,      // 固定为做多BTC
     shortAlt: true,     // 固定为做空ALT
-    allocationStrategy: PositionAllocationStrategy.BY_VOLUME
+    allocationStrategy: PositionAllocationStrategy.BY_VOLUME,
+    // 温度计规则参数
+    useTemperatureRule: false,
+    temperatureSymbol: 'OTHERS',
+    temperatureThreshold: 60
   });
 
   // 数据状态
@@ -200,12 +207,51 @@ export default function BTCDOM2Dashboard() {
     setError(null);
 
     try {
+      let temperaturePeriods: TemperaturePeriod[] = [];
+
+      // 如果启用了温度计规则，先获取温度计数据
+      if (paramsToUse.useTemperatureRule) {
+        console.log('获取温度计数据...');
+        const temperatureResponse = await fetch(
+          `/api/btcdom2/temperature-periods?` +
+          `symbol=${encodeURIComponent(paramsToUse.temperatureSymbol)}&` +
+          `threshold=${paramsToUse.temperatureThreshold}&` +
+          `startDate=${encodeURIComponent(paramsToUse.startDate + 'T00:00:00.000Z')}&` +
+          `endDate=${encodeURIComponent(paramsToUse.endDate + 'T23:59:59.999Z')}`,
+          {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+
+        if (!temperatureResponse.ok) {
+          throw new Error(`温度计数据获取失败: ${temperatureResponse.status}`);
+        }
+
+        const temperatureResult: TemperaturePeriodsResponse = await temperatureResponse.json();
+
+        if (!temperatureResult.success || !temperatureResult.data) {
+          throw new Error(temperatureResult.message || '温度计数据获取失败');
+        }
+
+        temperaturePeriods = temperatureResult.data.periods;
+        console.log(`获取到 ${temperaturePeriods.length} 个温度计超阈值时期`);
+      }
+
+      // 执行回测，将温度计数据包含在参数中
+      const backtestParams = {
+        ...paramsToUse,
+        temperaturePeriods: temperaturePeriods
+      };
+
       const response = await fetch('/api/btcdom2/backtest', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(paramsToUse),
+        body: JSON.stringify(backtestParams),
       });
 
       if (!response.ok) {
@@ -288,6 +334,19 @@ export default function BTCDOM2Dashboard() {
   // 仓位分配策略处理函数
   const handleAllocationStrategyChange = useCallback((value: PositionAllocationStrategy) => {
     setParams(prev => ({ ...prev, allocationStrategy: value }));
+  }, []);
+
+  // 温度计规则处理函数
+  const handleTemperatureRuleEnabledChange = useCallback((enabled: boolean) => {
+    setParams(prev => ({ ...prev, useTemperatureRule: enabled }));
+  }, []);
+
+  const handleTemperatureSymbolChange = useCallback((symbol: string) => {
+    setParams(prev => ({ ...prev, temperatureSymbol: symbol }));
+  }, []);
+
+  const handleTemperatureThresholdChange = useCallback((threshold: number) => {
+    setParams(prev => ({ ...prev, temperatureThreshold: threshold }));
   }, []);
 
   // 标准化权重 - 将所有权重按比例调整使总和为1
@@ -615,6 +674,17 @@ export default function BTCDOM2Dashboard() {
                     futuresFeeRate={params.futuresTradingFeeRate}
                     onSpotFeeChange={handleSpotTradingFeeRateChange}
                     onFuturesFeeChange={handleFuturesTradingFeeRateChange}
+                    disabled={loading}
+                  />
+
+                  {/* 温度计规则配置 */}
+                  <TemperatureRuleControl
+                    enabled={params.useTemperatureRule}
+                    symbol={params.temperatureSymbol}
+                    threshold={params.temperatureThreshold}
+                    onEnabledChange={handleTemperatureRuleEnabledChange}
+                    onSymbolChange={handleTemperatureSymbolChange}
+                    onThresholdChange={handleTemperatureThresholdChange}
                     disabled={loading}
                   />
 

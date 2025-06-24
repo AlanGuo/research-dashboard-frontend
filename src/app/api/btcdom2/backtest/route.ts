@@ -214,6 +214,26 @@ class BTCDOM2StrategyEngine {
     this.params = params;
   }
 
+  // 检查当前时间是否在温度计超阈值期间内
+  private isInTemperatureHighPeriod(timestamp: string): boolean {
+    if (!this.params.useTemperatureRule || !this.params.temperaturePeriods) {
+      return false;
+    }
+
+    const currentTime = new Date(timestamp);
+    
+    for (const period of this.params.temperaturePeriods) {
+      const startTime = new Date(period.start);
+      const endTime = new Date(period.end);
+      
+      if (currentTime >= startTime && currentTime <= endTime) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+
   // 计算交易手续费（返回负数，因为是扣除的费用）
   private calculateTradingFee(amount: number, isSpotTrading: boolean = true): number {
     const feeRate = isSpotTrading ? this.params.spotTradingFeeRate : this.params.futuresTradingFeeRate;
@@ -531,10 +551,19 @@ class BTCDOM2StrategyEngine {
     const selectionResult = await this.selectShortCandidates(rankings, btcPriceChange24h);
     const { selectedCandidates, rejectedCandidates, selectionReason } = selectionResult;
 
+    // 检查温度计规则
+    const isInTemperatureHigh = this.isInTemperatureHighPeriod(timestamp);
+    let temperatureRuleReason = '';
+    
+    if (isInTemperatureHigh) {
+      temperatureRuleReason = `温度计高于${this.params.temperatureThreshold}，禁止持有空头仓位`;
+    }
+
     // 检查是否有可执行的策略
     const hasShortCandidates = selectedCandidates.length > 0;
     const canLongBtc = this.params.longBtc || false;
-    const canShortAlt = this.params.shortAlt || false;
+    // 温度计高于阈值时，不能做空ALT
+    const canShortAlt = (this.params.shortAlt || false) && !isInTemperatureHigh;
     const isActive = (canLongBtc || (canShortAlt && hasShortCandidates));
 
     // 计算当前总价值（如果是第一个快照，则使用初始本金）
@@ -550,6 +579,11 @@ class BTCDOM2StrategyEngine {
     const accumulatedTradingFee = (previousSnapshot?.accumulatedTradingFee || 0);
     const accumulatedFundingFee = (previousSnapshot?.accumulatedFundingFee || 0);
     let inactiveReason = '';
+
+    // 如果因为温度计规则导致不能做空，记录原因
+    if (isInTemperatureHigh && this.params.shortAlt) {
+      inactiveReason = temperatureRuleReason;
+    }
 
     if (isActive) {
       // 初始化BTC盈亏
@@ -649,7 +683,9 @@ class BTCDOM2StrategyEngine {
       if (previousSnapshot?.shortPositions) {
         for (const prevPosition of previousSnapshot.shortPositions) {
           const stillHeld = selectedCandidates.find(c => c.symbol === prevPosition.symbol);
-          if (!stillHeld) {
+          // 温度计高于阈值时强制卖出所有空头仓位，或者正常的卖出逻辑
+          const shouldSell = !stillHeld || isInTemperatureHigh;
+          if (shouldSell) {
             // 这个持仓在本期被卖出了
             // 优先从removedSymbols中获取数据，如果没有则从rankings中查找
             let rankingItem = removedSymbols?.find(r => r.symbol === prevPosition.symbol);
@@ -706,7 +742,7 @@ class BTCDOM2StrategyEngine {
               },
               quantityChange: { type: 'sold' },
               fundingRateHistory: soldFundingRateHistory,
-              reason: '持仓卖出'
+              reason: isInTemperatureHigh ? `温度计规则强制卖出（${this.params.temperatureSymbol}>${this.params.temperatureThreshold})` : '持仓卖出'
             });
           }
         }
@@ -1022,7 +1058,9 @@ class BTCDOM2StrategyEngine {
       accumulatedFundingFee: accumulatedFundingFee + totalFundingFee,
       cashPosition,
       isActive,
-      rebalanceReason: isActive ? selectionReason : inactiveReason,
+      rebalanceReason: isActive ? 
+        (isInTemperatureHigh ? `${selectionReason} (${temperatureRuleReason})` : selectionReason) : 
+        inactiveReason,
       shortCandidates: [...selectedCandidates, ...rejectedCandidates]
     };
   }
@@ -1412,7 +1450,11 @@ export async function POST(request: NextRequest) {
       volatilityWeight: rawParams.volatilityWeight !== undefined ? rawParams.volatilityWeight : 0.1,
       fundingRateWeight: rawParams.fundingRateWeight !== undefined ? rawParams.fundingRateWeight : 0.3,
       allocationStrategy: rawParams.allocationStrategy !== undefined ? rawParams.allocationStrategy : PositionAllocationStrategy.BY_VOLUME,
-
+      // 温度计规则参数默认值
+      useTemperatureRule: rawParams.useTemperatureRule !== undefined ? rawParams.useTemperatureRule : false,
+      temperatureSymbol: rawParams.temperatureSymbol !== undefined ? rawParams.temperatureSymbol : 'OTHERS',
+      temperatureThreshold: rawParams.temperatureThreshold !== undefined ? rawParams.temperatureThreshold : 60,
+      temperaturePeriods: rawParams.temperaturePeriods || [],
     };
 
     // 检查是否为优化模式（跳过图表数据生成以提升性能）
