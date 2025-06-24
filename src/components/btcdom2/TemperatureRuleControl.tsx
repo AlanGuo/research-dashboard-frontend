@@ -1,9 +1,11 @@
 'use client';
 
+import React, { useState, useCallback, useRef, memo } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent } from '@/components/ui/card';
+import { devConsole } from '@/utils/devLogger';
 
 interface TemperatureRuleControlProps {
   enabled: boolean;
@@ -15,7 +17,7 @@ interface TemperatureRuleControlProps {
   disabled?: boolean;
 }
 
-export function TemperatureRuleControl({
+export const TemperatureRuleControl = memo<TemperatureRuleControlProps>(({
   enabled,
   symbol,
   threshold,
@@ -23,17 +25,116 @@ export function TemperatureRuleControl({
   onSymbolChange,
   onThresholdChange,
   disabled = false
-}: TemperatureRuleControlProps) {
-  const handleThresholdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseFloat(e.target.value);
-    if (!isNaN(value) && value >= 0 && value <= 100) {
-      onThresholdChange(value);
-    }
-  };
+}: TemperatureRuleControlProps) => {
+  // Symbol 本地状态和防抖
+  const [displaySymbol, setDisplaySymbol] = useState<string>(symbol);
+  const symbolDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastExternalSymbolRef = useRef<string>(symbol);
+  const isInternalSymbolChangeRef = useRef<boolean>(false);
 
-  const handleSymbolChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onSymbolChange(e.target.value);
-  };
+  // Threshold 本地状态和防抖
+  const [displayThreshold, setDisplayThreshold] = useState<number>(threshold);
+  const thresholdDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastExternalThresholdRef = useRef<number>(threshold);
+  const isInternalThresholdChangeRef = useRef<boolean>(false);
+
+  devConsole.log('🔄 TemperatureRuleControl render:', {
+    propsSymbol: symbol,
+    displaySymbol: displaySymbol,
+    propsThreshold: threshold,
+    displayThreshold: displayThreshold
+  });
+
+  // Symbol 防抖处理
+  const handleSymbolChange = useCallback((inputValue: string) => {
+    devConsole.log('⌨️  Symbol用户输入:', inputValue);
+    
+    isInternalSymbolChangeRef.current = true;
+    setDisplaySymbol(inputValue);
+    
+    if (symbolDebounceTimerRef.current) {
+      clearTimeout(symbolDebounceTimerRef.current);
+      symbolDebounceTimerRef.current = null;
+    }
+
+    symbolDebounceTimerRef.current = setTimeout(() => {
+      devConsole.log('🚀 Symbol防抖触发:', inputValue);
+      
+      if (inputValue !== lastExternalSymbolRef.current) {
+        lastExternalSymbolRef.current = inputValue;
+        devConsole.log('✅ 通知父组件Symbol更新:', inputValue);
+        onSymbolChange(inputValue);
+      } else {
+        devConsole.log('⏭️  Symbol值未变化，跳过通知');
+      }
+      
+      symbolDebounceTimerRef.current = null;
+    }, 300);
+  }, [onSymbolChange]);
+
+  // Threshold 防抖处理
+  const handleThresholdChange = useCallback((inputValue: string) => {
+    devConsole.log('⌨️  Threshold用户输入:', inputValue);
+    
+    const numValue = parseFloat(inputValue) || 0;
+    const clampedValue = Math.min(Math.max(numValue, 0), 100);
+    
+    isInternalThresholdChangeRef.current = true;
+    setDisplayThreshold(clampedValue);
+    
+    if (thresholdDebounceTimerRef.current) {
+      clearTimeout(thresholdDebounceTimerRef.current);
+      thresholdDebounceTimerRef.current = null;
+    }
+
+    thresholdDebounceTimerRef.current = setTimeout(() => {
+      devConsole.log('🚀 Threshold防抖触发:', clampedValue);
+      
+      if (Math.abs(clampedValue - lastExternalThresholdRef.current) > 0.001) {
+        lastExternalThresholdRef.current = clampedValue;
+        devConsole.log('✅ 通知父组件Threshold更新:', clampedValue);
+        onThresholdChange(clampedValue);
+      } else {
+        devConsole.log('⏭️  Threshold值未变化，跳过通知');
+      }
+      
+      thresholdDebounceTimerRef.current = null;
+    }, 300);
+  }, [onThresholdChange]);
+
+  // 同步外部Symbol变化
+  React.useEffect(() => {
+    if (symbol !== lastExternalSymbolRef.current && !isInternalSymbolChangeRef.current) {
+      devConsole.log('🔄 外部Symbol变化，更新显示值:', symbol);
+      setDisplaySymbol(symbol);
+      lastExternalSymbolRef.current = symbol;
+    } else if (isInternalSymbolChangeRef.current && symbol === lastExternalSymbolRef.current) {
+      isInternalSymbolChangeRef.current = false;
+    }
+  }, [symbol]);
+
+  // 同步外部Threshold变化
+  React.useEffect(() => {
+    if (Math.abs(threshold - lastExternalThresholdRef.current) > 0.001 && !isInternalThresholdChangeRef.current) {
+      devConsole.log('🔄 外部Threshold变化，更新显示值:', threshold);
+      setDisplayThreshold(threshold);
+      lastExternalThresholdRef.current = threshold;
+    } else if (isInternalThresholdChangeRef.current && Math.abs(threshold - lastExternalThresholdRef.current) <= 0.001) {
+      isInternalThresholdChangeRef.current = false;
+    }
+  }, [threshold]);
+
+  // 清理定时器
+  React.useEffect(() => {
+    return () => {
+      if (symbolDebounceTimerRef.current) {
+        clearTimeout(symbolDebounceTimerRef.current);
+      }
+      if (thresholdDebounceTimerRef.current) {
+        clearTimeout(thresholdDebounceTimerRef.current);
+      }
+    };
+  }, []);
 
   return (
     <Card className="border-gray-200 dark:border-gray-700">
@@ -67,8 +168,8 @@ export function TemperatureRuleControl({
                   </Label>
                   <Input
                     type="text"
-                    value={symbol}
-                    onChange={handleSymbolChange}
+                    value={displaySymbol}
+                    onChange={(e) => handleSymbolChange(e.target.value)}
                     disabled={disabled}
                     placeholder="OTHERS"
                     className="w-full"
@@ -85,8 +186,8 @@ export function TemperatureRuleControl({
                   </Label>
                   <Input
                     type="number"
-                    value={threshold}
-                    onChange={handleThresholdChange}
+                    value={displayThreshold}
+                    onChange={(e) => handleThresholdChange(e.target.value)}
                     disabled={disabled}
                     min={0}
                     max={100}
@@ -114,4 +215,6 @@ export function TemperatureRuleControl({
       </CardContent>
     </Card>
   );
-}
+});
+
+TemperatureRuleControl.displayName = 'TemperatureRuleControl';
