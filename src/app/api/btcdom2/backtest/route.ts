@@ -714,11 +714,15 @@ class BTCDOM2StrategyEngine {
             let soldFundingFee = 0;
             const soldRankingItem = previousData?.rankings?.find(r => r.symbol === prevPosition.symbol);
             const soldFundingRateHistory = soldRankingItem?.fundingRateHistory || [];
+            
             if (soldFundingRateHistory.length > 0 && validQuantity > 0) {
               for (const funding of soldFundingRateHistory) {
                 // 对于做空头寸：资金费率为负数时支付，为正数时收取
-                const positionValue = validQuantity * funding.markPrice;
-                soldFundingFee += positionValue * funding.fundingRate;
+                // 如果markPrice为null或0，使用当前价格作为替代
+                const effectiveMarkPrice = funding.markPrice || currentPrice;
+                const positionValue = validQuantity * effectiveMarkPrice;
+                const fundingAmount = positionValue * funding.fundingRate;
+                soldFundingFee += fundingAmount;
               }
             }
             totalFundingFee += soldFundingFee;
@@ -827,7 +831,9 @@ class BTCDOM2StrategyEngine {
               // 资金费率为负数时，空头支付资金费（亏损）
               // 资金费率为正数时，空头收取资金费（盈利）
               // 所以公式是：资金费率盈亏 = 头寸价值 × 资金费率
-              const positionValue = quantity * funding.markPrice;
+              // 如果markPrice为null或0，使用当前价格作为替代
+              const effectiveMarkPrice = funding.markPrice || price;
+              const positionValue = quantity * effectiveMarkPrice;
               fundingFee += positionValue * funding.fundingRate;
             }
           }
@@ -905,11 +911,15 @@ class BTCDOM2StrategyEngine {
           let soldFundingFee = 0;
           const soldRankingItem = previousData?.rankings?.find(r => r.symbol === prevPosition.symbol);
           const soldFundingRateHistory = soldRankingItem?.fundingRateHistory || [];
+          
           if (soldFundingRateHistory.length > 0 && validQuantity > 0) {
             for (const funding of soldFundingRateHistory) {
               // 对于做空头寸：资金费率为负数时支付，为正数时收取
-              const positionValue = validQuantity * funding.markPrice;
-              soldFundingFee += positionValue * funding.fundingRate;
+              // 如果markPrice为null或0，使用当前价格作为替代
+              const effectiveMarkPrice = funding.markPrice || currentPrice;
+              const positionValue = validQuantity * effectiveMarkPrice;
+              const fundingAmount = positionValue * funding.fundingRate;
+              soldFundingFee += fundingAmount;
             }
           }
           totalFundingFee += soldFundingFee;
