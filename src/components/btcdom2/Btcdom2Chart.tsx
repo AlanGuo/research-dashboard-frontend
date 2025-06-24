@@ -8,9 +8,10 @@ import {
   CartesianGrid, 
   Tooltip,
   ResponsiveContainer,
-  ComposedChart
+  ComposedChart,
+  ReferenceArea
 } from 'recharts';
-import { BTCDOM2ChartData, BTCDOM2StrategyParams } from '@/types/btcdom2';
+import { BTCDOM2ChartData, BTCDOM2StrategyParams, BTCDOM2PerformanceMetrics } from '@/types/btcdom2';
 
 // 扩展的图表数据类型，包含处理后的字段
 interface ProcessedChartData extends BTCDOM2ChartData {
@@ -25,9 +26,10 @@ interface ProcessedChartData extends BTCDOM2ChartData {
 interface BTCDOM2ChartProps {
   data: BTCDOM2ChartData[];
   params?: BTCDOM2StrategyParams;
+  performance?: BTCDOM2PerformanceMetrics;
 }
 
-export function BTCDOM2Chart({ data }: BTCDOM2ChartProps) {
+export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
   // 图表可见性状态
   const [visibility, setVisibility] = useState({
     btcPrice: true,
@@ -92,6 +94,34 @@ export function BTCDOM2Chart({ data }: BTCDOM2ChartProps) {
     
     return processedData;
   }, [data]);
+
+  // 计算最大回撤区域
+  const maxDrawdownArea = useMemo(() => {
+    if (!performance?.maxDrawdownInfo || !chartData || chartData.length === 0) {
+      return null;
+    }
+
+    const { startPeriod, endPeriod } = performance.maxDrawdownInfo;
+    
+    // 使用期数索引定位（最可靠的方法）
+    // 注意：期数是从1开始的，但数组索引是从0开始的
+    const startIndex = Math.max(0, startPeriod - 1);
+    const endIndex = Math.min(chartData.length - 1, endPeriod - 1);
+    
+    const startDateByIndex = chartData[startIndex]?.date;
+    const endDateByIndex = chartData[endIndex]?.date;
+
+    if (!startDateByIndex || !endDateByIndex) {
+      return null;
+    }
+
+    return {
+      startDate: startDateByIndex,
+      endDate: endDateByIndex,
+      startIndex,
+      endIndex
+    };
+  }, [performance?.maxDrawdownInfo, chartData]);
 
   // 自定义Tooltip
   const CustomTooltip = ({ active, payload, label }: { 
@@ -240,6 +270,18 @@ export function BTCDOM2Chart({ data }: BTCDOM2ChartProps) {
               BTCDOM2.0收益率 (%)
             </span>
           </div>
+          {/* 最大回撤区域图例 */}
+          {maxDrawdownArea && (
+            <div className="flex items-center gap-2 px-2 py-1">
+              <div
+                className="w-3 h-3 rounded border border-red-400"
+                style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)' }}
+              />
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                最大回撤期间
+              </span>
+            </div>
+          )}
         </div>
         
         <div className="h-80">
@@ -265,6 +307,20 @@ export function BTCDOM2Chart({ data }: BTCDOM2ChartProps) {
                 label={{ value: '收益率 (%)', angle: 90, position: 'insideRight' }}
               />
               <Tooltip content={<CustomTooltip />} />
+              {/* 最大回撤区域背景 */}
+              {maxDrawdownArea && (
+                <ReferenceArea
+                  yAxisId="right"
+                  x1={maxDrawdownArea.startDate}
+                  x2={maxDrawdownArea.endDate}
+                  fill="#fef2f2"
+                  fillOpacity={0.8}
+                  stroke="#dc2626"
+                  strokeOpacity={0.8}
+                  strokeWidth={1}
+                  strokeDasharray="3 3"
+                />
+              )}
               
               {visibility.btcPrice && (
                 <Line

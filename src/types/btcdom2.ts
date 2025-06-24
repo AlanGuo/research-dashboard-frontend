@@ -218,6 +218,14 @@ export interface BTCDOM2PerformanceMetrics {
     timestamp: string;
     period: number;
   };
+  maxDrawdownInfo?: {                // 最大回撤详情
+    drawdown: number;                // 最大回撤值
+    startTimestamp: string;          // 回撤开始时间（峰值）
+    endTimestamp: string;            // 回撤结束时间（谷底）
+    startPeriod: number;             // 回撤开始期数
+    endPeriod: number;               // 回撤结束期数
+    duration: number;                // 持续期数
+  };
   // 盈亏金额分解
   pnlBreakdown: {
     totalPnlAmount: number;      // 总盈亏金额

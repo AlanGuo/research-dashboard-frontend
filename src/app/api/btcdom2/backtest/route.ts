@@ -1080,6 +1080,14 @@ function calculatePerformanceMetrics(
         timestamp: snapshots[0].timestamp,
         period: 1
       },
+      maxDrawdownInfo: {
+        drawdown: 0,
+        startTimestamp: snapshots[0].timestamp,
+        endTimestamp: snapshots[0].timestamp,
+        startPeriod: 1,
+        endPeriod: 1,
+        duration: 1
+      },
       bestFundingPeriod: firstSnapshot.totalFundingFee || 0,
       worstFundingPeriod: firstSnapshot.totalFundingFee || 0,
       bestFundingPeriodInfo: {
@@ -1162,14 +1170,40 @@ function calculatePerformanceMetrics(
 
   // 最大回撤
   let maxDrawdown = 0;
+  let maxDrawdownInfo: { 
+    drawdown: number; 
+    startTimestamp: string; 
+    endTimestamp: string; 
+    startPeriod: number; 
+    endPeriod: number; 
+    duration: number; 
+  } | undefined;
   let peak = params.initialCapital;
-  for (const snapshot of snapshots) {
+  let peakIndex = -1; // 峰值对应的索引
+  
+  for (let i = 0; i < snapshots.length; i++) {
+    const snapshot = snapshots[i];
+    
+    // 更新峰值
     if (snapshot.totalValue > peak) {
       peak = snapshot.totalValue;
+      peakIndex = i;
     }
+    
+    // 计算当前回撤
     const drawdown = (peak - snapshot.totalValue) / peak;
+    
+    // 如果当前回撤是最大的，记录回撤期间信息
     if (drawdown > maxDrawdown) {
       maxDrawdown = drawdown;
+      maxDrawdownInfo = {
+        drawdown,
+        startTimestamp: peakIndex >= 0 ? snapshots[peakIndex].timestamp : snapshot.timestamp,
+        endTimestamp: snapshot.timestamp,
+        startPeriod: peakIndex >= 0 ? peakIndex + 1 : i + 1, // 期数从1开始
+        endPeriod: i + 1,
+        duration: peakIndex >= 0 ? (i - peakIndex + 1) : 1
+      };
     }
   }
 
@@ -1295,6 +1329,7 @@ function calculatePerformanceMetrics(
     worstFundingPeriod,
     bestFundingPeriodInfo,
     worstFundingPeriodInfo,
+    maxDrawdownInfo,
     pnlBreakdown: {
       totalPnlAmount,
       btcPnlAmount,

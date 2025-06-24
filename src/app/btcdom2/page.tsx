@@ -848,10 +848,23 @@ export default function BTCDOM2Dashboard() {
                   {/* 最大回撤 - 突出显示 */}
                   <div className="flex justify-between items-center p-3 bg-red-50 dark:bg-red-900/20 rounded-md">
                     <span className="font-medium text-gray-700 dark:text-gray-300">最大回撤</span>
-                    <div className="text-xl font-bold text-red-600 dark:text-red-400">
-                      {formatAmountWithPercent(
-                        params.initialCapital * backtestResult.performance.maxDrawdown,
-                        backtestResult.performance.maxDrawdown * 100
+                    <div className="text-right">
+                      <div className="text-xl font-bold text-red-600 dark:text-red-400">
+                        {formatAmountWithPercent(
+                          params.initialCapital * backtestResult.performance.maxDrawdown,
+                          backtestResult.performance.maxDrawdown * 100
+                        )}
+                      </div>
+                      {backtestResult.performance.maxDrawdownInfo && (
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          {backtestResult.performance.maxDrawdownInfo.startPeriod === backtestResult.performance.maxDrawdownInfo.endPeriod ? (
+                            // 单期回撤
+                            <>第{backtestResult.performance.maxDrawdownInfo.startPeriod}期 • {formatPeriodTime(backtestResult.performance.maxDrawdownInfo.startTimestamp)}</>
+                          ) : (
+                            // 多期回撤
+                            <>第{backtestResult.performance.maxDrawdownInfo.startPeriod}-{backtestResult.performance.maxDrawdownInfo.endPeriod}期 ({backtestResult.performance.maxDrawdownInfo.duration}期) • {formatPeriodTime(backtestResult.performance.maxDrawdownInfo.startTimestamp)} ~ {formatPeriodTime(backtestResult.performance.maxDrawdownInfo.endTimestamp)}</>
+                          )}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -977,7 +990,7 @@ export default function BTCDOM2Dashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <BTCDOM2Chart data={chartData} params={params} />
+                <BTCDOM2Chart data={chartData} params={params} performance={backtestResult.performance} />
               </CardContent>
             </Card>
 
