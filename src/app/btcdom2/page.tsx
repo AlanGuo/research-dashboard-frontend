@@ -55,7 +55,7 @@ export default function BTCDOM2Dashboard() {
     // 温度计规则参数
     useTemperatureRule: true,
     temperatureSymbol: 'OTHERS',
-    temperatureThreshold: 60
+    temperatureThreshold: 65
   });
 
   // 数据状态
