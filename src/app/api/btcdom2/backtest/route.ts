@@ -863,8 +863,8 @@ class BTCDOM2StrategyEngine {
         });
       }
 
-      // 计算总资金费率
-      totalFundingFee = shortPositions.reduce((sum, pos) => sum + (pos.fundingFee || 0), 0);
+      // 计算总资金费率（累加持仓的资金费，soldPositions的资金费已经在前面累加过了）
+      totalFundingFee += shortPositions.reduce((sum, pos) => sum + (pos.fundingFee || 0), 0);
 
       // 更新总价值（考虑手续费和资金费率）
       const btcValueChange = btcPnl;
