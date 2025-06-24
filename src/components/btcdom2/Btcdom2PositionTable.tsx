@@ -589,7 +589,27 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
       {snapshot.shortCandidates && snapshot.shortCandidates.length > 0 && (
         <Card className="mt-4">
           <CardHeader>
-            <CardTitle className="text-sm">做空候选标的评分详情(前10)</CardTitle>
+            <CardTitle className="text-sm flex items-center gap-2">
+              做空候选标的评分详情(前10)
+              {/* 温度计规则状态提示 */}
+              {snapshot.rebalanceReason?.includes('温度计') && (
+                <Badge variant="destructive" className="text-xs">
+                  <AlertTriangle className="w-3 h-3 mr-1" />
+                  温度计规则生效
+                </Badge>
+              )}
+            </CardTitle>
+            {/* 温度计规则详细说明 */}
+            {snapshot.rebalanceReason?.includes('温度计') && (
+              <div className="mt-2 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-md border border-orange-200 dark:border-orange-800">
+                <p className="text-xs text-orange-700 dark:text-orange-300">
+                  <strong>温度计规则触发:</strong> {snapshot.rebalanceReason}
+                </p>
+                <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                  虽然存在合格的做空候选标的，但因温度计规则强制清空所有空头仓位
+                </p>
+              </div>
+            )}
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -622,13 +642,24 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                       <TableCell className="text-right">{(candidate.fundingRateScore ?? 0.5).toFixed(3)}</TableCell>
                       <TableCell className="text-right font-medium">{(candidate.totalScore ?? 0).toFixed(3)}</TableCell>
                       <TableCell>
-                        <Badge variant={candidate.eligible ? "default" : "secondary"} className="text-xs">
-                          {candidate.eligible ? "已选择" : "已排除"}
+                        <Badge 
+                          variant={
+                            snapshot.rebalanceReason?.includes('温度计') ? "destructive" :
+                            candidate.eligible ? "default" : "secondary"
+                          } 
+                          className="text-xs"
+                        >
+                          {snapshot.rebalanceReason?.includes('温度计') ? "温度计禁止" :
+                           candidate.eligible ? "已选择" : "已排除"}
                         </Badge>
                       </TableCell>
                       <TableCell className="max-w-48">
                         <div className="text-xs text-muted-foreground" title={candidate.reason}>
-                          {candidate.eligible ? (
+                          {snapshot.rebalanceReason?.includes('温度计') ? (
+                            <div className="text-orange-600 dark:text-orange-400">
+                              温度计规则生效，禁止开空仓
+                            </div>
+                          ) : candidate.eligible ? (
                             <span>已选择</span>
                           ) : (
                             <div className="space-y-1">
