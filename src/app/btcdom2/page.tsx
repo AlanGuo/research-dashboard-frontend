@@ -1263,7 +1263,7 @@ export default function BTCDOM2Dashboard() {
                         </div>
 
                         {/* 快速跳转按钮 */}
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-2 justify-center">
                           <Button
                             variant="outline"
                             size="sm"
