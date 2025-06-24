@@ -53,7 +53,7 @@ export default function BTCDOM2Dashboard() {
     shortAlt: true,     // 固定为做空ALT
     allocationStrategy: PositionAllocationStrategy.BY_VOLUME,
     // 温度计规则参数
-    useTemperatureRule: false,
+    useTemperatureRule: true,
     temperatureSymbol: 'OTHERS',
     temperatureThreshold: 60
   });
