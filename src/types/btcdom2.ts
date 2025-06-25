@@ -38,7 +38,7 @@ export interface BTCDOM2StrategyParams {
 export interface FundingRateHistoryItem {
   fundingTime: string;        // 资金费率时间
   fundingRate: number;        // 资金费率
-  markPrice: number;          // 标记价格
+  markPrice: number | null;   // 标记价格，可能为null（当API未返回时）
 }
 
 // 新API返回的排行榜数据项
@@ -59,6 +59,7 @@ export interface RankingItem {
   futureSymbol?: string;         // 对应的期货交易对symbol（如果与现货不同）
   futurePriceAtTime?: number;    // 期货价格（当前时间点）
   fundingRateHistory?: FundingRateHistoryItem[]; // 对应时间段的资金费率历史
+  currentFundingRate?: number;   // 当期可用的最新资金费率（用于选股评分）
 }
 
 // 市场统计数据

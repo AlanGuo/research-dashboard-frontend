@@ -172,11 +172,8 @@ function computeBatchStats(rankings: RankingItem[]): BatchStats {
       maxAbsoluteDecline = Math.max(maxAbsoluteDecline, Math.abs(priceChange));
     }
 
-    if (item.fundingRateHistory && item.fundingRateHistory.length > 0) {
-      const latestFunding = item.fundingRateHistory[item.fundingRateHistory.length - 1];
-      if (latestFunding && !isNaN(latestFunding.fundingRate) && isFinite(latestFunding.fundingRate)) {
-        ARRAY_POOL.fundingRates.push(latestFunding.fundingRate);
-      }
+    if (item.currentFundingRate !== undefined && !isNaN(item.currentFundingRate) && isFinite(item.currentFundingRate)) {
+      ARRAY_POOL.fundingRates.push(item.currentFundingRate);
     }
   }
 
@@ -406,11 +403,8 @@ class BTCDOM2StrategyEngine {
         const volatilityScore = fastVolatilityScore(validVolatility, idealVolatility, volatilitySpread);
 
         let fundingRateScore = 0.5;
-        if (item.fundingRateHistory && item.fundingRateHistory.length > 0) {
-          const latestFunding = item.fundingRateHistory[item.fundingRateHistory.length - 1];
-          if (latestFunding && !isNaN(latestFunding.fundingRate) && isFinite(latestFunding.fundingRate)) {
-            fundingRateScore = fastFundingRateScore(latestFunding.fundingRate);
-          }
+        if (item.currentFundingRate !== undefined && !isNaN(item.currentFundingRate) && isFinite(item.currentFundingRate)) {
+          fundingRateScore = fastFundingRateScore(item.currentFundingRate);
         }
 
         const totalScore = priceChangeScore * this.params.priceChangeWeight +
