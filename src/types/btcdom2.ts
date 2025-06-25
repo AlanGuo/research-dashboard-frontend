@@ -9,8 +9,8 @@ export enum PositionAllocationStrategy {
 
 // 策略参数配置
 export interface BTCDOM2StrategyParams {
-  startDate: string;           // 持仓开始时间 (YYYY-MM-DD)
-  endDate: string;             // 持仓结束时间 (YYYY-MM-DD)
+  startDate: string;           // 持仓开始时间 (YYYY-MM-DDTHH:mm)
+  endDate: string;             // 持仓结束时间 (YYYY-MM-DDTHH:mm)
   initialCapital: number;      // 初始本金 (USDT)
   btcRatio: number;           // BTC占比 (0-1)
   priceChangeWeight: number;  // 跌幅权重 (0-1)

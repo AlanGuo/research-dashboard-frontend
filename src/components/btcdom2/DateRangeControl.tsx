@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
-import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { devConsole } from '@/utils/devLogger';
 
 interface DateRangeControlProps {
@@ -17,7 +17,8 @@ export const DateRangeControl = memo(function DateRangeControl({
   startDate,
   endDate,
   onStartDateChange,
-  onEndDateChange
+  onEndDateChange,
+  disabled = false
 }: DateRangeControlProps) {
   // 完全自管理的显示状态
   const [displayStartDate, setDisplayStartDate] = useState<string>(startDate);
@@ -41,78 +42,50 @@ export const DateRangeControl = memo(function DateRangeControl({
   });
 
   // 开始日期处理函数
-  const handleStartDateChange = useCallback((date: Date | undefined) => {
-    if (date) {
-      // 使用本地时区格式化日期，避免时区转换问题
-      const year = date.getFullYear();
-      const month = (date.getMonth() + 1).toString().padStart(2, '0');
-      const day = date.getDate().toString().padStart(2, '0');
-      const dateString = `${year}-${month}-${day}`;
-      
-      devConsole.log('⌨️  开始日期用户输入:', dateString, '当前显示值:', displayStartDate);
-      
-      // 立即更新显示值，保证UI响应性
-      setDisplayStartDate(dateString);
-      
-      // 清除之前的防抖定时器
-      if (startDateDebounceTimerRef.current) {
-        clearTimeout(startDateDebounceTimerRef.current);
-        devConsole.log('⏱️  清除开始日期防抖定时器');
-      }
-      
-      // 防抖处理：延迟通知父组件
-      startDateDebounceTimerRef.current = setTimeout(() => {
-        devConsole.log('🚀 开始日期防抖触发，处理数值:', dateString);
-        
-        // 更新记录值，避免下次外部值同步时覆盖用户输入
-        lastStartDateExternalValueRef.current = dateString;
-        devConsole.log('✅ 通知父组件更新开始日期:', dateString);
-        onStartDateChange(dateString);
-      }, 200); // 200ms 防抖，日期选择响应要快一些
-    } else {
-      devConsole.log('⌨️  开始日期清空');
-      setDisplayStartDate('');
-      lastStartDateExternalValueRef.current = '';
-      onStartDateChange('');
+  const handleStartDateChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const dateTimeValue = event.target.value;
+    devConsole.log('⌨️  开始日期时间输入:', dateTimeValue);
+    
+    setDisplayStartDate(dateTimeValue);
+    
+    // 清除之前的防抖定时器
+    if (startDateDebounceTimerRef.current) {
+      clearTimeout(startDateDebounceTimerRef.current);
     }
-  }, [onStartDateChange, displayStartDate]);
+    
+    // 防抖处理：延迟通知父组件
+    startDateDebounceTimerRef.current = setTimeout(() => {
+      devConsole.log('🚀 开始日期时间防抖触发，处理数值:', dateTimeValue);
+      
+      // 更新记录值，避免下次外部值同步时覆盖用户输入
+      lastStartDateExternalValueRef.current = dateTimeValue;
+      devConsole.log('✅ 通知父组件更新开始日期时间:', dateTimeValue);
+      onStartDateChange(dateTimeValue);
+    }, 300); // 300ms 防抖
+  }, [onStartDateChange]);
 
   // 结束日期处理函数
-  const handleEndDateChange = useCallback((date: Date | undefined) => {
-    if (date) {
-      // 使用本地时区格式化日期，避免时区转换问题
-      const year = date.getFullYear();
-      const month = (date.getMonth() + 1).toString().padStart(2, '0');
-      const day = date.getDate().toString().padStart(2, '0');
-      const dateString = `${year}-${month}-${day}`;
-      
-      devConsole.log('⌨️  结束日期用户输入:', dateString, '当前显示值:', displayEndDate);
-      
-      // 立即更新显示值，保证UI响应性
-      setDisplayEndDate(dateString);
-      
-      // 清除之前的防抖定时器
-      if (endDateDebounceTimerRef.current) {
-        clearTimeout(endDateDebounceTimerRef.current);
-        devConsole.log('⏱️  清除结束日期防抖定时器');
-      }
-      
-      // 防抖处理：延迟通知父组件
-      endDateDebounceTimerRef.current = setTimeout(() => {
-        devConsole.log('🚀 结束日期防抖触发，处理数值:', dateString);
-        
-        // 更新记录值，避免下次外部值同步时覆盖用户输入
-        lastEndDateExternalValueRef.current = dateString;
-        devConsole.log('✅ 通知父组件更新结束日期:', dateString);
-        onEndDateChange(dateString);
-      }, 200); // 200ms 防抖，日期选择响应要快一些
-    } else {
-      devConsole.log('⌨️  结束日期清空');
-      setDisplayEndDate('');
-      lastEndDateExternalValueRef.current = '';
-      onEndDateChange('');
+  const handleEndDateChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const dateTimeValue = event.target.value;
+    devConsole.log('⌨️  结束日期时间输入:', dateTimeValue);
+    
+    setDisplayEndDate(dateTimeValue);
+    
+    // 清除之前的防抖定时器
+    if (endDateDebounceTimerRef.current) {
+      clearTimeout(endDateDebounceTimerRef.current);
     }
-  }, [onEndDateChange, displayEndDate]);
+    
+    // 防抖处理：延迟通知父组件
+    endDateDebounceTimerRef.current = setTimeout(() => {
+      devConsole.log('🚀 结束日期时间防抖触发，处理数值:', dateTimeValue);
+      
+      // 更新记录值，避免下次外部值同步时覆盖用户输入
+      lastEndDateExternalValueRef.current = dateTimeValue;
+      devConsole.log('✅ 通知父组件更新结束日期时间:', dateTimeValue);
+      onEndDateChange(dateTimeValue);
+    }, 300); // 300ms 防抖
+  }, [onEndDateChange]);
 
   // 只在外部值真正变化时同步（避免用户输入时被覆盖）
   useEffect(() => {
@@ -165,19 +138,27 @@ export const DateRangeControl = memo(function DateRangeControl({
     <>
       <div className="space-y-2">
         <Label htmlFor="startDate">开始日期</Label>
-        <DatePicker
-          date={displayStartDate ? new Date(displayStartDate + 'T00:00:00') : undefined}
-          onDateChange={handleStartDateChange}
-          placeholder="选择开始日期"
+        <Input
+          id="startDate"
+          type="datetime-local"
+          value={displayStartDate}
+          onChange={handleStartDateChange}
+          disabled={disabled}
+          className="w-full"
+          placeholder="选择开始日期时间"
         />
       </div>
 
       <div className="space-y-2">
         <Label htmlFor="endDate">结束日期</Label>
-        <DatePicker
-          date={displayEndDate ? new Date(displayEndDate + 'T00:00:00') : undefined}
-          onDateChange={handleEndDateChange}
-          placeholder="选择结束日期"
+        <Input
+          id="endDate"
+          type="datetime-local"
+          value={displayEndDate}
+          onChange={handleEndDateChange}
+          disabled={disabled}
+          className="w-full"
+          placeholder="选择结束日期时间"
         />
       </div>
     </>

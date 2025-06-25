@@ -143,14 +143,16 @@ export function overrideConfig(overrideConfig: Partial<Config>): void {
 
 /**
  * 获取BTCDOM2策略的默认配置
- * 根据环境自动计算日期范围
+ * 根据环境自动计算日期范围（精确到小时）
  */
 export function getBTCDOM2Config() {
   const env = process.env.NODE_ENV || 'development';
   
   // 获取当前时间
   const now = new Date();
-  const endDate = now.toISOString().split('T')[0]; // YYYY-MM-DD格式
+  // 将分钟和秒设置为0，保持整点小时
+  now.setMinutes(0, 0, 0);
+  const endDate = now.toISOString().slice(0, 16); // YYYY-MM-DDTHH:mm格式
   
   let startDate: string;
   let maxBacktestDurationDays: number | undefined;
@@ -159,11 +161,18 @@ export function getBTCDOM2Config() {
     // production: 从当前时间往前半年，最大回测时长1年
     const sixMonthsAgo = new Date(now);
     sixMonthsAgo.setMonth(now.getMonth() - 6);
-    startDate = sixMonthsAgo.toISOString().split('T')[0];
+    sixMonthsAgo.setMinutes(0, 0, 0); // 确保也是整点小时
+    startDate = sixMonthsAgo.toISOString().slice(0, 16);
     maxBacktestDurationDays = getConfigValue('btcdom2.maxBacktestDurationDays', 365);
   } else {
     // development: 使用配置文件中的startDate，如果没有则使用2020-01-01
-    startDate = getConfigValue('btcdom2.startDate', '2020-01-01');
+    const configStartDate = getConfigValue('btcdom2.startDate', '2020-01-01');
+    // 如果配置的日期没有时间部分，添加00:00
+    if (configStartDate.length === 10) {
+      startDate = `${configStartDate}T00:00`;
+    } else {
+      startDate = configStartDate;
+    }
   }
   
   // 基础配置（从配置文件获取，如果没有则使用默认值）

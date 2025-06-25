@@ -169,12 +169,17 @@ export default function BTCDOM2Dashboard() {
       // 如果启用了温度计规则，先获取温度计数据
       if (paramsToUse.useTemperatureRule) {
         console.log('获取温度计数据...');
+        
+        // 处理日期格式，确保转换为完整的ISO字符串
+        const startDateISO = new Date(paramsToUse.startDate).toISOString();
+        const endDateISO = new Date(paramsToUse.endDate).toISOString();
+        
         const temperatureResponse = await fetch(
           `/api/btcdom2/temperature-periods?` +
           `symbol=${encodeURIComponent(paramsToUse.temperatureSymbol)}&` +
           `threshold=${paramsToUse.temperatureThreshold}&` +
-          `startDate=${encodeURIComponent(paramsToUse.startDate + 'T00:00:00.000Z')}&` +
-          `endDate=${encodeURIComponent(paramsToUse.endDate + 'T23:59:59.999Z')}`,
+          `startDate=${encodeURIComponent(startDateISO)}&` +
+          `endDate=${encodeURIComponent(endDateISO)}`,
           {
             method: 'GET',
             headers: {
