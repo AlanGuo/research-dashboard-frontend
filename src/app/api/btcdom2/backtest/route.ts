@@ -172,8 +172,12 @@ function computeBatchStats(rankings: RankingItem[]): BatchStats {
       maxAbsoluteDecline = Math.max(maxAbsoluteDecline, Math.abs(priceChange));
     }
 
-    if (item.currentFundingRate !== undefined && !isNaN(item.currentFundingRate) && isFinite(item.currentFundingRate)) {
-      ARRAY_POOL.fundingRates.push(item.currentFundingRate);
+    if (item.currentFundingRate && item.currentFundingRate.length > 0) {
+      // 取最新的一条资金费率记录
+      const latestFunding = item.currentFundingRate[item.currentFundingRate.length - 1];
+      if (latestFunding && !isNaN(latestFunding.fundingRate) && isFinite(latestFunding.fundingRate)) {
+        ARRAY_POOL.fundingRates.push(latestFunding.fundingRate);
+      }
     }
   }
 
@@ -403,8 +407,12 @@ class BTCDOM2StrategyEngine {
         const volatilityScore = fastVolatilityScore(validVolatility, idealVolatility, volatilitySpread);
 
         let fundingRateScore = 0.5;
-        if (item.currentFundingRate !== undefined && !isNaN(item.currentFundingRate) && isFinite(item.currentFundingRate)) {
-          fundingRateScore = fastFundingRateScore(item.currentFundingRate);
+        if (item.currentFundingRate && item.currentFundingRate.length > 0) {
+          // 取最新的一条资金费率记录
+          const latestFunding = item.currentFundingRate[item.currentFundingRate.length - 1];
+          if (latestFunding && !isNaN(latestFunding.fundingRate) && isFinite(latestFunding.fundingRate)) {
+            fundingRateScore = fastFundingRateScore(latestFunding.fundingRate);
+          }
         }
 
         const totalScore = priceChangeScore * this.params.priceChangeWeight +
@@ -704,8 +712,10 @@ class BTCDOM2StrategyEngine {
             if (soldFundingRateHistory.length > 0 && validQuantity > 0) {
               for (const funding of soldFundingRateHistory) {
                 // 对于做空头寸：资金费率为负数时支付，为正数时收取
-                // 如果markPrice为null或0，使用当前价格作为替代
-                const effectiveMarkPrice = funding.markPrice || currentPrice;
+                // 如果markPrice为null、0、NaN或Infinity，使用当前价格作为替代
+                const effectiveMarkPrice = (funding.markPrice && isFinite(funding.markPrice) && funding.markPrice > 0)
+                  ? funding.markPrice
+                  : currentPrice;
                 const positionValue = validQuantity * effectiveMarkPrice;
                 const fundingAmount = positionValue * funding.fundingRate;
                 soldFundingFee += fundingAmount;
@@ -817,8 +827,10 @@ class BTCDOM2StrategyEngine {
               // 资金费率为负数时，空头支付资金费（亏损）
               // 资金费率为正数时，空头收取资金费（盈利）
               // 所以公式是：资金费率盈亏 = 头寸价值 × 资金费率
-              // 如果markPrice为null或0，使用当前价格作为替代
-              const effectiveMarkPrice = funding.markPrice || price;
+              // 如果markPrice为null、0、NaN或Infinity，使用当前价格作为替代
+              const effectiveMarkPrice = (funding.markPrice && isFinite(funding.markPrice) && funding.markPrice > 0)
+                ? funding.markPrice
+                : price;
               const positionValue = quantity * effectiveMarkPrice;
               fundingFee += positionValue * funding.fundingRate;
             }
@@ -901,8 +913,10 @@ class BTCDOM2StrategyEngine {
           if (soldFundingRateHistory.length > 0 && validQuantity > 0) {
             for (const funding of soldFundingRateHistory) {
               // 对于做空头寸：资金费率为负数时支付，为正数时收取
-              // 如果markPrice为null或0，使用当前价格作为替代
-              const effectiveMarkPrice = funding.markPrice || currentPrice;
+              // 如果markPrice为null、0、NaN或Infinity，使用当前价格作为替代
+              const effectiveMarkPrice = (funding.markPrice && isFinite(funding.markPrice) && funding.markPrice > 0)
+                ? funding.markPrice
+                : currentPrice;
               const positionValue = validQuantity * effectiveMarkPrice;
               const fundingAmount = positionValue * funding.fundingRate;
               soldFundingFee += fundingAmount;
