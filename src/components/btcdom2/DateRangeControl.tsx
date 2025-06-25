@@ -137,7 +137,10 @@ export const DateRangeControl = memo(function DateRangeControl({
   return (
     <>
       <div className="space-y-2">
-        <Label htmlFor="startDate">开始日期</Label>
+        <Label htmlFor="startDate">
+          开始日期
+          <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">(UTC)</span>
+        </Label>
         <Input
           id="startDate"
           type="datetime-local"
@@ -150,7 +153,10 @@ export const DateRangeControl = memo(function DateRangeControl({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="endDate">结束日期</Label>
+        <Label htmlFor="endDate">
+          结束日期
+          <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">(UTC)</span>
+        </Label>
         <Input
           id="endDate"
           type="datetime-local"
