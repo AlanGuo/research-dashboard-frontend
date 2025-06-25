@@ -877,9 +877,31 @@ export default function BTCDOM2Dashboard() {
                   <TrendingDown className="h-4 w-4 text-red-500" />
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {/* 最大回撤 - 突出显示 */}
-                  <div className="flex justify-between items-center p-3 bg-red-50 dark:bg-red-900/20 rounded-md">
-                    <span className="font-medium text-gray-700 dark:text-gray-300">最大回撤</span>
+                  {/* 最大回撤 - 突出显示，可点击跳转 */}
+                  <div 
+                    className="flex justify-between items-center p-3 bg-red-50 dark:bg-red-900/20 rounded-md cursor-pointer hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors duration-200"
+                    onClick={() => {
+                      // 点击最大回撤区域，跳转到回撤开始期
+                      if (backtestResult.performance.maxDrawdownInfo) {
+                        const targetPeriod = backtestResult.performance.maxDrawdownInfo.startPeriod;
+                        // 跳转到开始期（期数-1得到数组索引）
+                        handleSnapshotSelection(targetPeriod - 1);
+                        
+                        // 滚动到持仓历史分析部分
+                        setTimeout(() => {
+                          const element = document.getElementById('position-history-analysis');
+                          if (element) {
+                            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                          }
+                        }, 100);
+                      }
+                    }}
+                    title="点击跳转到最大回撤开始期的持仓详情"
+                  >
+                    <span className="font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                      最大回撤
+                      <Eye className="w-3 h-3 text-gray-400" />
+                    </span>
                     <div className="text-right">
                       <div className="text-xl font-bold text-red-600 dark:text-red-400">
                         {(() => {
@@ -1197,7 +1219,7 @@ export default function BTCDOM2Dashboard() {
 
             {/* 历史持仓查看 */}
             {backtestResult && backtestResult.snapshots && backtestResult.snapshots.length > 0 && (
-              <Card className="border border-gray-200 dark:border-gray-700">
+              <Card className="border border-gray-200 dark:border-gray-700" id="position-history-analysis">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Eye className="w-4 h-4" />
