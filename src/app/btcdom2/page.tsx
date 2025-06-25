@@ -882,10 +882,33 @@ export default function BTCDOM2Dashboard() {
                     <span className="font-medium text-gray-700 dark:text-gray-300">最大回撤</span>
                     <div className="text-right">
                       <div className="text-xl font-bold text-red-600 dark:text-red-400">
-                        {formatAmountWithPercent(
-                          params.initialCapital * backtestResult.performance.maxDrawdown,
-                          backtestResult.performance.maxDrawdown * 100
-                        )}
+                        {(() => {
+                          // 计算实际的最大回撤金额（基于峰值和谷底的实际资产值）
+                          if (!backtestResult.performance.maxDrawdownInfo || !backtestResult.snapshots) {
+                            return formatAmountWithPercent(0, 0);
+                          }
+                          
+                          const { startPeriod, endPeriod } = backtestResult.performance.maxDrawdownInfo;
+                          
+                          // 找到峰值期和谷底期的快照（注意期数从1开始，数组索引从0开始）
+                          const peakSnapshot = backtestResult.snapshots[startPeriod - 1];
+                          const troughSnapshot = backtestResult.snapshots[endPeriod - 1];
+                          
+                          if (!peakSnapshot || !troughSnapshot) {
+                            return formatAmountWithPercent(0, 0);
+                          }
+                          
+                          // 计算实际回撤金额和百分比
+                          const peakValue = peakSnapshot.totalValue;
+                          const troughValue = troughSnapshot.totalValue;
+                          const drawdownAmount = peakValue - troughValue;
+                          const drawdownPercentage = (drawdownAmount / peakValue) * 100;
+                          
+                          return formatAmountWithPercent(
+                            -drawdownAmount, // 负数表示损失
+                            -drawdownPercentage
+                          );
+                        })()}
                       </div>
                       {backtestResult.performance.maxDrawdownInfo && (
                         <span className="text-xs text-gray-500 dark:text-gray-400">
