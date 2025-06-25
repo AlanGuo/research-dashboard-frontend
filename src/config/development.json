@@ -1,9 +1,5 @@
 {
-  "api": {
-    "baseUrl": "http://localhost:4001"
-  },
-  "features": {
-    "debugMode": true,
-    "mockData": false
+  "btcdom2": {
+    "startDate": "2020-01-01"
   }
 }

@@ -19,6 +19,7 @@ import {
   TemperaturePeriodsResponse,
   TemperaturePeriod
 } from '@/types/btcdom2';
+import { getBTCDOM2Config, validateBTCDOM2Params } from '@/config/index';
 import { BTCDOM2Chart } from '@/components/btcdom2/Btcdom2Chart';
 import { BTCDOM2PositionTable } from '@/components/btcdom2/Btcdom2PositionTable';
 import { PnlTrendAnalysis } from '@/components/btcdom2/PnlTrendAnalysis';
@@ -36,26 +37,30 @@ export default function BTCDOM2Dashboard() {
   // 常量定义
   const REBALANCE_HOURS = 8; // 8小时再平衡周期
 
-  // 策略参数状态
-  const [params, setParams] = useState<BTCDOM2StrategyParams>({
-    startDate: '2020-01-01',
-    endDate: '2025-06-24',
-    initialCapital: 10000,
-    btcRatio: 0.5,
-    priceChangeWeight: 0.15,
-    volumeWeight: 0.35,
-    volatilityWeight: 0.15,
-    fundingRateWeight: 0.35,
-    maxShortPositions: 5,
-    spotTradingFeeRate: 0.0008, // 0.08% 现货手续费
-    futuresTradingFeeRate: 0.0002, // 0.02% 期货手续费
-    longBtc: true,      // 固定为做多BTC
-    shortAlt: true,     // 固定为做空ALT
-    allocationStrategy: PositionAllocationStrategy.BY_VOLUME,
-    // 温度计规则参数
-    useTemperatureRule: true,
-    temperatureSymbol: 'OTHERS',
-    temperatureThreshold: 65
+  // 获取默认配置
+  const defaultConfig = getBTCDOM2Config();
+
+  // 策略参数状态 - 使用配置文件的默认值
+  const [params, setParams] = useState<BTCDOM2StrategyParams>(() => {
+    return {
+      startDate: defaultConfig.startDate,
+      endDate: defaultConfig.endDate,
+      initialCapital: defaultConfig.initialCapital,
+      btcRatio: defaultConfig.btcRatio,
+      priceChangeWeight: defaultConfig.priceChangeWeight,
+      volumeWeight: defaultConfig.volumeWeight,
+      volatilityWeight: defaultConfig.volatilityWeight,
+      fundingRateWeight: defaultConfig.fundingRateWeight,
+      maxShortPositions: defaultConfig.maxShortPositions,
+      spotTradingFeeRate: defaultConfig.spotTradingFeeRate,
+      futuresTradingFeeRate: defaultConfig.futuresTradingFeeRate,
+      longBtc: defaultConfig.longBtc,
+      shortAlt: defaultConfig.shortAlt,
+      allocationStrategy: defaultConfig.allocationStrategy as PositionAllocationStrategy, // 类型转换
+      useTemperatureRule: defaultConfig.useTemperatureRule,
+      temperatureSymbol: defaultConfig.temperatureSymbol,
+      temperatureThreshold: defaultConfig.temperatureThreshold
+    };
   });
 
   // 数据状态
@@ -111,9 +116,13 @@ export default function BTCDOM2Dashboard() {
 
     return `${formattedAmount} (${formattedPercent})`;
   };
-  // 验证参数 - 分组验证，最小影响范围
+  
+  // 参数验证 - 使用配置文件的验证函数
+  const parameterValidation = useMemo(() => {
+    return validateBTCDOM2Params(params as unknown as Record<string, unknown>);
+  }, [params]);
 
-  // 权重验证 - 基于实际参数值
+  // 权重验证 - 基于实际参数值（保持现有逻辑用于UI显示）
   const weightValidation = useMemo(() => {
     const sum = params.priceChangeWeight + params.volumeWeight +
                 params.volatilityWeight + params.fundingRateWeight;
@@ -127,70 +136,18 @@ export default function BTCDOM2Dashboard() {
     params.volatilityWeight, params.fundingRateWeight
   ]);
 
-  // 基础参数验证 - 只依赖基础参数
-  const baseParamsValidation = useMemo(() => {
-    const errors: Record<string, string> = {};
-
-    if (params.initialCapital <= 0) {
-      errors.initialCapital = '初始本金必须大于0';
-    }
-
-    const startDate = new Date(params.startDate);
-    const endDate = new Date(params.endDate);
-    if (startDate >= endDate) {
-      errors.dateRange = '开始日期必须早于结束日期';
-    }
-
-    return errors;
-  }, [params.initialCapital, params.startDate, params.endDate]);
-
-  // 策略参数验证 - 只依赖策略参数
-  const strategyParamsValidation = useMemo(() => {
-    const errors: Record<string, string> = {};
-
-    if (params.btcRatio < 0 || params.btcRatio > 1) {
-      errors.btcRatio = 'BTC占比必须在0-1之间';
-    }
-
-    // 策略已固定为做多BTC和做空ALT，无需验证策略选择
-
-    return errors;
-  }, [params.btcRatio]);
-
-  // 交易参数验证 - 只依赖交易参数
-  const tradingParamsValidation = useMemo(() => {
-    const errors: Record<string, string> = {};
-
-    if (params.maxShortPositions <= 0 || params.maxShortPositions > 50) {
-      errors.maxShortPositions = '做空标的数量必须在1-50之间';
-    }
-
-    if (params.spotTradingFeeRate < 0 || params.spotTradingFeeRate > 0.01) {
-      errors.spotTradingFeeRate = '现货交易手续费率必须在0-1%之间';
-    }
-
-    if (params.futuresTradingFeeRate < 0 || params.futuresTradingFeeRate > 0.01) {
-      errors.futuresTradingFeeRate = '期货交易手续费率必须在0-1%之间';
-    }
-
-    return errors;
-  }, [params.maxShortPositions, params.spotTradingFeeRate, params.futuresTradingFeeRate]);
-
-  // 合并所有验证错误
+  // 转换为错误对象格式（为了兼容现有UI代码）
   const parameterErrors = useMemo(() => {
-    const allErrors = {
-      ...baseParamsValidation,
-      ...strategyParamsValidation,
-      ...tradingParamsValidation
-    };
-
-    // 权重验证使用实际参数值
-    if (!weightValidation.valid) {
-      allErrors.weights = '跌幅权重、成交量权重、波动率权重和资金费率权重之和必须等于1';
+    const errors: Record<string, string> = {};
+    
+    if (!parameterValidation.valid) {
+      parameterValidation.errors.forEach((error: string, index: number) => {
+        errors[`error_${index}`] = error;
+      });
     }
 
-    return allErrors;
-  }, [baseParamsValidation, strategyParamsValidation, tradingParamsValidation, weightValidation.valid]);
+    return errors;
+  }, [parameterValidation]);
 
   // 兼容性别名已移除 - 不再需要
 
@@ -394,7 +351,7 @@ export default function BTCDOM2Dashboard() {
       volatilityWeight: bestParams.volatilityWeight,
       fundingRateWeight: bestParams.fundingRateWeight,
       maxShortPositions: bestParams.maxShortPositions,
-      allocationStrategy: bestParams.allocationStrategy
+      allocationStrategy: bestParams.allocationStrategy // 正确的类型
     };
 
     setParams(newParams);

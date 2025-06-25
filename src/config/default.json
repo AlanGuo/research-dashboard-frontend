@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "Research Dashboard",
-    "version": "1.0.0"
+    "version": "1.1.0"
   },
   "api": {
     "baseUrl": "http://localhost:4001"
@@ -9,5 +9,22 @@
   "features": {
     "darkMode": true,
     "analytics": false
+  },
+  "btcdom2": {
+    "initialCapital": 10000,
+    "btcRatio": 0.5,
+    "priceChangeWeight": 0.15,
+    "volumeWeight": 0.35,
+    "volatilityWeight": 0.15,
+    "fundingRateWeight": 0.35,
+    "maxShortPositions": 5,
+    "spotTradingFeeRate": 0.0008,
+    "futuresTradingFeeRate": 0.0002,
+    "longBtc": true,
+    "shortAlt": true,
+    "allocationStrategy": "BY_VOLUME",
+    "useTemperatureRule": true,
+    "temperatureSymbol": "OTHERS",
+    "temperatureThreshold": 65
   }
 }

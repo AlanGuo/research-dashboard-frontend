@@ -198,14 +198,6 @@ function computeBatchStats(rankings: RankingItem[]): BatchStats {
   };
 }
 
-
-
-
-
-
-
-
-
 // 策略引擎类
 class BTCDOM2StrategyEngine {
   private params: BTCDOM2StrategyParams;
