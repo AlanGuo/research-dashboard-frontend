@@ -905,20 +905,8 @@ export default function BTCDOM2Dashboard() {
                     <div className="text-right">
                       <div className="text-xl font-bold text-red-600 dark:text-red-400">
                         {(() => {
-                          // 调试日志：检查最大回撤数据
-                          console.log('[DEBUG] 前端最大回撤数据检查:', {
-                            maxDrawdown: backtestResult.performance.maxDrawdown,
-                            maxDrawdownInfo: backtestResult.performance.maxDrawdownInfo,
-                            hasSnapshots: !!backtestResult.snapshots,
-                            snapshotsLength: backtestResult.snapshots?.length
-                          });
-
                           // 计算实际的最大回撤金额（基于峰值和谷底的实际资产值）
                           if (!backtestResult.performance.maxDrawdownInfo || !backtestResult.snapshots) {
-                            console.log('[DEBUG] 前端返回0的原因:', {
-                              noMaxDrawdownInfo: !backtestResult.performance.maxDrawdownInfo,
-                              noSnapshots: !backtestResult.snapshots
-                            });
                             return formatAmountWithPercent(0, 0);
                           }
                           
@@ -930,7 +918,6 @@ export default function BTCDOM2Dashboard() {
                           // 计算回撤金额：使用峰值期的总价值乘以回撤百分比
                           const peakSnapshot = backtestResult.snapshots[startPeriod - 1];
                           if (!peakSnapshot) {
-                            console.log('[DEBUG] 找不到峰值期快照:', { startPeriod, snapshotsLength: backtestResult.snapshots.length });
                             return formatAmountWithPercent(0, 0);
                           }
 

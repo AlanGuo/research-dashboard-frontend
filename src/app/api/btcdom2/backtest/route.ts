@@ -1290,12 +1290,6 @@ function calculatePerformanceMetrics(
 
   const calmarRatio = maxDrawdown > 0 ? annualizedReturn / maxDrawdown : 0;
 
-  // 调试日志：最终结果
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`[DEBUG] 最大回撤计算完成: ${(maxDrawdown * 100).toFixed(3)}%`);
-    console.log(`[DEBUG] maxDrawdownInfo:`, maxDrawdownInfo);
-  }
-
   // 确保 maxDrawdownInfo 始终有值，即使没有回撤
   if (!maxDrawdownInfo && snapshots.length > 0) {
     maxDrawdownInfo = {
