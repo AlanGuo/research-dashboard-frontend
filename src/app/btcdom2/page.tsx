@@ -19,7 +19,7 @@ import {
   TemperaturePeriodsResponse,
   TemperaturePeriod
 } from '@/types/btcdom2';
-import { getBTCDOM2Config, validateBTCDOM2Params } from '@/config/index';
+import { getBTCDOM2Config, validateBTCDOM2Params } from '@/lib/btcdom2-utils';
 import { BTCDOM2Chart } from '@/components/btcdom2/Btcdom2Chart';
 import { BTCDOM2PositionTable } from '@/components/btcdom2/Btcdom2PositionTable';
 import { PnlTrendAnalysis } from '@/components/btcdom2/PnlTrendAnalysis';

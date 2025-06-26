@@ -1,5 +1,6 @@
 // 测试 BTCDOM2 配置系统
-const { getBTCDOM2Config, validateBTCDOM2Params, getConfigValue } = require('./src/config/index.ts');
+const { getBTCDOM2Config, validateBTCDOM2Params } = require('./src/lib/btcdom2-utils.ts');
+const { getConfigValue } = require('./src/config/index.ts');
 
 console.log('=== 测试 BTCDOM2 配置系统 ===\n');
 
