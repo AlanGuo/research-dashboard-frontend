@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import config from '@/config';
+import config from '@/config/index';
 import {
   BTCDOM2StrategyParams,
   BTCDOM2BacktestResult,
