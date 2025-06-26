@@ -1,7 +1,7 @@
-import defaultConfig from './default.json';
-import developmentConfig from './development.json';
-import productionConfig from './production.json';
-import testConfig from './test.json';
+import defaultConfig from '../../config/default.json';
+import developmentConfig from '../../config/development.json';
+import productionConfig from '../../config/production.json';
+import testConfig from '../../config/test.json';
 
 // Define the configuration type
 export interface Config {

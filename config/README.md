@@ -4,11 +4,13 @@ This configuration system allows loading different configurations based on the c
 
 ## Structure
 
-- `default.json` - Base configuration that applies to all environments
-- `development.json` - Development environment specific configuration
-- `production.json` - Production environment specific configuration
-- `test.json` - Test environment specific configuration
-- `index.ts` - Configuration utility functions
+- `config/default.json` - Base configuration that applies to all environments
+- `config/development.json` - Development environment specific configuration
+- `config/production.json` - Production environment specific configuration
+- `config/test.json` - Test environment specific configuration
+- `src/config/index.ts` - Configuration utility functions
+
+**Note**: Configuration files are now located in the project root `config/` directory, separate from the source code.
 
 ## Usage
 

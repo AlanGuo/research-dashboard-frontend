@@ -1,0 +1,15 @@
+# Configuration .gitignore example
+# 
+# You can copy this to .gitignore in the config directory if you want to
+# exclude certain configuration files from version control
+
+# Exclude environment-specific configs (keep only in deployment)
+# production.json
+# development.json
+
+# Exclude local override configs
+# local.json
+# *.local.json
+
+# Exclude sensitive configs
+# secrets.json
