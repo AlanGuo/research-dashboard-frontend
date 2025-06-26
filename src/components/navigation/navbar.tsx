@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/utils';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Menu, X } from 'lucide-react';
 
