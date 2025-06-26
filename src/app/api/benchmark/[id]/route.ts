@@ -1,4 +1,4 @@
-import config from '@/config';
+import config from '@/config/index';
 import { NextResponse } from 'next/server';
 
 export async function GET(

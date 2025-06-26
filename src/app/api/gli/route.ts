@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import config from '@/config';
+import config from '@/config/index';
 import { GliParams } from '@/types/gli';
 
 export async function GET(

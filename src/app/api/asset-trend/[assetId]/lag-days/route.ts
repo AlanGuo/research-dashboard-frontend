@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import config from '@/config';
+import config from '@/config/index';
 
 /**
  * 临时计算资产在特定滞后天数下的趋势表现，不更新数据库
