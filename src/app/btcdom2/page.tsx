@@ -905,26 +905,37 @@ export default function BTCDOM2Dashboard() {
                     <div className="text-right">
                       <div className="text-xl font-bold text-red-600 dark:text-red-400">
                         {(() => {
+                          // 调试日志：检查最大回撤数据
+                          console.log('[DEBUG] 前端最大回撤数据检查:', {
+                            maxDrawdown: backtestResult.performance.maxDrawdown,
+                            maxDrawdownInfo: backtestResult.performance.maxDrawdownInfo,
+                            hasSnapshots: !!backtestResult.snapshots,
+                            snapshotsLength: backtestResult.snapshots?.length
+                          });
+
                           // 计算实际的最大回撤金额（基于峰值和谷底的实际资产值）
                           if (!backtestResult.performance.maxDrawdownInfo || !backtestResult.snapshots) {
+                            console.log('[DEBUG] 前端返回0的原因:', {
+                              noMaxDrawdownInfo: !backtestResult.performance.maxDrawdownInfo,
+                              noSnapshots: !backtestResult.snapshots
+                            });
                             return formatAmountWithPercent(0, 0);
                           }
                           
-                          const { startPeriod, endPeriod } = backtestResult.performance.maxDrawdownInfo;
-                          
-                          // 找到峰值期和谷底期的快照（注意期数从1开始，数组索引从0开始）
+                          const { startPeriod, drawdown } = backtestResult.performance.maxDrawdownInfo;
+
+                          // 直接使用后端计算的回撤百分比，避免前端重复计算导致的错误
+                          const drawdownPercentage = drawdown * 100;
+
+                          // 计算回撤金额：使用峰值期的总价值乘以回撤百分比
                           const peakSnapshot = backtestResult.snapshots[startPeriod - 1];
-                          const troughSnapshot = backtestResult.snapshots[endPeriod - 1];
-                          
-                          if (!peakSnapshot || !troughSnapshot) {
+                          if (!peakSnapshot) {
+                            console.log('[DEBUG] 找不到峰值期快照:', { startPeriod, snapshotsLength: backtestResult.snapshots.length });
                             return formatAmountWithPercent(0, 0);
                           }
-                          
-                          // 计算实际回撤金额和百分比
+
                           const peakValue = peakSnapshot.totalValue;
-                          const troughValue = troughSnapshot.totalValue;
-                          const drawdownAmount = peakValue - troughValue;
-                          const drawdownPercentage = (drawdownAmount / peakValue) * 100;
+                          const drawdownAmount = peakValue * drawdown; // 使用后端计算的精确回撤比例
                           
                           return formatAmountWithPercent(
                             -drawdownAmount, // 负数表示损失
