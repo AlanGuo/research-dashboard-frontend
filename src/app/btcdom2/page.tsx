@@ -775,36 +775,32 @@ export default function BTCDOM2Dashboard() {
                         </div>
 
                         {/* 只在选择做多BTC时显示BTC收益率 */}
-                        {params.longBtc && (
-                          <div className="flex justify-between items-center py-1">
-                            <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                              <Bitcoin className="w-3 h-3" />
-                              BTC做多
-                            </span>
-                            <span className={`text-sm font-semibold ${getValueColorClass(pnlBreakdown.btcPnlAmount)}`}>
-                              {formatAmountWithPercent(
-                                pnlBreakdown.btcPnlAmount,
-                                pnlBreakdown.btcPnlRate * 100
-                              )}
-                            </span>
-                          </div>
-                        )}
+                        <div className="flex justify-between items-center py-1">
+                          <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                            <Bitcoin className="w-3 h-3" />
+                            BTC做多
+                          </span>
+                          <span className={`text-sm font-semibold ${getValueColorClass(pnlBreakdown.btcPnlAmount)}`}>
+                            {formatAmountWithPercent(
+                              pnlBreakdown.btcPnlAmount,
+                              pnlBreakdown.btcPnlRate * 100
+                            )}
+                          </span>
+                        </div>
 
                         {/* 只在选择做空ALT时显示ALT收益率 */}
-                        {params.shortAlt && (
-                          <div className="flex justify-between items-center py-1">
-                            <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                              <ArrowDown className="w-3 h-3" />
-                              ALT做空
-                            </span>
-                            <span className={`text-sm font-semibold ${getValueColorClass(pnlBreakdown.altPnlAmount)}`}>
-                              {formatAmountWithPercent(
-                                pnlBreakdown.altPnlAmount,
-                                pnlBreakdown.altPnlRate * 100
-                              )}
-                            </span>
-                          </div>
-                        )}
+                        <div className="flex justify-between items-center py-1">
+                          <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                            <ArrowDown className="w-3 h-3" />
+                            ALT做空
+                          </span>
+                          <span className={`text-sm font-semibold ${getValueColorClass(pnlBreakdown.altPnlAmount)}`}>
+                            {formatAmountWithPercent(
+                              pnlBreakdown.altPnlAmount,
+                              pnlBreakdown.altPnlRate * 100
+                            )}
+                          </span>
+                        </div>
 
                         {/* 手续费盈亏 */}
                         <div className="flex justify-between items-center py-1">
@@ -818,39 +814,37 @@ export default function BTCDOM2Dashboard() {
                         </div>
 
                         {/* 资金费率盈亏 */}
-                        {params.shortAlt && (
-                          <div className="flex justify-between items-center py-1">
-                            <div className="flex items-center gap-1">
-                              <span className="text-gray-500 dark:text-gray-400">资金费率盈亏</span>
-                              <Popover>
-                                <PopoverTrigger asChild>
-                                  <Button variant="ghost" size="sm" className="h-4 w-4 p-0 hover:bg-gray-100 dark:hover:bg-gray-800">
-                                    <Info className="h-3 w-3 text-gray-400" />
-                                  </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-80 text-sm">
-                                  <div className="space-y-2">
-                                    <p className="font-medium">资金费率说明</p>
-                                    <p className="text-gray-600 dark:text-gray-400">
-                                      对于做空头寸：
-                                    </p>
-                                    <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                                      <p>• 资金费率为负数时，空头支付资金费（亏损）</p>
-                                      <p>• 资金费率为正数时，空头收取资金费（盈利）</p>
-                                      <p>• 新开仓的交易对从下一期开始收取资金费率</p>
-                                    </div>
+                        <div className="flex justify-between items-center py-1">
+                          <div className="flex items-center gap-1">
+                            <span className="text-gray-500 dark:text-gray-400">资金费率盈亏</span>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-4 w-4 p-0 hover:bg-gray-100 dark:hover:bg-gray-800">
+                                  <Info className="h-3 w-3 text-gray-400" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-80 text-sm">
+                                <div className="space-y-2">
+                                  <p className="font-medium">资金费率说明</p>
+                                  <p className="text-gray-600 dark:text-gray-400">
+                                    对于做空头寸：
+                                  </p>
+                                  <div className="text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                                    <p>• 资金费率为负数时，空头支付资金费（亏损）</p>
+                                    <p>• 资金费率为正数时，空头收取资金费（盈利）</p>
+                                    <p>• 新开仓的交易对从下一期开始收取资金费率</p>
                                   </div>
-                                </PopoverContent>
-                              </Popover>
-                            </div>
-                            <span className={`text-sm font-semibold ${getValueColorClass(pnlBreakdown.fundingFeeAmount)}`}>
-                              {formatAmountWithPercent(
-                                pnlBreakdown.fundingFeeAmount,
-                                pnlBreakdown.fundingFeeRate * 100
-                              )}
-                            </span>
+                                </div>
+                              </PopoverContent>
+                            </Popover>
                           </div>
-                        )}
+                          <span className={`text-sm font-semibold ${getValueColorClass(pnlBreakdown.fundingFeeAmount)}`}>
+                            {formatAmountWithPercent(
+                              pnlBreakdown.fundingFeeAmount,
+                              pnlBreakdown.fundingFeeRate * 100
+                            )}
+                          </span>
+                        </div>
 
                         {/* 盈亏验证 - 开发调试用 */}
                         {process.env.NODE_ENV === 'development' && (
@@ -1055,9 +1049,7 @@ export default function BTCDOM2Dashboard() {
                 <CardTitle>
                   BTC价格与策略收益对比
                   <span className="text-sm font-normal text-gray-500 dark:text-gray-400 ml-2">
-                    ({params.longBtc && params.shortAlt ? '做多BTC + 做空ALT' :
-                      params.longBtc ? '做多BTC' :
-                      params.shortAlt ? '做空ALT' : '无策略'})
+                    (做多BTC + 做空ALT)
                   </span>
                 </CardTitle>
               </CardHeader>
@@ -1084,16 +1076,14 @@ export default function BTCDOM2Dashboard() {
                       <span className="font-medium">{backtestResult.summary.totalRebalances}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">持仓/空仓状态次数</span>
+                      <span className="text-gray-600 dark:text-gray-400">持仓/空仓次数</span>
                       <span className="font-medium">{backtestResult.summary.activeRebalances} / {backtestResult.summary.inactiveRebalances}</span>
                     </div>
-                    {/* 只在选择做空ALT时显示平均做空标的数量 */}
-                    {params.shortAlt && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">平均做空标的数量</span>
-                        <span className="font-medium">{backtestResult.summary.avgShortPositions.toFixed(1)}</span>
-                      </div>
-                    )}
+                    {/* 显示平均做空标的数量 */}
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">平均做空标的数量</span>
+                      <span className="font-medium">{backtestResult.summary.avgShortPositions.toFixed(1)}</span>
+                    </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-400">策略持仓率</span>
                       <span className="font-medium">
@@ -1220,9 +1210,7 @@ export default function BTCDOM2Dashboard() {
                     <Eye className="w-4 h-4" />
                     持仓历史分析
                     <span className="text-sm font-normal text-gray-500 dark:text-gray-400 ml-2">
-                      ({params.longBtc && params.shortAlt ? '做多BTC + 做空ALT' :
-                        params.longBtc ? '做多BTC' :
-                        params.shortAlt ? '做空ALT' : '无策略'})
+                      (做多BTC + 做空ALT)
                     </span>
                   </CardTitle>
                 </CardHeader>

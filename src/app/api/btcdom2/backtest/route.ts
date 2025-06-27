@@ -553,12 +553,14 @@ class BTCDOM2StrategyEngine {
       temperatureRuleReason = `温度计高于${this.params.temperatureThreshold}，禁止持有空头仓位`;
     }
 
-    // 检查是否有可执行的策略
+    // 检查是否有可执行的策略（longBtc和shortAlt始终为true）
     const hasShortCandidates = selectedCandidates.length > 0;
-    const canLongBtc = this.params.longBtc || false;
+    const canLongBtc = true; // 始终做多BTC
     // 温度计高于阈值时，不能做空ALT
-    const canShortAlt = (this.params.shortAlt || false) && !isInTemperatureHigh;
-    const isActive = (canLongBtc || (canShortAlt && hasShortCandidates));
+    const canShortAlt = !isInTemperatureHigh; // 始终做空ALT，除非温度计高温
+    // 重新定义isActive：只有当能够做空ALT且有符合条件的做空标的时才算活跃
+    // 不持有空单的状态定义为空仓状态
+    const isActive = canShortAlt && hasShortCandidates;
 
     // 计算当前总价值（如果是第一个快照，则使用初始本金）
     const previousValue = previousSnapshot?.totalValue || this.params.initialCapital;
@@ -1022,15 +1024,13 @@ class BTCDOM2StrategyEngine {
         };
       }
 
-      // 设置空仓原因
-      if (!canLongBtc && !canShortAlt) {
-        inactiveReason = '策略未启用：未选择做多BTC和做空ALT';
-      } else if (!canLongBtc && canShortAlt) {
-        inactiveReason = hasShortCandidates ? '策略调整：仅做空ALT' : '无符合做空条件的ALT标的';
-      } else if (canLongBtc && !canShortAlt) {
-        inactiveReason = '策略调整：仅做多BTC';
+      // 设置空仓原因（空仓定义为不持有空单的状态）
+      if (!canShortAlt) {
+        inactiveReason = temperatureRuleReason; // 温度计高温导致的空仓
+      } else if (!hasShortCandidates) {
+        inactiveReason = '无符合做空条件的ALT标的，空仓状态';
       } else {
-        inactiveReason = '无符合做空条件的ALT标的，仅持有BTC';
+        inactiveReason = '未知原因导致的空仓状态';
       }
 
       const soldValueChange = soldPositions.reduce((sum, pos) => sum + pos.pnl, 0);
