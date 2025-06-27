@@ -311,23 +311,20 @@ export default function BTCDOM2Dashboard() {
     setParams(prev => ({ ...prev, temperatureThreshold: threshold }));
   }, []);
 
-  // 标准化权重 - 将所有权重按比例调整使总和为1
+  // 标准化权重 - 直接加载默认配置的权重参数
   const normalizeWeights = useCallback(() => {
-    const currentSum = params.priceChangeWeight + params.volumeWeight + params.volatilityWeight + params.fundingRateWeight;
-    if (currentSum === 0) return; // 避免除零
-
-    const normalizedWeights = {
-      priceChangeWeight: params.priceChangeWeight / currentSum,
-      volumeWeight: params.volumeWeight / currentSum,
-      volatilityWeight: params.volatilityWeight / currentSum,
-      fundingRateWeight: params.fundingRateWeight / currentSum
+    const defaultWeights = {
+      priceChangeWeight: defaultConfig.priceChangeWeight,
+      volumeWeight: defaultConfig.volumeWeight,
+      volatilityWeight: defaultConfig.volatilityWeight,
+      fundingRateWeight: defaultConfig.fundingRateWeight
     };
 
     setParams(prev => ({
       ...prev,
-      ...normalizedWeights
+      ...defaultWeights
     }));
-  }, [params.priceChangeWeight, params.volumeWeight, params.volatilityWeight, params.fundingRateWeight]);
+  }, [defaultConfig.priceChangeWeight, defaultConfig.volumeWeight, defaultConfig.volatilityWeight, defaultConfig.fundingRateWeight]);
 
   // 处理优化完成
   const handleOptimizationComplete = useCallback((results: OptimizationResult[]) => {
