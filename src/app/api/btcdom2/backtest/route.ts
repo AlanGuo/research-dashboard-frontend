@@ -91,16 +91,14 @@ function cleanupCaches() {
 
     CACHE_STATS.lastCleanup = now;
 
-    // 开发环境下打印缓存统计
-    if (process.env.NODE_ENV === 'development') {
-      const volatilityTotal = CACHE_STATS.volatilityHits + CACHE_STATS.volatilityMisses;
-      const fundingRateTotal = CACHE_STATS.fundingRateHits + CACHE_STATS.fundingRateMisses;
-      const candidateTotal = CACHE_STATS.candidateSelectionHits + CACHE_STATS.candidateSelectionMisses;
-      const volatilityHitRate = volatilityTotal > 0 ? (CACHE_STATS.volatilityHits / volatilityTotal * 100).toFixed(1) : 'N/A';
-      const fundingRateHitRate = fundingRateTotal > 0 ? (CACHE_STATS.fundingRateHits / fundingRateTotal * 100).toFixed(1) : 'N/A';
-      const candidateHitRate = candidateTotal > 0 ? (CACHE_STATS.candidateSelectionHits / candidateTotal * 100).toFixed(1) : 'N/A';
-      console.log(`[CACHE] 定期清理 - 波动率: ${volatilityHitRate}%, 资金费率: ${fundingRateHitRate}%, 候选者选择: ${candidateHitRate}%`);
-    }
+    // 打印缓存统计
+    const volatilityTotal = CACHE_STATS.volatilityHits + CACHE_STATS.volatilityMisses;
+    const fundingRateTotal = CACHE_STATS.fundingRateHits + CACHE_STATS.fundingRateMisses;
+    const candidateTotal = CACHE_STATS.candidateSelectionHits + CACHE_STATS.candidateSelectionMisses;
+    const volatilityHitRate = volatilityTotal > 0 ? (CACHE_STATS.volatilityHits / volatilityTotal * 100).toFixed(1) : 'N/A';
+    const fundingRateHitRate = fundingRateTotal > 0 ? (CACHE_STATS.fundingRateHits / fundingRateTotal * 100).toFixed(1) : 'N/A';
+    const candidateHitRate = candidateTotal > 0 ? (CACHE_STATS.candidateSelectionHits / candidateTotal * 100).toFixed(1) : 'N/A';
+    console.debug(`[CACHE] 定期清理 - 波动率: ${volatilityHitRate}%, 资金费率: ${fundingRateHitRate}%, 候选者选择: ${candidateHitRate}%`);
   }
 }
 
@@ -348,9 +346,7 @@ class BTCDOM2StrategyEngine {
     let stepStartTime: number;
     let stepEndTime: number;
 
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[PERF] selectShortCandidates 开始`);
-    }
+    console.debug(`[PERF] selectShortCandidates 开始`);
 
     // 生成缓存键
     const cacheKey = getCandidateSelectionCacheKey(rankings, btcPriceChange, this.params);
@@ -359,10 +355,8 @@ class BTCDOM2StrategyEngine {
     const cachedResult = CANDIDATE_SELECTION_CACHE.get(cacheKey);
     if (cachedResult) {
       CACHE_STATS.candidateSelectionHits++;
-      if (process.env.NODE_ENV === 'development') {
-        const executionTime = performance.now() - startTime;
-        console.log(`[PERF] selectShortCandidates 缓存命中, 耗时: ${executionTime.toFixed(2)}ms`);
-      }
+      const executionTime = performance.now() - startTime;
+      console.debug(`[PERF] selectShortCandidates 缓存命中, 耗时: ${executionTime.toFixed(2)}ms`);
       return cachedResult;
     }
     CACHE_STATS.candidateSelectionMisses++;
@@ -371,17 +365,13 @@ class BTCDOM2StrategyEngine {
     stepStartTime = performance.now();
     cleanupCaches();
     stepEndTime = performance.now();
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[PERF] selectShortCandidates - cleanupCaches 耗时: ${(stepEndTime - stepStartTime).toFixed(2)}ms`);
-    }
+    console.debug(`[PERF] selectShortCandidates - cleanupCaches 耗时: ${(stepEndTime - stepStartTime).toFixed(2)}ms`);
 
     // 使用优化的批量统计计算
     stepStartTime = performance.now();
     const stats = computeBatchStats(rankings);
     stepEndTime = performance.now();
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[PERF] selectShortCandidates - computeBatchStats 耗时: ${(stepEndTime - stepStartTime).toFixed(2)}ms`);
-    }
+    console.debug(`[PERF] selectShortCandidates - computeBatchStats 耗时: ${(stepEndTime - stepStartTime).toFixed(2)}ms`);
 
     // 提前终止：如果没有候选标的，直接返回
     if (stats.totalCandidates === 0) {
@@ -409,14 +399,12 @@ class BTCDOM2StrategyEngine {
       return priceChange < btcPriceChange;
     });
     stepEndTime = performance.now();
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[PERF] selectShortCandidates - pre-filtering 耗时: ${(stepEndTime - stepStartTime).toFixed(2)}ms, 筛选前: ${stats.filteredRankings.length}, 筛选后: ${preFilteredItems.length}`);
-    }
+    console.debug(`[PERF] selectShortCandidates - pre-filtering 耗时: ${(stepEndTime - stepStartTime).toFixed(2)}ms, 筛选前: ${stats.filteredRankings.length}, 筛选后: ${preFilteredItems.length}`);
 
     // 如果预筛选后没有符合条件的候选者，快速返回
     if (preFilteredItems.length === 0) {
       const rejectedCandidates = stats.filteredRankings.map(item => ({
-        symbol: item.symbol,
+        symbol: item.symbol, 
         rank: item.rank,
         priceChange24h: isNaN(item.priceChange24h) ? 0 : item.priceChange24h,
         volume24h: item.volume24h,
@@ -502,8 +490,8 @@ class BTCDOM2StrategyEngine {
         reason: `综合评分: ${finalTotalScore.toFixed(3)}`
       };
 
-      // 调试信息：记录分数异常的情况（仅开发环境）
-      if (process.env.NODE_ENV === 'development' && (isNaN(totalScore) || isNaN(priceChangeScore) || isNaN(volumeScore) || isNaN(volatilityScore) || isNaN(fundingRateScore))) {
+      // 调试信息：记录分数异常的情况
+      if (isNaN(totalScore) || isNaN(priceChangeScore) || isNaN(volumeScore) || isNaN(volatilityScore) || isNaN(fundingRateScore)) {
         console.warn(`[DEBUG] 分数异常 ${item.symbol}:`, {
           priceChange: item.priceChange24h,
           volatility: item.volatility24h,
@@ -516,9 +504,7 @@ class BTCDOM2StrategyEngine {
     }
     
     stepEndTime = performance.now();
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[PERF] selectShortCandidates - candidate scoring 耗时: ${(stepEndTime - stepStartTime).toFixed(2)}ms`);
-    }
+    console.debug(`[PERF] selectShortCandidates - candidate scoring 耗时: ${(stepEndTime - stepStartTime).toFixed(2)}ms`);
     
     // 限制候选者数量以提高效率
     const maxCandidates = this.params.maxShortPositions * 2;
@@ -531,9 +517,7 @@ class BTCDOM2StrategyEngine {
     stepStartTime = performance.now();
     ARRAY_POOL.tempCandidates.sort((a, b) => b.totalScore - a.totalScore);
     stepEndTime = performance.now();
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[PERF] selectShortCandidates - sorting tempCandidates 耗时: ${(stepEndTime - stepStartTime).toFixed(2)}ms`);
-    }
+    console.debug(`[PERF] selectShortCandidates - sorting tempCandidates 耗时: ${(stepEndTime - stepStartTime).toFixed(2)}ms`);
 
     // 创建最终结果，只复制需要的数量
     const eligibleCandidates = [...ARRAY_POOL.tempCandidates];
@@ -566,17 +550,13 @@ class BTCDOM2StrategyEngine {
       }
     }
     stepEndTime = performance.now();
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[PERF] selectShortCandidates - rejected candidates processing 耗时: ${(stepEndTime - stepStartTime).toFixed(2)}ms`);
-    }
+    console.debug(`[PERF] selectShortCandidates - rejected candidates processing 耗时: ${(stepEndTime - stepStartTime).toFixed(2)}ms`);
 
     // 只对符合条件的候选者排序
     stepStartTime = performance.now();
     eligibleCandidates.sort((a, b) => b.totalScore - a.totalScore);
     stepEndTime = performance.now();
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[PERF] selectShortCandidates - final eligibleCandidates sorting 耗时: ${(stepEndTime - stepStartTime).toFixed(2)}ms`);
-    }
+    console.debug(`[PERF] selectShortCandidates - final eligibleCandidates sorting 耗时: ${(stepEndTime - stepStartTime).toFixed(2)}ms`);
 
     const finalSelectedCandidates = eligibleCandidates.slice(0, this.params.maxShortPositions);
 
@@ -584,20 +564,18 @@ class BTCDOM2StrategyEngine {
       ? `选择了${finalSelectedCandidates.length}个做空标的`
       : '无符合条件的做空标的';
 
-    // 性能监控日志（仅开发环境）
+    // 性能监控日志
     const executionTime = performance.now() - startTime;
-    if (process.env.NODE_ENV === 'development') {
-      const volatilityTotal = CACHE_STATS.volatilityHits + CACHE_STATS.volatilityMisses;
-      const fundingRateTotal = CACHE_STATS.fundingRateHits + CACHE_STATS.fundingRateMisses;
-      const candidateTotal = CACHE_STATS.candidateSelectionHits + CACHE_STATS.candidateSelectionMisses;
-      const volatilityHitRate = volatilityTotal > 0 ? (CACHE_STATS.volatilityHits / volatilityTotal * 100).toFixed(1) : 'N/A';
-      const fundingRateHitRate = fundingRateTotal > 0 ? (CACHE_STATS.fundingRateHits / fundingRateTotal * 100).toFixed(1) : 'N/A';
-      const candidateHitRate = candidateTotal > 0 ? (CACHE_STATS.candidateSelectionHits / candidateTotal * 100).toFixed(1) : 'N/A';
+    const volatilityTotal = CACHE_STATS.volatilityHits + CACHE_STATS.volatilityMisses;
+    const fundingRateTotal = CACHE_STATS.fundingRateHits + CACHE_STATS.fundingRateMisses;
+    const candidateTotal = CACHE_STATS.candidateSelectionHits + CACHE_STATS.candidateSelectionMisses;
+    const volatilityHitRate = volatilityTotal > 0 ? (CACHE_STATS.volatilityHits / volatilityTotal * 100).toFixed(1) : 'N/A';
+    const fundingRateHitRate = fundingRateTotal > 0 ? (CACHE_STATS.fundingRateHits / fundingRateTotal * 100).toFixed(1) : 'N/A';
+    const candidateHitRate = candidateTotal > 0 ? (CACHE_STATS.candidateSelectionHits / candidateTotal * 100).toFixed(1) : 'N/A';
 
-      console.log(`[PERF] selectShortCandidates 总耗时: ${executionTime.toFixed(2)}ms, 总候选数: ${stats.totalCandidates}, 预筛选后: ${selectedCount}, 最终选择: ${finalSelectedCandidates.length}`);
-      console.log(`[CACHE] 波动率: ${volatilityHitRate}%, 资金费率: ${fundingRateHitRate}%, 候选者选择: ${candidateHitRate}%`);
-      console.log(`[CACHE] 缓存大小 - 波动率: ${VOLATILITY_SCORE_CACHE.size}, 资金费率: ${FUNDING_RATE_SCORE_CACHE.size}, 候选者: ${CANDIDATE_SELECTION_CACHE.size}`);
-    }
+    console.debug(`[PERF] selectShortCandidates 总耗时: ${executionTime.toFixed(2)}ms, 总候选数: ${stats.totalCandidates}, 预筛选后: ${selectedCount}, 最终选择: ${finalSelectedCandidates.length}`);
+    console.debug(`[CACHE] 波动率: ${volatilityHitRate}%, 资金费率: ${fundingRateHitRate}%, 候选者选择: ${candidateHitRate}%`);
+    console.debug(`[CACHE] 缓存大小 - 波动率: ${VOLATILITY_SCORE_CACHE.size}, 资金费率: ${FUNDING_RATE_SCORE_CACHE.size}, 候选者: ${CANDIDATE_SELECTION_CACHE.size}`);
 
     const result = {
       selectedCandidates: finalSelectedCandidates,
@@ -1616,9 +1594,7 @@ export async function POST(request: NextRequest) {
 
     // 性能监控开始
     const backtestStartTime = performance.now();
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[PERF] 开始BTCDOM2回测, ${startTime} - ${endTime}, BTC占比: ${params.btcRatio}, 起始资金: ${params.initialCapital}, 数据点数: ${data.length}`);
-    }
+    console.debug(`[PERF] 开始BTCDOM2回测, ${startTime} - ${endTime}, BTC占比: ${params.btcRatio}, 起始资金: ${params.initialCapital}, 数据点数: ${data.length}`);
 
     const snapshotGenerationTimes: number[] = [];
 
@@ -1669,11 +1645,11 @@ export async function POST(request: NextRequest) {
       reasonCounts.set(reason, (reasonCounts.get(reason) || 0) + 1);
     });
 
-    if (process.env.NODE_ENV === 'development' && inactiveRebalances > 0) {
-      console.log(`[空仓汇总] 总空仓次数: ${inactiveRebalances}, 原因分布:`);
+    if (inactiveRebalances > 0) {
+      console.debug(`[空仓汇总] 总空仓次数: ${inactiveRebalances}, 原因分布:`);
       reasonCounts.forEach((count, reason) => {
         const percentage = ((count / inactiveRebalances) * 100).toFixed(1);
-        console.log(`  - ${reason}: ${count}次 (${percentage}%)`);
+        console.debug(`  - ${reason}: ${count}次 (${percentage}%)`);
       });
     }
 
@@ -1684,15 +1660,13 @@ export async function POST(request: NextRequest) {
       ? snapshotGenerationTimes.reduce((sum, time) => sum + time, 0) / snapshotGenerationTimes.length
       : 0;
 
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[PERF] BTCDOM2回测���成:`);
-      console.log(`  - 数据处理耗时 (不含快照生成): ${(totalBacktestTime - performanceTime - (avgSnapshotTime * data.length)).toFixed(2)}ms`);
-      console.log(`  - 快照生成总耗时: ${(avgSnapshotTime * data.length).toFixed(2)}ms (平均: ${avgSnapshotTime.toFixed(2)}ms/快照)`);
-      console.log(`  - 性能计算耗时: ${performanceTime.toFixed(2)}ms`);
-      console.log(`  - 总耗时: ${totalBacktestTime.toFixed(2)}ms`);
-      console.log(`  - 平均每个数据点 (含快照): ${(totalBacktestTime / data.length).toFixed(2)}ms`);
-      console.log(`  - 活跃/非活跃再平衡: ${activeRebalances}/${inactiveRebalances}`);
-    }
+    console.debug(`[PERF] BTCDOM2回测完成:`);
+    console.debug(`  - 数据处理耗时 (不含快照生成): ${(totalBacktestTime - performanceTime - (avgSnapshotTime * data.length)).toFixed(2)}ms`);
+    console.debug(`  - 快照生成总耗时: ${(avgSnapshotTime * data.length).toFixed(2)}ms (平均: ${avgSnapshotTime.toFixed(2)}ms/快照)`);
+    console.debug(`  - 性能计算耗时: ${performanceTime.toFixed(2)}ms`);
+    console.debug(`  - 总耗时: ${totalBacktestTime.toFixed(2)}ms`);
+    console.debug(`  - 平均每个数据点 (含快照): ${(totalBacktestTime / data.length).toFixed(2)}ms`);
+    console.debug(`  - 活跃/非活跃再平衡: ${activeRebalances}/${inactiveRebalances}`);
 
     const result: BTCDOM2BacktestResult = {
       params,
