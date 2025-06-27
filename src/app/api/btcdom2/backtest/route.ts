@@ -1552,6 +1552,14 @@ export async function POST(request: NextRequest) {
       const dataPoint = data[index];
       const previousData = index > 0 ? data[index - 1] : null;
       const snapshot = await strategyEngine.generateSnapshot(dataPoint, previousSnapshot, previousData);
+      
+      // 记录空仓状态日志
+      if (!snapshot.isActive) {
+        const timestamp = new Date(snapshot.timestamp).toISOString();
+        const reason = snapshot.rebalanceReason;
+        console.debug(`[空仓记录] 时间: ${timestamp}, 原因: ${reason}`);
+      }
+      
       snapshots.push(snapshot);
       previousSnapshot = snapshot;
     }
@@ -1567,6 +1575,22 @@ export async function POST(request: NextRequest) {
     const activeRebalances = snapshots.filter(s => s.isActive).length;
     const inactiveRebalances = snapshots.length - activeRebalances;
     const avgShortPositions = snapshots.reduce((sum, s) => sum + s.shortPositions.length, 0) / snapshots.length;
+
+    // 统计空仓原因分布
+    const inactiveSnapshots = snapshots.filter(s => !s.isActive);
+    const reasonCounts = new Map<string, number>();
+    inactiveSnapshots.forEach(snapshot => {
+      const reason = snapshot.rebalanceReason;
+      reasonCounts.set(reason, (reasonCounts.get(reason) || 0) + 1);
+    });
+
+    if (process.env.NODE_ENV === 'development' && inactiveRebalances > 0) {
+      console.log(`[空仓汇总] 总空仓次数: ${inactiveRebalances}, 原因分布:`);
+      reasonCounts.forEach((count, reason) => {
+        const percentage = ((count / inactiveRebalances) * 100).toFixed(1);
+        console.log(`  - ${reason}: ${count}次 (${percentage}%)`);
+      });
+    }
 
     // 性能监控总结
     const totalBacktestTime = Date.now() - backtestStartTime;
