@@ -20,6 +20,7 @@ import {
   TemperaturePeriod
 } from '@/types/btcdom2';
 import { getBTCDOM2Config, validateBTCDOM2Params } from '@/lib/btcdom2-utils';
+import { fetchLivePerformanceData, convertLiveDataToChartFormat } from '@/lib/btcdom2-live-utils';
 import { BTCDOM2Chart } from '@/components/btcdom2/Btcdom2Chart';
 import { BTCDOM2PositionTable } from '@/components/btcdom2/Btcdom2PositionTable';
 import { PnlTrendAnalysis } from '@/components/btcdom2/PnlTrendAnalysis';
@@ -70,6 +71,9 @@ export default function BTCDOM2Dashboard() {
   const [selectedSnapshotIndex, setSelectedSnapshotIndex] = useState<number>(-1); // -1 表示最新
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 实盘数据状态
+  const [liveError, setLiveError] = useState<string | null>(null);
 
   // UI状态
   const [showAdvancedSettings, setShowAdvancedSettings] = useState<boolean>(false);
@@ -151,6 +155,51 @@ export default function BTCDOM2Dashboard() {
 
   // 兼容性别名已移除 - 不再需要
 
+  // 合并回测数据和实盘数据
+  const mergeBacktestWithLiveData = useCallback((
+    backtestData: BTCDOM2ChartData[],
+    liveData: BTCDOM2ChartData[]
+  ): BTCDOM2ChartData[] => {
+    if (!backtestData || backtestData.length === 0) {
+      return backtestData;
+    }
+
+    if (!liveData || liveData.length === 0) {
+      return backtestData;
+    }
+
+    // 创建实盘数据的时间戳映射
+    const liveDataMap = new Map<string, BTCDOM2ChartData>();
+    liveData.forEach(livePoint => {
+      liveDataMap.set(livePoint.timestamp, livePoint);
+    });
+
+    console.log('实盘数据时间戳:', liveData.map(p => p.timestamp));
+    console.log('回测数据开头时间戳:', backtestData.slice(0, 5).map(p => p.timestamp));
+    console.log('回测数据末尾时间戳:', backtestData.slice(-10).map(p => p.timestamp));
+
+    // 基于回测数据，添加对应时间的实盘收益率
+    const merged: BTCDOM2ChartData[] = backtestData.map(point => {
+      const livePoint = liveDataMap.get(point.timestamp);
+      return {
+        ...point,
+        // 如果有对应的实盘数据，添加实盘收益率字段
+        liveReturn: livePoint ? livePoint.totalReturn : undefined
+      };
+    });
+
+    const matchedCount = merged.filter(p => p.liveReturn !== undefined).length;
+    console.log(`匹配到 ${matchedCount} 个实盘数据点，总共 ${merged.length} 个回测数据点`);
+
+    // 输出匹配的时间戳用于调试
+    const matchedTimestamps = merged.filter(p => p.liveReturn !== undefined).map(p => p.timestamp);
+    if (matchedTimestamps.length > 0) {
+      console.log('匹配的时间戳:', matchedTimestamps);
+    }
+
+    return merged;
+  }, []);
+
   // 执行回测
   const runBacktest = useCallback(async (currentParams?: BTCDOM2StrategyParams) => {
     const paramsToUse = currentParams || params;
@@ -162,6 +211,7 @@ export default function BTCDOM2Dashboard() {
 
     setLoading(true);
     setError(null);
+    setLiveError(null); // 清除实盘数据错误
 
     try {
       let temperaturePeriods: TemperaturePeriod[] = [];
@@ -169,11 +219,11 @@ export default function BTCDOM2Dashboard() {
       // 如果启用了温度计规则，先获取温度计数据
       if (paramsToUse.useTemperatureRule) {
         console.log('获取温度计数据...');
-        
+
         // 处理日期格式，确保转换为完整的ISO字符串
         const startDateISO = new Date(paramsToUse.startDate).toISOString();
         const endDateISO = new Date(paramsToUse.endDate).toISOString();
-        
+
         const temperatureResponse = await fetch(
           `/api/btcdom2/temperature-periods?` +
           `symbol=${encodeURIComponent(paramsToUse.temperatureSymbol)}&` +
@@ -223,8 +273,39 @@ export default function BTCDOM2Dashboard() {
       const result = await response.json();
 
       if (result.success) {
+        console.log(`[回测] 获取到 ${result.data.chartData.length} 个数据点`);
+        console.log(`[回测] 数据时间范围: ${result.data.chartData[0]?.timestamp} - ${result.data.chartData[result.data.chartData.length - 1]?.timestamp}`);
+        console.log(`[回测] 请求的时间范围: ${paramsToUse.startDate} - ${paramsToUse.endDate}`);
+
         setBacktestResult(result.data);
-        setChartData(result.data.chartData);
+
+        // 同时加载实盘数据
+        try {
+          console.log('同时获取实盘数据...');
+          console.log('使用回测时间范围:', paramsToUse.startDate, '到', paramsToUse.endDate);
+
+          const livePerformanceData = await fetchLivePerformanceData({
+            startDate: paramsToUse.startDate,
+            endDate: paramsToUse.endDate,
+            limit: 1000
+          });
+
+          console.log('实盘数据获取成功:', livePerformanceData.length, '条记录');
+
+          // 转换为图表数据格式
+          const convertedLiveData = convertLiveDataToChartFormat(livePerformanceData);
+
+          // 合并实盘数据到回测数据中
+          const mergedChartData = mergeBacktestWithLiveData(result.data.chartData, convertedLiveData);
+
+          setChartData(mergedChartData);
+
+        } catch (liveErr) {
+          console.error('实盘数据获取错误:', liveErr);
+          setLiveError(liveErr instanceof Error ? liveErr.message : '获取实盘数据失败');
+          // 即使实盘数据获取失败，也要设置回测数据
+          setChartData(result.data.chartData);
+        }
 
         // 设置最新快照并标记新增持仓
         const latestIndex = result.data.snapshots.length - 1;
@@ -240,7 +321,7 @@ export default function BTCDOM2Dashboard() {
     } finally {
       setLoading(false);
     }
-  }, [parameterErrors, params]);
+  }, [parameterErrors, params, mergeBacktestWithLiveData]);
 
   // 按钮点击处理
   const handleRunBacktest = () => {
@@ -383,7 +464,7 @@ export default function BTCDOM2Dashboard() {
 
   // 标记新增持仓的函数（带数据参数）
   const markNewPositionsWithData = (currentSnapshot: StrategySnapshot, currentIndex: number, data: BTCDOM2BacktestResult): StrategySnapshot => {
-    if (!data) {
+    if (!data || !currentSnapshot) {
       return currentSnapshot;
     }
 
@@ -399,7 +480,7 @@ export default function BTCDOM2Dashboard() {
           quantityChange: { type: 'new' },
           priceChange: { type: 'new' }
         } : null,
-        shortPositions: currentSnapshot.shortPositions.map(pos => ({
+        shortPositions: (currentSnapshot.shortPositions || []).map(pos => ({
           ...pos,
           isNewPosition: true,
           quantityChange: { type: 'new' }
@@ -409,6 +490,24 @@ export default function BTCDOM2Dashboard() {
 
     // 获取前一期的快照
     const previousSnapshot = data.snapshots[actualIndex - 1];
+
+    // 如果没有前一期快照，说明这是第一期，所有持仓都是新增的
+    if (!previousSnapshot) {
+      return {
+        ...currentSnapshot,
+        btcPosition: currentSnapshot.btcPosition ? {
+          ...currentSnapshot.btcPosition,
+          isNewPosition: true,
+          quantityChange: { type: 'new' },
+          priceChange: { type: 'new' }
+        } : null,
+        shortPositions: (currentSnapshot.shortPositions || []).map(pos => ({
+          ...pos,
+          isNewPosition: true,
+          quantityChange: { type: 'new' }
+        }))
+      };
+    }
 
     // 获取前一期的持仓信息
     const previousPositions = new Map<string, PositionInfo>();
@@ -743,6 +842,19 @@ export default function BTCDOM2Dashboard() {
           </Card>
         )}
 
+        {/* 实盘数据错误显示 */}
+        {liveError && (
+          <Card className="border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-2 text-orange-700 dark:text-orange-400">
+                <AlertCircle className="w-5 h-5" />
+                <span className="font-medium">实盘数据加载失败</span>
+              </div>
+              <p className="text-orange-600 dark:text-orange-400 mt-2">{liveError}</p>
+            </CardContent>
+          </Card>
+        )}
+
         {/* 结果展示 */}
         {backtestResult && (
           <>
@@ -1054,7 +1166,11 @@ export default function BTCDOM2Dashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <BTCDOM2Chart data={chartData} params={params} performance={backtestResult.performance} />
+                <BTCDOM2Chart
+                  data={chartData}
+                  params={params}
+                  performance={backtestResult.performance}
+                />
               </CardContent>
             </Card>
 

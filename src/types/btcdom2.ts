@@ -263,6 +263,44 @@ export interface BTCDOM2ChartData {
   isActive: boolean;        // 策略是否持仓
   btcPrice: number;         // BTC价格
   btcdomPrice?: number;     // BTCDOM合约价格
+  liveReturn?: number;      // 实盘收益率 (可选)
+}
+
+// 实盘表现数据类型
+export interface LivePerformanceData {
+  _id: string;
+  timestamp: string;
+  position_pnl: number;
+  btc_pnl: number;
+  futures_pnl: number;
+  total_fees_usdt: number;
+  total_funding_fee_usdt: number;
+  total_pnl: number;
+  total_return_rate: number;
+  total_trades: number;
+  win_rate: number;
+  max_drawdown: number;
+  sharpe_ratio: number;
+  positions_count: number;
+  market_data_timestamp: string;
+  execution_id: string;
+}
+
+// 实盘统计信息
+export interface LivePerformanceStats {
+  totalRecords: number;
+  dateRange: {
+    _id: null;
+    earliest: string | null;
+    latest: string | null;
+  };
+  performanceSummary: {
+    totalPnl: number;
+    totalReturnRate?: number;
+    totalTrades: number;
+    totalFees?: number;
+    totalFundingFees?: number;
+  };
 }
 
 // API响应类型

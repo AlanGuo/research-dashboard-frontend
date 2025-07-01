@@ -12,15 +12,24 @@ import {
   ReferenceArea
 } from 'recharts';
 import { BTCDOM2ChartData, BTCDOM2StrategyParams, BTCDOM2PerformanceMetrics } from '@/types/btcdom2';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 
 // 扩展的图表数据类型，包含处理后的字段
 interface ProcessedChartData extends BTCDOM2ChartData {
   date: string;
   totalReturnPercent: number;
   btcReturnPercent: number;
-  btcdomReturnPercent: number | null;
+  btcdomReturnPercent?: number | null; // 改为可选
   drawdownPercent: number;
   totalValueK: number;
+  strategyReturnPercent?: number; // 回测策略收益率
+  liveStrategyReturnPercent?: number; // 实盘策略收益率
+  dataType?: 'backtest' | 'live';
+  hasLiveData?: boolean; // 是否有实盘数据
+  isAfterLiveStart?: boolean; // 是否在实盘数据开始之后
+  backtestSolidPercent?: number; // 回测实线部分
+  backtestDashedPercent?: number; // 回测虚线部分
 }
 
 interface BTCDOM2ChartProps {
@@ -36,8 +45,12 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
     btcReturn: true,
     btcdomReturn: true,
     strategyReturn: true,
+    liveStrategyReturn: true, // 新增实盘策略收益率
     maxDrawdown: true
   });
+
+  // 实盘数据对齐开关
+  const [alignLiveData, setAlignLiveData] = useState(true);
 
   // 切换曲线可见性 - 使用 useCallback 避免不必要的重新渲染
   const toggleVisibility = useCallback((key: keyof typeof visibility) => {
@@ -50,10 +63,10 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
   // 处理图表数据
   const chartData = useMemo(() => {
     if (!data || data.length === 0) return [];
-    
+
     // 计算BTC收益率基准价格（第一个有效价格）
     const initialBtcPrice = data.length > 0 && data[0].btcPrice ? data[0].btcPrice : null;
-    
+
     // 计算BTCDOM收益率基准价格（第一个有效的非零价格）
     let initialBtcdomPrice = null;
     for (const point of data) {
@@ -62,20 +75,47 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
         break;
       }
     }
-    
-    const processedData = data.map(point => {
+
+    // 找到第一个有实盘数据的点，用于对齐计算
+    let firstLiveDataIndex = -1;
+    let alignmentOffset = 0;
+
+    if (alignLiveData) {
+      for (let i = 0; i < data.length; i++) {
+        if (data[i].liveReturn !== undefined) {
+          firstLiveDataIndex = i;
+          // 获取该点的回测收益率作为对齐基准
+          alignmentOffset = data[i].totalReturn * 100;
+          break;
+        }
+      }
+    }
+
+    const processedData = data.map((point, index) => {
       // 计算BTC收益率
       let btcReturnPercent = 0;
       if (initialBtcPrice && point.btcPrice) {
         btcReturnPercent = ((point.btcPrice - initialBtcPrice) / initialBtcPrice) * 100;
       }
-      
+
       // 计算BTCDOM收益率
       let btcdomReturnPercent = null;
       if (initialBtcdomPrice && point.btcdomPrice && point.btcdomPrice > 0) {
         btcdomReturnPercent = ((point.btcdomPrice - initialBtcdomPrice) / initialBtcdomPrice) * 100;
       }
-      
+
+      // 计算对齐后的实盘收益率
+      let alignedLiveStrategyReturnPercent = undefined;
+      if (point.liveReturn !== undefined) {
+        const rawLiveReturnPercent = point.liveReturn * 100;
+        if (alignLiveData && firstLiveDataIndex >= 0) {
+          // 对齐：实盘收益率 + 实盘首期对应的回测收益率
+          alignedLiveStrategyReturnPercent = rawLiveReturnPercent + alignmentOffset;
+        } else {
+          alignedLiveStrategyReturnPercent = rawLiveReturnPercent;
+        }
+      }
+
       return {
         ...point,
         date: new Date(point.timestamp).toLocaleDateString('zh-CN', {
@@ -90,27 +130,64 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
         btcdomReturnPercent,
         drawdownPercent: (point.drawdown * 100),
         totalValueK: point.totalValue / 1000, // 转换为千为单位
+        // 使用对齐后的实盘收益率
+        liveStrategyReturnPercent: alignedLiveStrategyReturnPercent,
+        // 标记是否有实盘数据，用于样式控制
+        hasLiveData: point.liveReturn !== undefined,
+        isAfterLiveStart: firstLiveDataIndex >= 0 && index >= firstLiveDataIndex,
       };
     });
-    
+
     return processedData;
-  }, [data]);
+  }, [data, alignLiveData]);
+
+  // 使用处理后的图表数据，添加分离的回测数据字段
+  const combinedChartData = useMemo(() => {
+    const firstLiveIndex = chartData.findIndex(point => point.hasLiveData);
+
+    return chartData.map((point, index) => {
+      const strategyReturnPercent = point.totalReturnPercent;
+
+      // 分离回测数据：实盘开始前用实线，实盘开始后用虚线
+      let backtestSolidPercent = undefined;
+      let backtestDashedPercent = undefined;
+
+      if (firstLiveIndex === -1) {
+        // 没有实盘数据，全部使用实线
+        backtestSolidPercent = strategyReturnPercent;
+      } else if (index <= firstLiveIndex) {
+        // 实盘开始前（包含第一个实盘数据点以保证连续性）
+        backtestSolidPercent = strategyReturnPercent;
+      } else {
+        // 实盘开始后
+        backtestDashedPercent = strategyReturnPercent;
+      }
+
+      return {
+        ...point,
+        strategyReturnPercent,
+        backtestSolidPercent,
+        backtestDashedPercent,
+        dataType: 'backtest' as const
+      };
+    });
+  }, [chartData]);
 
   // 计算最大回撤区域
   const maxDrawdownArea = useMemo(() => {
-    if (!performance?.maxDrawdownInfo || !chartData || chartData.length === 0) {
+    if (!performance?.maxDrawdownInfo || !combinedChartData || combinedChartData.length === 0) {
       return null;
     }
 
     const { startPeriod, endPeriod } = performance.maxDrawdownInfo;
-    
+
     // 使用期数索引定位（最可靠的方法）
     // 注意：期数是从1开始的，但数组索引是从0开始的
     const startIndex = Math.max(0, startPeriod - 1);
-    const endIndex = Math.min(chartData.length - 1, endPeriod - 1);
-    
-    const startDateByIndex = chartData[startIndex]?.date;
-    const endDateByIndex = chartData[endIndex]?.date;
+    const endIndex = Math.min(combinedChartData.length - 1, endPeriod - 1);
+
+    const startDateByIndex = combinedChartData[startIndex]?.date;
+    const endDateByIndex = combinedChartData[endIndex]?.date;
 
     if (!startDateByIndex || !endDateByIndex) {
       return null;
@@ -122,7 +199,7 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
       startIndex,
       endIndex
     };
-  }, [performance?.maxDrawdownInfo, chartData]);
+  }, [performance?.maxDrawdownInfo, combinedChartData]);
 
   // 自定义Tooltip
   const CustomTooltip = ({ active, payload, label }: { 
@@ -155,7 +232,7 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
                 {data.totalReturnPercent.toFixed(2)}%
               </span>
             </div>
-            {data.btcdomReturnPercent !== null && (
+            {data.btcdomReturnPercent !== null && data.btcdomReturnPercent !== undefined && (
               <div className="flex justify-between gap-6">
                 <span className="text-gray-600 dark:text-gray-400">BTCDOM收益率:</span>
                 <span className={`font-medium ${data.btcdomReturnPercent >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
@@ -183,6 +260,22 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
                 </span>
               </div>
             )}
+            {data.strategyReturnPercent !== undefined && (
+              <div className="flex justify-between gap-6">
+                <span className="text-gray-600 dark:text-gray-400">回测收益率:</span>
+                <span className={`font-medium ${data.strategyReturnPercent >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  {data.strategyReturnPercent.toFixed(2)}%
+                </span>
+              </div>
+            )}
+            {data.liveStrategyReturnPercent !== undefined && (
+              <div className="flex justify-between gap-6">
+                <span className="text-gray-600 dark:text-gray-400">实盘收益率:</span>
+                <span className={`font-medium ${data.liveStrategyReturnPercent >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  {data.liveStrategyReturnPercent.toFixed(2)}%
+                </span>
+              </div>
+            )}
             <div className="flex justify-between gap-6">
               <span className="text-gray-600 dark:text-gray-400">策略状态:</span>
               <span className={`font-medium ${data.isActive ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
@@ -201,7 +294,7 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
       <div className="h-96 flex items-center justify-center">
         <div className="text-center">
           <p className="text-muted-foreground">暂无数据</p>
-          <p className="text-sm text-muted-foreground mt-1">请执行回测以生成图表数据</p>
+          <p className="text-sm text-muted-foreground mt-1">请执行回测或加载实盘数据以生成图表</p>
         </div>
       </div>
     );
@@ -211,8 +304,25 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
     <div className="space-y-2">
       {/* BTC价格与策略收益对比 */}
       <div>
-        <h4 className="text-lg font-medium mb-4">BTC价格与收益率对比</h4>
-        
+        <div className="flex justify-between items-center mb-4">
+          <h4 className="text-lg font-medium">BTC价格与收益率对比</h4>
+
+          {/* 实盘数据对齐控制 */}
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="alignLiveData"
+              checked={alignLiveData}
+              onCheckedChange={(checked) => setAlignLiveData(checked === true)}
+            />
+            <Label
+              htmlFor="alignLiveData"
+              className="text-sm font-medium cursor-pointer"
+            >
+              实盘数据对齐
+            </Label>
+          </div>
+        </div>
+
         {/* 自定义Legend - 独立于数据显示 */}
         <div className="flex justify-center gap-6 mb-4 flex-wrap">
           <div
@@ -268,7 +378,21 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
               style={{ backgroundColor: '#2563eb' }}
             />
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              BTCDOM2.0收益率 (%)
+              BTCDOM2.0回测收益率 (%)
+            </span>
+          </div>
+          <div
+            className={`flex items-center gap-2 cursor-pointer select-none transition-all duration-200 hover:scale-105 px-2 py-1 rounded ${
+              visibility.liveStrategyReturn ? 'opacity-100' : 'opacity-50'
+            }`}
+            onClick={() => toggleVisibility('liveStrategyReturn')}
+          >
+            <div
+              className="w-3 h-3 rounded"
+              style={{ backgroundColor: '#dc2626' }}
+            />
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              BTCDOM2.0实盘收益率 (%)
             </span>
           </div>
           {/* 最大回撤区域图例 */}
@@ -292,7 +416,7 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
         
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData}>
+            <ComposedChart data={combinedChartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis 
                 dataKey="date" 
@@ -362,15 +486,43 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
                   connectNulls={true}
                 />
               )}
+              {/* 回测收益率 - 实线部分（实盘数据开始前） */}
               {visibility.strategyReturn && (
                 <Line
                   yAxisId="right"
                   type="monotone"
-                  dataKey="totalReturnPercent"
+                  dataKey="backtestSolidPercent"
                   stroke="#2563eb"
                   strokeWidth={2}
                   dot={false}
-                  name="BTCDOM2.0收益率 (%)"
+                  name="BTCDOM2.0回测收益率 (%)"
+                  connectNulls={false}
+                />
+              )}
+              {/* 回测收益率 - 虚线部分（实盘数据开始后） */}
+              {visibility.strategyReturn && (
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="backtestDashedPercent"
+                  stroke="#2563eb"
+                  strokeWidth={2}
+                  strokeDasharray="5 5"
+                  dot={false}
+                  name="BTCDOM2.0回测收益率(虚线) (%)"
+                  connectNulls={false}
+                />
+              )}
+              {visibility.liveStrategyReturn && (
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="liveStrategyReturnPercent"
+                  stroke="#dc2626"
+                  strokeWidth={2}
+                  dot={false}
+                  name="BTCDOM2.0实盘收益率 (%)"
+                  connectNulls={false}
                 />
               )}
             </ComposedChart>
