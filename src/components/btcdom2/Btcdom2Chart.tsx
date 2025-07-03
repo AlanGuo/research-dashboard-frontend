@@ -145,20 +145,6 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
   const combinedChartData = useMemo(() => {
     const firstLiveIndex = chartData.findIndex(point => point.hasLiveData);
 
-    // 调试日志：检查第一个实盘数据点
-    console.log('图表数据中第一个实盘数据点索引:', firstLiveIndex);
-    if (firstLiveIndex >= 0) {
-      console.log('第一个实盘数据点:', chartData[firstLiveIndex]);
-    }
-
-    // 调试日志：检查前几个数据点的实盘数据状态
-    console.log('前5个数据点的实盘数据状态:', chartData.slice(0, 5).map((p, i) => ({
-      index: i,
-      timestamp: p.timestamp,
-      hasLiveData: p.hasLiveData,
-      liveReturn: p.liveReturn
-    })));
-
     return chartData.map((point, index) => {
       const strategyReturnPercent = point.totalReturnPercent;
 
@@ -169,11 +155,11 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
       if (firstLiveIndex === -1) {
         // 没有实盘数据，全部使用实线
         backtestSolidPercent = strategyReturnPercent;
-      } else if (index <= firstLiveIndex) {
-        // 实盘开始前（包含第一个实盘数据点以保证连续性）
+      } else if (index < firstLiveIndex) {
+        // 实盘开始前
         backtestSolidPercent = strategyReturnPercent;
       } else {
-        // 实盘开始后
+        // 从第一个实盘数据点开始使用虚线
         backtestDashedPercent = strategyReturnPercent;
       }
 
