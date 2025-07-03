@@ -954,14 +954,14 @@ export default function BTCDOM2Dashboard() {
 
                             {/* 添加最大回撤vs总盈亏的对比信息 */}
                             <div className="mt-2 pt-2 border-t border-green-200 dark:border-green-700">
-                              <div className="font-medium mb-1">最大回撤 vs 总盈亏对比：</div>
+                              <div className="font-medium mb-1">最大回撤</div>
                               {(() => {
                                 const maxDrawdownInfo = backtestResult.performance.maxDrawdownInfo;
                                 if (!maxDrawdownInfo) return null;
 
                                 const firstSnapshot = backtestResult.snapshots[0];
                                 const lastSnapshot = backtestResult.snapshots[backtestResult.snapshots.length - 1];
-                                const initialCapital = 10000; // TODO: 应该从配置中获取
+                                const initialCapital = backtestResult.params.initialCapital; // TODO: 应该从配置中获取
 
                                 // 计算峰值：如果startPeriod为0，峰值是初始资金；否则是对应快照的总价值
                                 let peakValue: number;
@@ -981,8 +981,6 @@ export default function BTCDOM2Dashboard() {
                                     <div>初始资金: ${initialCapital.toFixed(2)}</div>
                                     <div>第一期总价值: ${firstSnapshot.totalValue.toFixed(2)}</div>
                                     <div>峰值总价值: ${peakValue.toFixed(2)} ({maxDrawdownInfo.startPeriod === 0 ? '初始状态' : `第${maxDrawdownInfo.startPeriod}期`})</div>
-                                    <div>最终总价值: ${lastSnapshot.totalValue.toFixed(2)}</div>
-                                    <div>总盈亏: ${totalPnlAmount.toFixed(2)} (基于初始资金)</div>
                                     <div>最大回撤: ${maxDrawdownAmount.toFixed(2)} (基于峰值)</div>
                                     <div>差额: ${difference.toFixed(2)}</div>
                                   </>
