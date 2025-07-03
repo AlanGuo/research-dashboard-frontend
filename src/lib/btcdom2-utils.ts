@@ -4,6 +4,14 @@ import { BTCDOM2StrategyParams, PositionAllocationStrategy } from '@/types/btcdo
 /**
  * 获取BTCDOM2策略的默认配置
  * 根据环境自动计算日期范围（精确到小时，使用UTC时间）
+ *
+ * Production模式：
+ * - 优先读取 'btcdom2.startDate' 配置
+ * - 如果没有配置，则从当前时间往前半年
+ * - 最大回测时长1年，如果配置的时长超过1年，则以最长1年为准
+ *
+ * Development模式：
+ * - 使用配置文件中的startDate，如果没有则使用2020-01-01
  */
 export function getBTCDOM2Config(): BTCDOM2StrategyParams {
   const env = process.env.NODE_ENV || 'development';
@@ -20,12 +28,35 @@ export function getBTCDOM2Config(): BTCDOM2StrategyParams {
   let maxBacktestDurationDays: number | undefined;
 
   if (env === 'production') {
-    // production: 从当前时间往前半年，最大回测时长1年
-    const sixMonthsAgo = new Date(now);
-    sixMonthsAgo.setUTCMonth(now.getUTCMonth() - 6);
-    sixMonthsAgo.setUTCMinutes(0, 0, 0); // 确保也是整点小时
-    startDate = sixMonthsAgo.toISOString();
-    maxBacktestDurationDays = getConfigValue('btcdom2.maxBacktestDurationDays', 365);
+    // production: 优先读取配置的startDate，如果没有配置才往前半年
+    const configStartDate = getConfigValue('btcdom2.startDate', null);
+
+    if (configStartDate) {
+      // 使用配置的startDate
+      startDate = configStartDate;
+    } else {
+      // 如果没有配置，从当前时间往前半年
+      const sixMonthsAgo = new Date(now);
+      sixMonthsAgo.setUTCMonth(now.getUTCMonth() - 6);
+      sixMonthsAgo.setUTCMinutes(0, 0, 0); // 确保也是整点小时
+      startDate = sixMonthsAgo.toISOString();
+    }
+
+    // 检查配置的时长是否超过1年，如果超过则限制为1年
+    const maxDurationDays = getConfigValue('btcdom2.maxBacktestDurationDays', 365);
+    const startTime = new Date(startDate).getTime();
+    const endTime = now.getTime();
+    const durationDays = (endTime - startTime) / (1000 * 60 * 60 * 24);
+
+    if (durationDays > maxDurationDays) {
+      // 如果配置的时长超过最大限制，则从endDate往前推算maxDurationDays天
+      const limitedStartDate = new Date(now);
+      limitedStartDate.setUTCDate(now.getUTCDate() - maxDurationDays);
+      limitedStartDate.setUTCMinutes(0, 0, 0); // 确保也是整点小时
+      startDate = limitedStartDate.toISOString();
+    }
+
+    maxBacktestDurationDays = maxDurationDays;
   } else {
     // development: 使用配置文件中的startDate，如果没有则使用2020-01-01
     const configStartDate = getConfigValue('btcdom2.startDate', '2020-01-01T00:00:00.000Z');
