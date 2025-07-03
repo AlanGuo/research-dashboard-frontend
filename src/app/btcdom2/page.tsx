@@ -174,10 +174,6 @@ export default function BTCDOM2Dashboard() {
       liveDataMap.set(livePoint.timestamp, livePoint);
     });
 
-    console.log('实盘数据时间戳:', liveData.map(p => p.timestamp));
-    console.log('回测数据开头时间戳:', backtestData.slice(0, 5).map(p => p.timestamp));
-    console.log('回测数据末尾时间戳:', backtestData.slice(-10).map(p => p.timestamp));
-
     // 基于回测数据，添加对应时间的实盘收益率
     const merged: BTCDOM2ChartData[] = backtestData.map(point => {
       const livePoint = liveDataMap.get(point.timestamp);
@@ -187,16 +183,6 @@ export default function BTCDOM2Dashboard() {
         liveReturn: livePoint ? livePoint.totalReturn : undefined
       };
     });
-
-    const matchedCount = merged.filter(p => p.liveReturn !== undefined).length;
-    console.log(`匹配到 ${matchedCount} 个实盘数据点，总共 ${merged.length} 个回测数据点`);
-
-    // 输出匹配的时间戳用于调试
-    const matchedTimestamps = merged.filter(p => p.liveReturn !== undefined).map(p => p.timestamp);
-    if (matchedTimestamps.length > 0) {
-      console.log('匹配的时间戳:', matchedTimestamps);
-    }
-
     return merged;
   }, []);
 
