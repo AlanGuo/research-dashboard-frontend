@@ -961,17 +961,26 @@ export default function BTCDOM2Dashboard() {
 
                                 const firstSnapshot = backtestResult.snapshots[0];
                                 const lastSnapshot = backtestResult.snapshots[backtestResult.snapshots.length - 1];
-                                const peakSnapshot = backtestResult.snapshots[maxDrawdownInfo.startPeriod - 1];
+                                const initialCapital = 10000; // TODO: 应该从配置中获取
 
-                                const totalPnlAmount = lastSnapshot.totalValue - 10000; // 假设初始资金10000
-                                const maxDrawdownAmount = peakSnapshot.totalValue * maxDrawdownInfo.drawdown;
+                                // 计算峰值：如果startPeriod为0，峰值是初始资金；否则是对应快照的总价值
+                                let peakValue: number;
+                                if (maxDrawdownInfo.startPeriod === 0) {
+                                  peakValue = initialCapital;
+                                } else {
+                                  const peakSnapshot = backtestResult.snapshots[maxDrawdownInfo.startPeriod - 1];
+                                  peakValue = peakSnapshot.totalValue;
+                                }
+
+                                const totalPnlAmount = lastSnapshot.totalValue - initialCapital;
+                                const maxDrawdownAmount = peakValue * maxDrawdownInfo.drawdown;
                                 const difference = Math.abs(totalPnlAmount) - maxDrawdownAmount;
 
                                 return (
                                   <>
-                                    <div>初始资金: $10,000.00</div>
+                                    <div>初始资金: ${initialCapital.toFixed(2)}</div>
                                     <div>第一期总价值: ${firstSnapshot.totalValue.toFixed(2)}</div>
-                                    <div>峰值总价值: ${peakSnapshot.totalValue.toFixed(2)} (第{maxDrawdownInfo.startPeriod}期)</div>
+                                    <div>峰值总价值: ${peakValue.toFixed(2)} ({maxDrawdownInfo.startPeriod === 0 ? '初始状态' : `第${maxDrawdownInfo.startPeriod}期`})</div>
                                     <div>最终总价值: ${lastSnapshot.totalValue.toFixed(2)}</div>
                                     <div>总盈亏: ${totalPnlAmount.toFixed(2)} (基于初始资金)</div>
                                     <div>最大回撤: ${maxDrawdownAmount.toFixed(2)} (基于峰值)</div>
@@ -1033,13 +1042,22 @@ export default function BTCDOM2Dashboard() {
                           // 直接使用后端计算的回撤百分比，避免前端重复计算导致的错误
                           const drawdownPercentage = drawdown * 100;
 
-                          // 计算回撤金额：使用峰值期的总价值乘以回撤百分比
-                          const peakSnapshot = backtestResult.snapshots[startPeriod - 1];
-                          if (!peakSnapshot) {
-                            return formatAmountWithPercent(0, 0);
+                          // 计算回撤金额：
+                          // 如果 startPeriod 为 0，表示峰值是初始资金
+                          // 如果 startPeriod > 0，表示峰值是某个快照的总价值
+                          let peakValue: number;
+                          if (startPeriod === 0) {
+                            // 峰值是初始资金
+                            peakValue = 10000; // TODO: 应该从配置中获取初始资金
+                          } else {
+                            // 峰值是某个快照的总价值
+                            const peakSnapshot = backtestResult.snapshots[startPeriod - 1];
+                            if (!peakSnapshot) {
+                              return formatAmountWithPercent(0, 0);
+                            }
+                            peakValue = peakSnapshot.totalValue;
                           }
 
-                          const peakValue = peakSnapshot.totalValue;
                           const drawdownAmount = peakValue * drawdown; // 使用后端计算的精确回撤比例
                           
                           return formatAmountWithPercent(
@@ -1050,13 +1068,24 @@ export default function BTCDOM2Dashboard() {
                       </div>
                       {backtestResult.performance.maxDrawdownInfo && (
                         <span className="text-xs text-gray-500 dark:text-gray-400">
-                          {backtestResult.performance.maxDrawdownInfo.startPeriod === backtestResult.performance.maxDrawdownInfo.endPeriod ? (
-                            // 单期回撤
-                            <>第{backtestResult.performance.maxDrawdownInfo.startPeriod}期 • {formatPeriodTime(backtestResult.performance.maxDrawdownInfo.startTimestamp)}</>
-                          ) : (
-                            // 多期回撤
-                            <>第{backtestResult.performance.maxDrawdownInfo.startPeriod}-{backtestResult.performance.maxDrawdownInfo.endPeriod}期 ({backtestResult.performance.maxDrawdownInfo.duration}期) • {formatPeriodTime(backtestResult.performance.maxDrawdownInfo.startTimestamp)} ~ {formatPeriodTime(backtestResult.performance.maxDrawdownInfo.endTimestamp)}</>
-                          )}
+                          {(() => {
+                            const { startPeriod, endPeriod, duration, startTimestamp, endTimestamp } = backtestResult.performance.maxDrawdownInfo;
+
+                            if (startPeriod === 0) {
+                              // 从初始状态开始的回撤
+                              if (endPeriod === 1) {
+                                return <>初始-第{endPeriod}期 • {formatPeriodTime(startTimestamp)} ~ {formatPeriodTime(endTimestamp)}</>;
+                              } else {
+                                return <>初始-第{endPeriod}期 ({duration}期) • {formatPeriodTime(startTimestamp)} ~ {formatPeriodTime(endTimestamp)}</>;
+                              }
+                            } else if (startPeriod === endPeriod) {
+                              // 单期回撤
+                              return <>第{startPeriod}期 • {formatPeriodTime(startTimestamp)}</>;
+                            } else {
+                              // 多期回撤
+                              return <>第{startPeriod}-{endPeriod}期 ({duration}期) • {formatPeriodTime(startTimestamp)} ~ {formatPeriodTime(endTimestamp)}</>;
+                            }
+                          })()}
                         </span>
                       )}
                     </div>

@@ -1284,10 +1284,16 @@ function calculatePerformanceMetrics(
     duration: number;
   } | undefined;
 
-  // 使用第一个快照的总价值作为初始峰值，而不是初始资金
-  // 这样确保回撤计算从实际的第一个数据点开始
-  let peak = snapshots.length > 0 ? snapshots[0].totalValue : params.initialCapital;
-  let peakIndex = snapshots.length > 0 ? 0 : -1; // 峰值对应的索引，从第一个快照开始
+  // 峰值应该是初始资金和第一个快照总价值中的较大者
+  // 如果第一期就亏损，峰值应该是初始资金
+  let peak = params.initialCapital;
+  let peakIndex = -1; // -1 表示峰值是初始资金，不对应任何快照
+
+  // 如果第一个快照的总价值大于初始资金，则更新峰值
+  if (snapshots.length > 0 && snapshots[0].totalValue > params.initialCapital) {
+    peak = snapshots[0].totalValue;
+    peakIndex = 0;
+  }
 
   for (let i = 0; i < snapshots.length; i++) {
     const snapshot = snapshots[i];
@@ -1306,11 +1312,15 @@ function calculatePerformanceMetrics(
       maxDrawdown = drawdown;
       maxDrawdownInfo = {
         drawdown,
-        startTimestamp: peakIndex >= 0 ? snapshots[peakIndex].timestamp : snapshot.timestamp,
+        // 如果峰值是初始资金(peakIndex = -1)，使用第一个快照的时间戳作为开始时间
+        // 如果峰值是某个快照，使用该快照的时间戳
+        startTimestamp: peakIndex >= 0 ? snapshots[peakIndex].timestamp : (snapshots.length > 0 ? snapshots[0].timestamp : snapshot.timestamp),
         endTimestamp: snapshot.timestamp,
-        startPeriod: peakIndex >= 0 ? peakIndex + 1 : i + 1, // 期数从1开始
+        // 如果峰值是初始资金，startPeriod为0（表示从初始状态开始）
+        // 如果峰值是某个快照，使用该快照的期数
+        startPeriod: peakIndex >= 0 ? peakIndex + 1 : 0,
         endPeriod: i + 1,
-        duration: peakIndex >= 0 ? (i - peakIndex + 1) : 1
+        duration: peakIndex >= 0 ? (i - peakIndex + 1) : (i + 2) // 从初始状态到当前期数
       };
     }
   }

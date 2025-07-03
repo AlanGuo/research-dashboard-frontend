@@ -181,9 +181,10 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
 
     const { startPeriod, endPeriod } = performance.maxDrawdownInfo;
 
-    // 使用期数索引定位（最可靠的方法）
-    // 注意：期数是从1开始的，但数组索引是从0开始的
-    const startIndex = Math.max(0, startPeriod - 1);
+    // 处理期数索引定位
+    // 如果 startPeriod 为 0，表示从初始状态开始，使用第一个数据点
+    // 如果 startPeriod > 0，期数是从1开始的，但数组索引是从0开始的
+    const startIndex = startPeriod === 0 ? 0 : Math.max(0, startPeriod - 1);
     const endIndex = Math.min(combinedChartData.length - 1, endPeriod - 1);
 
     const startDateByIndex = combinedChartData[startIndex]?.date;
