@@ -1275,29 +1275,32 @@ function calculatePerformanceMetrics(
 
   // 最大回撤
   let maxDrawdown = 0;
-  let maxDrawdownInfo: { 
-    drawdown: number; 
-    startTimestamp: string; 
-    endTimestamp: string; 
-    startPeriod: number; 
-    endPeriod: number; 
-    duration: number; 
+  let maxDrawdownInfo: {
+    drawdown: number;
+    startTimestamp: string;
+    endTimestamp: string;
+    startPeriod: number;
+    endPeriod: number;
+    duration: number;
   } | undefined;
-  let peak = params.initialCapital;
-  let peakIndex = -1; // 峰值对应的索引
-  
+
+  // 使用第一个快照的总价值作为初始峰值，而不是初始资金
+  // 这样确保回撤计算从实际的第一个数据点开始
+  let peak = snapshots.length > 0 ? snapshots[0].totalValue : params.initialCapital;
+  let peakIndex = snapshots.length > 0 ? 0 : -1; // 峰值对应的索引，从第一个快照开始
+
   for (let i = 0; i < snapshots.length; i++) {
     const snapshot = snapshots[i];
-    
+
     // 更新峰值
     if (snapshot.totalValue > peak) {
       peak = snapshot.totalValue;
       peakIndex = i;
     }
-    
+
     // 计算当前回撤
     const drawdown = (peak - snapshot.totalValue) / peak;
-    
+
     // 如果当前回撤是最大的，记录回撤期间信息
     if (drawdown > maxDrawdown) {
       maxDrawdown = drawdown;
