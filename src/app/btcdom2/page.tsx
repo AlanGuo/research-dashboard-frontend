@@ -951,6 +951,35 @@ export default function BTCDOM2Dashboard() {
                             <div>BTC: ${pnlBreakdown.btcPnlAmount.toFixed(2)} + ALT: ${pnlBreakdown.altPnlAmount.toFixed(2)} + 手续费: ${pnlBreakdown.tradingFeeAmount.toFixed(2)} + 资金费: ${pnlBreakdown.fundingFeeAmount.toFixed(2)}</div>
                             <div>= ${(pnlBreakdown.btcPnlAmount + pnlBreakdown.altPnlAmount + pnlBreakdown.tradingFeeAmount + pnlBreakdown.fundingFeeAmount).toFixed(2)}</div>
                             <div>总盈亏: ${pnlBreakdown.totalPnlAmount.toFixed(2)} (差额: ${(pnlBreakdown.totalPnlAmount - (pnlBreakdown.btcPnlAmount + pnlBreakdown.altPnlAmount + pnlBreakdown.tradingFeeAmount + pnlBreakdown.fundingFeeAmount)).toFixed(2)})</div>
+
+                            {/* 添加最大回撤vs总盈亏的对比信息 */}
+                            <div className="mt-2 pt-2 border-t border-green-200 dark:border-green-700">
+                              <div className="font-medium mb-1">最大回撤 vs 总盈亏对比：</div>
+                              {(() => {
+                                const maxDrawdownInfo = backtestResult.performance.maxDrawdownInfo;
+                                if (!maxDrawdownInfo) return null;
+
+                                const firstSnapshot = backtestResult.snapshots[0];
+                                const lastSnapshot = backtestResult.snapshots[backtestResult.snapshots.length - 1];
+                                const peakSnapshot = backtestResult.snapshots[maxDrawdownInfo.startPeriod - 1];
+
+                                const totalPnlAmount = lastSnapshot.totalValue - 10000; // 假设初始资金10000
+                                const maxDrawdownAmount = peakSnapshot.totalValue * maxDrawdownInfo.drawdown;
+                                const difference = Math.abs(totalPnlAmount) - maxDrawdownAmount;
+
+                                return (
+                                  <>
+                                    <div>初始资金: $10,000.00</div>
+                                    <div>第一期总价值: ${firstSnapshot.totalValue.toFixed(2)}</div>
+                                    <div>峰值总价值: ${peakSnapshot.totalValue.toFixed(2)} (第{maxDrawdownInfo.startPeriod}期)</div>
+                                    <div>最终总价值: ${lastSnapshot.totalValue.toFixed(2)}</div>
+                                    <div>总盈亏: ${totalPnlAmount.toFixed(2)} (基于初始资金)</div>
+                                    <div>最大回撤: ${maxDrawdownAmount.toFixed(2)} (基于峰值)</div>
+                                    <div>差额: ${difference.toFixed(2)}</div>
+                                  </>
+                                );
+                              })()}
+                            </div>
                           </div>
                         )}
                       </>
