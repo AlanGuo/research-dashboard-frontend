@@ -198,17 +198,6 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
       console.warn('最大回撤区域日期无效:', { startDateByIndex, endDateByIndex, startIndex, endIndex });
       return null;
     }
-
-    console.log('最大回撤区域计算:', {
-      startPeriod,
-      endPeriod,
-      startIndex,
-      endIndex,
-      startDate: startDateByIndex,
-      endDate: endDateByIndex,
-      dataLength: combinedChartData.length
-    });
-
     return {
       startDate: startDateByIndex,
       endDate: endDateByIndex,
@@ -432,6 +421,9 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
                 dataKey="date" 
                 tick={{ fontSize: 12 }}
                 stroke="#666"
+                type="category"
+                scale="point"
+                domain={['dataMin', 'dataMax']}
               />
               <YAxis 
                 yAxisId="left"
