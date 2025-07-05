@@ -1,11 +1,11 @@
 'use client';
 
 import { useMemo, useState, useCallback } from 'react';
-import { 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
+import {
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
   Tooltip,
   ResponsiveContainer,
   ComposedChart,
@@ -207,15 +207,15 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
   }, [performance?.maxDrawdownInfo, combinedChartData]);
 
   // 自定义Tooltip
-  const CustomTooltip = ({ active, payload, label }: { 
-    active?: boolean; 
+  const CustomTooltip = ({ active, payload, label }: {
+    active?: boolean;
     payload?: Array<{
       color: string;
       name: string;
       value: number;
       payload: ProcessedChartData;
-    }>; 
-    label?: string 
+    }>;
+    label?: string
   }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
@@ -396,7 +396,7 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
           </div>
           {/* 最大回撤区域图例 */}
           {maxDrawdownArea && (
-            <div 
+            <div
               className={`flex items-center gap-2 cursor-pointer select-none transition-all duration-200 hover:scale-105 px-2 py-1 rounded ${
                 visibility.maxDrawdown ? 'opacity-100' : 'opacity-50'
               }`}
@@ -412,26 +412,26 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
             </div>
           )}
         </div>
-        
+
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={combinedChartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis 
-                dataKey="date" 
+              <XAxis
+                dataKey="date"
                 tick={{ fontSize: 12 }}
                 stroke="#666"
                 type="category"
                 scale="point"
                 domain={['dataMin', 'dataMax']}
               />
-              <YAxis 
+              <YAxis
                 yAxisId="left"
                 tick={{ fontSize: 12 }}
                 stroke="#f7931a"
                 label={{ value: 'BTC价格 ($)', angle: -90, position: 'insideLeft' }}
               />
-              <YAxis 
+              <YAxis
                 yAxisId="right"
                 orientation="right"
                 tick={{ fontSize: 12 }}
@@ -453,7 +453,7 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
                   strokeDasharray="3 3"
                 />
               )}
-              
+
               {visibility.btcPrice && (
                 <Line
                   yAxisId="left"
