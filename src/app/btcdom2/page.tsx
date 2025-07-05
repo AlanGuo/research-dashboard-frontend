@@ -979,7 +979,6 @@ export default function BTCDOM2Dashboard() {
                                 return (
                                   <>
                                     <div>初始资金: ${initialCapital.toFixed(2)}</div>
-                                    <div>第一期总价值: ${firstSnapshot.totalValue.toFixed(2)}</div>
                                     <div>峰值总价值: ${peakValue.toFixed(2)} ({maxDrawdownInfo.startPeriod === 0 ? '初始状态' : `第${maxDrawdownInfo.startPeriod}期`})</div>
                                     <div>最大回撤: ${maxDrawdownAmount.toFixed(2)} (基于峰值)</div>
                                     <div>差额: ${difference.toFixed(2)}</div>

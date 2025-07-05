@@ -116,15 +116,13 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
         }
       }
 
+      // 使用更稳定的日期格式化方法
+      const dateObj = new Date(point.timestamp);
+      const formattedDate = `${dateObj.getUTCFullYear()}/${String(dateObj.getUTCMonth() + 1).padStart(2, '0')}/${String(dateObj.getUTCDate()).padStart(2, '0')} ${String(dateObj.getUTCHours()).padStart(2, '0')}`;
+
       return {
         ...point,
-        date: new Date(point.timestamp).toLocaleDateString('zh-CN', {
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          timeZone: 'UTC'
-        }),
+        date: formattedDate,
         totalReturnPercent: (point.totalReturn * 100),
         btcReturnPercent,
         btcdomReturnPercent,
@@ -187,12 +185,29 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
     const startIndex = startPeriod === 0 ? 0 : Math.max(0, startPeriod - 1);
     const endIndex = Math.min(combinedChartData.length - 1, endPeriod - 1);
 
+    // 确保索引有效
+    if (startIndex < 0 || endIndex < 0 || startIndex >= combinedChartData.length || endIndex >= combinedChartData.length) {
+      console.warn('最大回撤区域索引无效:', { startIndex, endIndex, dataLength: combinedChartData.length, startPeriod, endPeriod });
+      return null;
+    }
+
     const startDateByIndex = combinedChartData[startIndex]?.date;
     const endDateByIndex = combinedChartData[endIndex]?.date;
 
     if (!startDateByIndex || !endDateByIndex) {
+      console.warn('最大回撤区域日期无效:', { startDateByIndex, endDateByIndex, startIndex, endIndex });
       return null;
     }
+
+    console.log('最大回撤区域计算:', {
+      startPeriod,
+      endPeriod,
+      startIndex,
+      endIndex,
+      startDate: startDateByIndex,
+      endDate: endDateByIndex,
+      dataLength: combinedChartData.length
+    });
 
     return {
       startDate: startDateByIndex,
