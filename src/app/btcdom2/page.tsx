@@ -959,7 +959,6 @@ export default function BTCDOM2Dashboard() {
                                 const maxDrawdownInfo = backtestResult.performance.maxDrawdownInfo;
                                 if (!maxDrawdownInfo) return null;
 
-                                const firstSnapshot = backtestResult.snapshots[0];
                                 const lastSnapshot = backtestResult.snapshots[backtestResult.snapshots.length - 1];
                                 const initialCapital = backtestResult.params.initialCapital; // TODO: 应该从配置中获取
 
