@@ -177,12 +177,6 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
       };
     });
 
-    // 调试日志
-    console.log('Combined chart data sample:', result.slice(0, 3));
-    console.log('Data length:', result.length);
-    console.log('First timestampValue:', result[0]?.timestampValue);
-    console.log('Last timestampValue:', result[result.length - 1]?.timestampValue);
-
     return result;
   }, [chartData]);
 
@@ -215,27 +209,7 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
       console.warn('最大回撤区域日期无效:', { startDateByIndex, endDateByIndex, startIndex, endIndex });
       return null;
     }
-
-    // 添加调试日志
-    console.log('MaxDrawdownArea Debug:', {
-      startPeriod,
-      endPeriod,
-      startIndex,
-      endIndex,
-      startDateByIndex,
-      endDateByIndex,
-      dataLength: combinedChartData.length,
-      useIndexMethod: true
-    });
-
-    // 验证索引范围
-    console.log('Index validation:', {
-      startIndex,
-      endIndex,
-      maxIndex: combinedChartData.length - 1,
-      indexValid: startIndex >= 0 && endIndex >= 0 && startIndex < combinedChartData.length && endIndex < combinedChartData.length
-    });
-
+    
     return {
       startDate: startDateByIndex,
       endDate: endDateByIndex,
