@@ -18,6 +18,8 @@ import { Label } from '@/components/ui/label';
 // 扩展的图表数据类型，包含处理后的字段
 interface ProcessedChartData extends BTCDOM2ChartData {
   date: string;
+  timestampValue: number; // 添加时间戳字段
+  dataIndex: number; // 添加数组索引字段
   totalReturnPercent: number;
   btcReturnPercent: number;
   btcdomReturnPercent?: number | null; // 改为可选
@@ -116,13 +118,18 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
         }
       }
 
-      // 使用更稳定的日期格式化方法
+      // 使用更稳定的日期格式化方法，包含分钟信息
       const dateObj = new Date(point.timestamp);
-      const formattedDate = `${dateObj.getUTCFullYear()}/${String(dateObj.getUTCMonth() + 1).padStart(2, '0')}/${String(dateObj.getUTCDate()).padStart(2, '0')} ${String(dateObj.getUTCHours()).padStart(2, '0')}`;
+      const formattedDate = `${dateObj.getUTCFullYear()}/${String(dateObj.getUTCMonth() + 1).padStart(2, '0')}/${String(dateObj.getUTCDate()).padStart(2, '0')} ${String(dateObj.getUTCHours()).padStart(2, '0')}:${String(dateObj.getUTCMinutes()).padStart(2, '0')}`;
+      
+      // 同时保留原有时间戳用于数值型 X 轴
+      const timestampValue = point.timestamp;
 
       return {
         ...point,
         date: formattedDate,
+        timestampValue, // 添加时间戳值
+        dataIndex: index, // 添加数组索引
         totalReturnPercent: (point.totalReturn * 100),
         btcReturnPercent,
         btcdomReturnPercent,
@@ -143,7 +150,7 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
   const combinedChartData = useMemo(() => {
     const firstLiveIndex = chartData.findIndex(point => point.hasLiveData);
 
-    return chartData.map((point, index) => {
+    const result = chartData.map((point, index) => {
       const strategyReturnPercent = point.totalReturnPercent;
 
       // 分离回测数据：实盘开始前用实线，实盘开始后用虚线
@@ -162,13 +169,21 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
       }
 
       return {
-        ...point,
+        ...point, // 这会包含所有字段，包括 timestampValue
         strategyReturnPercent,
         backtestSolidPercent,
         backtestDashedPercent,
         dataType: 'backtest' as const
       };
     });
+
+    // 调试日志
+    console.log('Combined chart data sample:', result.slice(0, 3));
+    console.log('Data length:', result.length);
+    console.log('First timestampValue:', result[0]?.timestampValue);
+    console.log('Last timestampValue:', result[result.length - 1]?.timestampValue);
+
+    return result;
   }, [chartData]);
 
   // 计算最大回撤区域
@@ -193,11 +208,34 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
 
     const startDateByIndex = combinedChartData[startIndex]?.date;
     const endDateByIndex = combinedChartData[endIndex]?.date;
+    const startTimestamp = combinedChartData[startIndex]?.timestamp;
+    const endTimestamp = combinedChartData[endIndex]?.timestamp;
 
-    if (!startDateByIndex || !endDateByIndex) {
+    if (!startDateByIndex || !endDateByIndex || !startTimestamp || !endTimestamp) {
       console.warn('最大回撤区域日期无效:', { startDateByIndex, endDateByIndex, startIndex, endIndex });
       return null;
     }
+
+    // 添加调试日志
+    console.log('MaxDrawdownArea Debug:', {
+      startPeriod,
+      endPeriod,
+      startIndex,
+      endIndex,
+      startDateByIndex,
+      endDateByIndex,
+      dataLength: combinedChartData.length,
+      useIndexMethod: true
+    });
+
+    // 验证索引范围
+    console.log('Index validation:', {
+      startIndex,
+      endIndex,
+      maxIndex: combinedChartData.length - 1,
+      indexValid: startIndex >= 0 && endIndex >= 0 && startIndex < combinedChartData.length && endIndex < combinedChartData.length
+    });
+
     return {
       startDate: startDateByIndex,
       endDate: endDateByIndex,
@@ -418,12 +456,17 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
             <ComposedChart data={combinedChartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis
-                dataKey="date"
+                dataKey="dataIndex"
                 tick={{ fontSize: 12 }}
                 stroke="#666"
-                type="category"
-                scale="point"
-                domain={['dataMin', 'dataMax']}
+                type="number"
+                domain={[0, 'dataMax']}
+                tickFormatter={(value) => {
+                  const dataPoint = combinedChartData[Math.floor(value)];
+                  if (!dataPoint) return '';
+                  const date = new Date(dataPoint.timestamp);
+                  return `${String(date.getUTCMonth() + 1).padStart(2, '0')}/${String(date.getUTCDate()).padStart(2, '0')} ${String(date.getUTCHours()).padStart(2, '0')}:${String(date.getUTCMinutes()).padStart(2, '0')}`;
+                }}
               />
               <YAxis
                 yAxisId="left"
@@ -439,12 +482,16 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
                 label={{ value: '收益率 (%)', angle: 90, position: 'insideRight' }}
               />
               <Tooltip content={<CustomTooltip />} />
-              {/* 最大回撤区域背景 */}
-              {maxDrawdownArea && visibility.maxDrawdown && (
+              {/* 最大回撤区域背景 - 使用数组索引确保稳定渲染 */}
+              {maxDrawdownArea && 
+               visibility.maxDrawdown && 
+               maxDrawdownArea.startIndex !== undefined &&
+               maxDrawdownArea.endIndex !== undefined &&
+               maxDrawdownArea.startIndex !== maxDrawdownArea.endIndex && (
                 <ReferenceArea
                   yAxisId="right"
-                  x1={maxDrawdownArea.startDate}
-                  x2={maxDrawdownArea.endDate}
+                  x1={maxDrawdownArea.startIndex}
+                  x2={maxDrawdownArea.endIndex}
                   fill="#fef2f2"
                   fillOpacity={0.8}
                   stroke="#dc2626"
