@@ -161,28 +161,53 @@ export default function BTCDOM2Dashboard() {
     liveData: BTCDOM2ChartData[]
   ): BTCDOM2ChartData[] => {
     if (!backtestData || backtestData.length === 0) {
+      console.log('[数据合并] 回测数据为空');
       return backtestData;
     }
 
     if (!liveData || liveData.length === 0) {
+      console.log('[数据合并] 实盘数据为空');
       return backtestData;
     }
 
+    console.log(`[数据合并] 开始合并数据：回测 ${backtestData.length} 条，实盘 ${liveData.length} 条`);
+    
     // 创建实盘数据的时间戳映射
     const liveDataMap = new Map<string, BTCDOM2ChartData>();
     liveData.forEach(livePoint => {
       liveDataMap.set(livePoint.timestamp, livePoint);
     });
 
+    console.log(`[数据合并] 实盘数据时间戳列表:`, Array.from(liveDataMap.keys()).sort());
+
     // 基于回测数据，添加对应时间的实盘收益率
+    let matchedCount = 0;
+    let missingCount = 0;
+    const missing: string[] = [];
+    
     const merged: BTCDOM2ChartData[] = backtestData.map(point => {
       const livePoint = liveDataMap.get(point.timestamp);
+      if (livePoint) {
+        matchedCount++;
+      } else {
+        missingCount++;
+        missing.push(point.timestamp);
+      }
+      
       return {
         ...point,
         // 如果有对应的实盘数据，添加实盘收益率字段
         liveReturn: livePoint ? livePoint.totalReturn : undefined
       };
     });
+
+    console.log(`[数据合并] 匹配结果：成功匹配 ${matchedCount} 条，缺失 ${missingCount} 条`);
+    if (missing.length > 0 && missing.length <= 10) {
+      console.log(`[数据合并] 缺失的时间戳:`, missing);
+    } else if (missing.length > 10) {
+      console.log(`[数据合并] 缺失的时间戳过多 (${missing.length}条)，仅显示前10条:`, missing.slice(0, 10));
+    }
+    
     return merged;
   }, []);
 

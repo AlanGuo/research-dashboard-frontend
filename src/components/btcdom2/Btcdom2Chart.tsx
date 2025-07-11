@@ -545,7 +545,7 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
                   strokeWidth={2}
                   dot={false}
                   name="BTCDOM2.0实盘收益率 (%)"
-                  connectNulls={false}
+                  connectNulls={true}
                 />
               )}
             </ComposedChart>
