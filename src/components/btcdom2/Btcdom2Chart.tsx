@@ -234,7 +234,7 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
       return (
         <div className="bg-white dark:bg-gray-900 p-3 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg backdrop-blur-sm">
           <p className="font-medium text-gray-900 dark:text-gray-100 mb-2 border-b border-gray-200 dark:border-gray-700 pb-1">
-            {new Date(data.timestamp).toUTCString().replace(/GMT$/, 'UTC')}
+            {new Date(data.timestamp).toISOString().slice(0, 16).replace('T', ' ')}
           </p>
           <div className="space-y-1.5 text-sm">
             <div className="flex justify-between gap-6">
