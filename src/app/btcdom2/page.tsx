@@ -17,7 +17,7 @@ import {
   PositionInfo,
   PositionAllocationStrategy,
   TemperaturePeriodsResponse,
-  TemperaturePeriod
+  TemperatureDataPoint
 } from '@/types/btcdom2';
 import { getBTCDOM2Config, validateBTCDOM2Params } from '@/lib/btcdom2-utils';
 import { fetchLivePerformanceData, convertLiveDataToChartFormat } from '@/lib/btcdom2-live-utils';
@@ -75,6 +75,9 @@ export default function BTCDOM2Dashboard() {
   // 实盘数据状态
   const [liveError, setLiveError] = useState<string | null>(null);
 
+  // 温度计数据状态
+  const [temperatureData, setTemperatureData] = useState<TemperatureDataPoint[]>([]);
+
   // UI状态
   const [showAdvancedSettings, setShowAdvancedSettings] = useState<boolean>(false);
   const [showOptimization, setShowOptimization] = useState<boolean>(false);
@@ -120,7 +123,7 @@ export default function BTCDOM2Dashboard() {
 
     return `${formattedAmount} (${formattedPercent})`;
   };
-  
+
   // 参数验证 - 使用配置文件的验证函数
   const parameterValidation = useMemo(() => {
     return validateBTCDOM2Params(params as unknown as Record<string, unknown>);
@@ -143,7 +146,7 @@ export default function BTCDOM2Dashboard() {
   // 转换为错误对象格式（为了兼容现有UI代码）
   const parameterErrors = useMemo(() => {
     const errors: Record<string, string> = {};
-    
+
     if (!parameterValidation.valid) {
       parameterValidation.errors.forEach((error: string, index: number) => {
         errors[`error_${index}`] = error;
@@ -171,20 +174,18 @@ export default function BTCDOM2Dashboard() {
     }
 
     console.log(`[数据合并] 开始合并数据：回测 ${backtestData.length} 条，实盘 ${liveData.length} 条`);
-    
+
     // 创建实盘数据的时间戳映射
     const liveDataMap = new Map<string, BTCDOM2ChartData>();
     liveData.forEach(livePoint => {
       liveDataMap.set(livePoint.timestamp, livePoint);
     });
 
-    console.log(`[数据合并] 实盘数据时间戳列表:`, Array.from(liveDataMap.keys()).sort());
-
     // 基于回测数据，添加对应时间的实盘收益率
     let matchedCount = 0;
     let missingCount = 0;
     const missing: string[] = [];
-    
+
     const merged: BTCDOM2ChartData[] = backtestData.map(point => {
       const livePoint = liveDataMap.get(point.timestamp);
       if (livePoint) {
@@ -193,7 +194,7 @@ export default function BTCDOM2Dashboard() {
         missingCount++;
         missing.push(point.timestamp);
       }
-      
+
       return {
         ...point,
         // 如果有对应的实盘数据，添加实盘收益率字段
@@ -207,7 +208,7 @@ export default function BTCDOM2Dashboard() {
     } else if (missing.length > 10) {
       console.log(`[数据合并] 缺失的时间戳过多 (${missing.length}条)，仅显示前10条:`, missing.slice(0, 10));
     }
-    
+
     return merged;
   }, []);
 
@@ -225,7 +226,7 @@ export default function BTCDOM2Dashboard() {
     setLiveError(null); // 清除实盘数据错误
 
     try {
-      let temperaturePeriods: TemperaturePeriod[] = [];
+      let fetchedTemperatureData: TemperatureDataPoint[] = [];
 
       // 如果启用了温度计规则，先获取温度计数据
       if (paramsToUse.useTemperatureRule) {
@@ -238,7 +239,6 @@ export default function BTCDOM2Dashboard() {
         const temperatureResponse = await fetch(
           `/api/btcdom2/temperature-periods?` +
           `symbol=${encodeURIComponent(paramsToUse.temperatureSymbol)}&` +
-          `threshold=${paramsToUse.temperatureThreshold}&` +
           `startDate=${encodeURIComponent(startDateISO)}&` +
           `endDate=${encodeURIComponent(endDateISO)}`,
           {
@@ -259,14 +259,14 @@ export default function BTCDOM2Dashboard() {
           throw new Error(temperatureResult.message || '温度计数据获取失败');
         }
 
-        temperaturePeriods = temperatureResult.data.periods;
-        console.log(`获取到 ${temperaturePeriods.length} 个温度计超阈值时期`);
+        fetchedTemperatureData = temperatureResult.data.data;
+        console.log(`获取到 ${fetchedTemperatureData.length} 个温度计数据点`);
       }
 
       // 执行回测，将温度计数据包含在参数中
       const backtestParams = {
         ...paramsToUse,
-        temperaturePeriods: temperaturePeriods
+        temperatureData: fetchedTemperatureData
       };
 
       const response = await fetch('/api/btcdom2/backtest', {
@@ -289,6 +289,7 @@ export default function BTCDOM2Dashboard() {
         console.log(`[回测] 请求的时间范围: ${paramsToUse.startDate} - ${paramsToUse.endDate}`);
 
         setBacktestResult(result.data);
+        setTemperatureData(fetchedTemperatureData); // 保存温度计原始数据
 
         // 同时加载实盘数据
         try {
@@ -1026,7 +1027,7 @@ export default function BTCDOM2Dashboard() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {/* 最大回撤 - 突出显示，可点击跳转 */}
-                  <div 
+                  <div
                     className="flex justify-between items-center p-3 bg-red-50 dark:bg-red-900/20 rounded-md cursor-pointer hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors duration-200"
                     onClick={() => {
                       // 点击最大回撤区域，跳转到回撤开始期
@@ -1034,7 +1035,7 @@ export default function BTCDOM2Dashboard() {
                         const targetPeriod = backtestResult.performance.maxDrawdownInfo.startPeriod;
                         // 跳转到开始期（期数-1得到数组索引）
                         handleSnapshotSelection(targetPeriod - 1);
-                        
+
                         // 滚动到持仓历史分析部分
                         setTimeout(() => {
                           const element = document.getElementById('position-history-analysis');
@@ -1057,7 +1058,7 @@ export default function BTCDOM2Dashboard() {
                           if (!backtestResult.performance.maxDrawdownInfo || !backtestResult.snapshots) {
                             return formatAmountWithPercent(0, 0);
                           }
-                          
+
                           const { startPeriod, drawdown } = backtestResult.performance.maxDrawdownInfo;
 
                           // 直接使用后端计算的回撤百分比，避免前端重复计算导致的错误
@@ -1080,7 +1081,7 @@ export default function BTCDOM2Dashboard() {
                           }
 
                           const drawdownAmount = peakValue * drawdown; // 使用后端计算的精确回撤比例
-                          
+
                           return formatAmountWithPercent(
                             -drawdownAmount, // 负数表示损失
                             -drawdownPercentage

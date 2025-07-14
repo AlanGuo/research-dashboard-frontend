@@ -31,7 +31,7 @@ export interface BTCDOM2StrategyParams {
   useTemperatureRule: boolean;  // 是否启用温度计规则
   temperatureSymbol: string;    // 温度计监控的Symbol (默认OTHERS)
   temperatureThreshold: number; // 温度计阈值 (默认60)
-  temperaturePeriods?: TemperaturePeriod[]; // 温度计超阈值时期数据（运行时获取）
+  temperatureData?: TemperatureDataPoint[]; // 温度计原始数据（运行时获取）
 }
 
 // 资金费率历史数据项
@@ -172,6 +172,7 @@ export interface StrategySnapshot {
   isActive: boolean;                 // 策略是否持仓
   rebalanceReason: string;           // 再平衡原因
   shortCandidates: ShortCandidate[]; // 做空候选标的详情
+  temperatureValue?: number | null;  // 前一天的温度计数值（用于判断是否持仓）
 }
 
 // 策略回测结果
@@ -339,20 +340,18 @@ export interface ShortSelectionResult {
   selectionReason: string;
 }
 
-// 温度计时间段数据
-export interface TemperaturePeriod {
-  start: string;      // 开始时间 ISO格式
-  end: string;        // 结束时间 ISO格式
-  maxValue: number;   // 该时间段内的最大温度值
+// 温度计原始数据点
+export interface TemperatureDataPoint {
+  timestamp: string;  // 时间戳 ISO格式
+  value: number;      // 温度计数值
 }
 
 // 温度计API响应数据
 export interface TemperaturePeriodsData {
   symbol: string;
   timeframe: string;
-  periods: TemperaturePeriod[];
-  totalPeriods: number;
-  threshold: number;
+  data: TemperatureDataPoint[];
+  totalDataPoints: number;
   dateRange: {
     start: string;
     end: string;

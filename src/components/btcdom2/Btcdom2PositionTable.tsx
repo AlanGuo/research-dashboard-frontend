@@ -49,7 +49,7 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
   // 格式化货币
   const formatCurrency = (amount: number | null) => {
     const validAmount = amount ?? 0;
-    
+
     // 统一使用2位小数格式
     const formattedValue = `$${validAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -82,6 +82,26 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
     return `${date.getUTCFullYear()}-${(date.getUTCMonth() + 1).toString().padStart(2, '0')}-${date.getUTCDate().toString().padStart(2, '0')} ${date.getUTCHours().toString().padStart(2, '0')}:${date.getUTCMinutes().toString().padStart(2, '0')}`;
   };
 
+  // 获取前一天的温度计数值显示和样式
+  const getTemperatureDisplayInfo = (): { value: string; isHighTemperature: boolean } => {
+    // 直接使用snapshot中的温度计数值（已经是前一天的数值）
+    if (snapshot.temperatureValue !== null && snapshot.temperatureValue !== undefined) {
+      const isHighTemperature = params?.temperatureThreshold !== undefined 
+        ? snapshot.temperatureValue > params.temperatureThreshold 
+        : false;
+      
+      return {
+        value: snapshot.temperatureValue.toFixed(2),
+        isHighTemperature
+      };
+    }
+    
+    return {
+      value: "无数据",
+      isHighTemperature: false
+    };
+  };
+
   // 计算到当前期数的BTC累计盈亏
   const calculateBtcCumulativePnl = (): { amount: number; rate: number } => {
     if (!backtestResult || !periodNumber) {
@@ -95,12 +115,12 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
     // 累计到当前期数的BTC盈亏
     for (let i = 0; i <= currentIndex && i < backtestResult.snapshots.length; i++) {
       const snapshot = backtestResult.snapshots[i];
-      
+
       // 累计BTC持仓的盈亏
       if (snapshot.btcPosition) {
         btcCumulativePnl += snapshot.btcPosition.pnl || 0;
       }
-      
+
       // 累计BTC相关的卖出盈亏
       if (snapshot.soldPositions) {
         snapshot.soldPositions.forEach(soldPos => {
@@ -132,14 +152,14 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
     // 累计到当前期数的做空ALT盈亏
     for (let i = 0; i <= currentIndex && i < backtestResult.snapshots.length; i++) {
       const snapshot = backtestResult.snapshots[i];
-      
+
       // 累计做空持仓的盈亏
       if (snapshot.shortPositions) {
         snapshot.shortPositions.forEach(shortPos => {
           altCumulativePnl += shortPos.pnl || 0;
         });
       }
-      
+
       // 累计做空相关的卖出盈亏
       if (snapshot.soldPositions) {
         snapshot.soldPositions.forEach(soldPos => {
@@ -295,7 +315,7 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
       </div>
 
       {/* 基本信息 */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-4">
         <div className="text-center">
           <p className="text-sm text-gray-500 dark:text-gray-400">总资产</p>
           <p className="text-lg font-semibold text-gray-900 dark:text-white">{formatCurrency(snapshot.totalValue)}</p>
@@ -321,6 +341,16 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
         <div className="text-center">
           <p className="text-sm text-gray-500 dark:text-gray-400">做空标的数</p>
           <p className="text-lg font-semibold text-gray-900 dark:text-white">{snapshot.shortPositions.length}</p>
+        </div>
+        <div className="text-center">
+          <p className="text-sm text-gray-500 dark:text-gray-400">温度计</p>
+          <p className={`text-lg font-semibold ${
+            getTemperatureDisplayInfo().isHighTemperature 
+              ? 'text-red-600 dark:text-red-400' 
+              : 'text-green-600 dark:text-green-400'
+          }`}>
+            {getTemperatureDisplayInfo().value}
+          </p>
         </div>
       </div>
 
@@ -458,8 +488,8 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                     {position.side === 'SHORT' ? (
                       <div className="text-right">
                         <div className={`font-medium ${calculateFundingPnL(position) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                          {calculateFundingPnL(position) === 0 ? 
-                            <span className="text-gray-400 dark:text-gray-500">$0.00</span> : 
+                          {calculateFundingPnL(position) === 0 ?
+                            <span className="text-gray-400 dark:text-gray-500">$0.00</span> :
                             formatCurrency(calculateFundingPnL(position))
                           }
                         </div>
@@ -490,8 +520,8 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                     {/* 优先使用专门的24H价格变化数据 */}
                     {position.priceChange24h !== undefined ? (
                       <span className={`font-medium ${
-                        position.priceChange24h > 0 ? 'text-green-600 dark:text-green-400' : 
-                        position.priceChange24h < 0 ? 'text-red-600 dark:text-red-400' : 
+                        position.priceChange24h > 0 ? 'text-green-600 dark:text-green-400' :
+                        position.priceChange24h < 0 ? 'text-red-600 dark:text-red-400' :
                         'text-gray-600 dark:text-gray-400'
                       }`}>
                         {position.priceChange24h > 0 ? '+' : ''}
@@ -499,8 +529,8 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                       </span>
                     ) : position.type === 'BTC' && snapshot.btcPriceChange24h !== undefined ? (
                       <span className={`font-medium ${
-                        snapshot.btcPriceChange24h > 0 ? 'text-green-600 dark:text-green-400' : 
-                        snapshot.btcPriceChange24h < 0 ? 'text-red-600 dark:text-red-400' : 
+                        snapshot.btcPriceChange24h > 0 ? 'text-green-600 dark:text-green-400' :
+                        snapshot.btcPriceChange24h < 0 ? 'text-red-600 dark:text-red-400' :
                         'text-gray-600 dark:text-gray-400'
                       }`}>
                         {snapshot.btcPriceChange24h > 0 ? '+' : ''}
@@ -518,10 +548,10 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                       {/* 显示相对于上一期价格的变化率 */}
                       {position.priceChange?.previousPrice && position.priceChange.previousPrice > 0 && position.currentPrice !== position.priceChange.previousPrice ? (
                         <span className={`text-xs ${
-                          position.currentPrice > position.priceChange.previousPrice 
-                            ? 'text-green-600 dark:text-green-400' 
-                            : position.currentPrice < position.priceChange.previousPrice 
-                            ? 'text-red-600 dark:text-red-400' 
+                          position.currentPrice > position.priceChange.previousPrice
+                            ? 'text-green-600 dark:text-green-400'
+                            : position.currentPrice < position.priceChange.previousPrice
+                            ? 'text-red-600 dark:text-red-400'
                             : 'text-gray-500 dark:text-gray-400'
                         }`}>
                           ({position.currentPrice > position.priceChange.previousPrice ? '+' : ''}
@@ -529,10 +559,10 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                         </span>
                       ) : position.entryPrice && position.entryPrice > 0 && position.currentPrice !== position.entryPrice && !position.isNewPosition ? (
                         <span className={`text-xs ${
-                          position.currentPrice > position.entryPrice 
-                            ? 'text-green-600 dark:text-green-400' 
-                            : position.currentPrice < position.entryPrice 
-                            ? 'text-red-600 dark:text-red-400' 
+                          position.currentPrice > position.entryPrice
+                            ? 'text-green-600 dark:text-green-400'
+                            : position.currentPrice < position.entryPrice
+                            ? 'text-red-600 dark:text-red-400'
                             : 'text-gray-500 dark:text-gray-400'
                         }`}>
                           ({position.currentPrice > position.entryPrice ? '+' : ''}
@@ -642,11 +672,11 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                       <TableCell className="text-right">{(candidate.fundingRateScore ?? 0.5).toFixed(3)}</TableCell>
                       <TableCell className="text-right font-medium">{(candidate.totalScore ?? 0).toFixed(3)}</TableCell>
                       <TableCell>
-                        <Badge 
+                        <Badge
                           variant={
                             snapshot.rebalanceReason?.includes('温度计') ? "destructive" :
                             candidate.eligible ? "default" : "secondary"
-                          } 
+                          }
                           className="text-xs"
                         >
                           {snapshot.rebalanceReason?.includes('温度计') ? "温度计禁止" :

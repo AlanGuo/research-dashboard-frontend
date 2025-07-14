@@ -238,22 +238,54 @@ class BTCDOM2StrategyEngine {
 
   // 检查当前时间是否在温度计超阈值期间内
   private isInTemperatureHighPeriod(timestamp: string): boolean {
-    if (!this.params.useTemperatureRule || !this.params.temperaturePeriods) {
+    if (!this.params.useTemperatureRule || !this.params.temperatureData) {
       return false;
     }
 
+    // 使用前一天的温度计数值来判断，因为当天的温度计还在变动中
     const currentTime = new Date(timestamp);
+    const previousDay = new Date(currentTime);
+    previousDay.setDate(previousDay.getDate() - 1);
     
-    for (const period of this.params.temperaturePeriods) {
-      const startTime = new Date(period.start);
-      const endTime = new Date(period.end);
+    // 找到前一天的温度计数值
+    const previousDayStr = previousDay.toISOString().split('T')[0]; // YYYY-MM-DD格式
+    
+    for (const dataPoint of this.params.temperatureData) {
+      const dataPointDate = new Date(dataPoint.timestamp).toISOString().split('T')[0];
       
-      if (currentTime >= startTime && currentTime <= endTime) {
-        return true;
+      // 如果找到前一天的数据点，检查是否超过阈值
+      if (dataPointDate === previousDayStr) {
+        return dataPoint.value > this.params.temperatureThreshold;
       }
     }
     
+    // 如果没有找到前一天的数据，默认不触发温度计规则
     return false;
+  }
+
+  // 获取前一天的温度计数值，用于显示和判断
+  private getPreviousDayTemperatureValue(timestamp: string): number | null {
+    if (!this.params.temperatureData) {
+      return null;
+    }
+
+    // 计算前一天的日期
+    const currentTime = new Date(timestamp);
+    const previousDay = new Date(currentTime);
+    previousDay.setDate(previousDay.getDate() - 1);
+    const previousDayStr = previousDay.toISOString().split('T')[0]; // YYYY-MM-DD格式
+    
+    // 找到前一天的温度计数值
+    for (const dataPoint of this.params.temperatureData) {
+      const dataPointDate = new Date(dataPoint.timestamp).toISOString().split('T')[0];
+      
+      if (dataPointDate === previousDayStr) {
+        return dataPoint.value;
+      }
+    }
+    
+    // 如果没有找到前一天的数据，返回null
+    return null;
   }
 
   // 计算交易手续费（返回负数，因为是扣除的费用）
@@ -609,6 +641,8 @@ class BTCDOM2StrategyEngine {
     if (isInTemperatureHigh) {
       temperatureRuleReason = `温度计高于${this.params.temperatureThreshold}，禁止持有空头仓位`;
     }
+
+
 
     // 检查是否有可执行的策略（longBtc和shortAlt始终为true）
     const hasShortCandidates = selectedCandidates.length > 0;
@@ -1104,6 +1138,9 @@ class BTCDOM2StrategyEngine {
     const periodPnl = totalValue - prevValue;
     const periodPnlPercent = prevValue > 0 ? periodPnl / prevValue : 0;
 
+    // 获取前一天的温度计数值用于显示
+    const previousDayTemperatureValue = this.getPreviousDayTemperatureValue(timestamp);
+
     return {
       timestamp,
       hour,
@@ -1128,7 +1165,8 @@ class BTCDOM2StrategyEngine {
       rebalanceReason: isActive ? 
         (isInTemperatureHigh ? `${selectionReason} (${temperatureRuleReason})` : selectionReason) : 
         inactiveReason,
-      shortCandidates: [...selectedCandidates, ...rejectedCandidates]
+      shortCandidates: [...selectedCandidates, ...rejectedCandidates],
+      temperatureValue: previousDayTemperatureValue
     };
   }
 }
@@ -1546,7 +1584,7 @@ export async function POST(request: NextRequest) {
       useTemperatureRule: rawParams.useTemperatureRule !== undefined ? rawParams.useTemperatureRule : false,
       temperatureSymbol: rawParams.temperatureSymbol !== undefined ? rawParams.temperatureSymbol : 'OTHERS',
       temperatureThreshold: rawParams.temperatureThreshold !== undefined ? rawParams.temperatureThreshold : 55,
-      temperaturePeriods: rawParams.temperaturePeriods || [],
+      temperatureData: rawParams.temperatureData || [],
     };
 
     // 检查是否为优化模式（跳过图表数据生成以提升性能）
