@@ -5,15 +5,18 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { devConsole } from '@/utils/devLogger';
 
 interface TemperatureRuleControlProps {
   enabled: boolean;
   symbol: string;
   threshold: number;
+  timeframe: string;
   onEnabledChange: (enabled: boolean) => void;
   onSymbolChange: (symbol: string) => void;
   onThresholdChange: (threshold: number) => void;
+  onTimeframeChange: (timeframe: string) => void;
   disabled?: boolean;
 }
 
@@ -21,9 +24,11 @@ export const TemperatureRuleControl = memo<TemperatureRuleControlProps>(({
   enabled,
   symbol,
   threshold,
+  timeframe,
   onEnabledChange,
   onSymbolChange,
   onThresholdChange,
+  onTimeframeChange,
   disabled = false
 }: TemperatureRuleControlProps) => {
   // Symbol 本地状态和防抖
@@ -42,7 +47,8 @@ export const TemperatureRuleControl = memo<TemperatureRuleControlProps>(({
     propsSymbol: symbol,
     displaySymbol: displaySymbol,
     propsThreshold: threshold,
-    displayThreshold: displayThreshold
+    displayThreshold: displayThreshold,
+    propsTimeframe: timeframe
   });
 
   // Symbol 防抖处理
@@ -160,7 +166,7 @@ export const TemperatureRuleControl = memo<TemperatureRuleControlProps>(({
           {/* 温度计配置 - 只在启用时显示 */}
           {enabled && (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* 监控Symbol */}
                 <div className="space-y-2">
                   <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -176,6 +182,29 @@ export const TemperatureRuleControl = memo<TemperatureRuleControlProps>(({
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400">
                     默认: OTHERS (cryptos exclude top 10)
+                  </p>
+                </div>
+
+                {/* 时间间隔 */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    时间间隔
+                  </Label>
+                  <Select
+                    value={timeframe}
+                    onValueChange={onTimeframeChange}
+                    disabled={disabled}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="选择时间间隔" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="8H">8小时 (8H)</SelectItem>
+                      <SelectItem value="1D">1天 (1D)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    8H: 与上一个8小时对比，1D: 与上一天对比
                   </p>
                 </div>
 
@@ -206,6 +235,8 @@ export const TemperatureRuleControl = memo<TemperatureRuleControlProps>(({
                   <strong>规则说明:</strong><br/>
                   • 温度计高于阈值时：不持有任何空头仓位，已有的全部卖掉<br/>
                   • 温度计低于阈值时：可以正常开空仓<br/>
+                  • <strong>8H模式:</strong> 与上一个8小时的温度计数值对比判断阈值<br/>
+                  • <strong>1D模式:</strong> 与上一天的温度计数值对比判断阈值<br/>
                   • 温度计数据在执行回测时获取，使用回测的起止日期
                 </p>
               </div>

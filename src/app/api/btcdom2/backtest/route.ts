@@ -242,49 +242,58 @@ class BTCDOM2StrategyEngine {
       return false;
     }
 
-    // 使用前一天的温度计数值来判断，因为当天的温度计还在变动中
-    const currentTime = new Date(timestamp);
-    const previousDay = new Date(currentTime);
-    previousDay.setDate(previousDay.getDate() - 1);
-
-    // 找到前一天的温度计数值
-    const previousDayStr = previousDay.toISOString().split('T')[0]; // YYYY-MM-DD格式
-
-    for (const dataPoint of this.params.temperatureData) {
-      const dataPointDate = new Date(dataPoint.timestamp).toISOString().split('T')[0];
-
-      // 如果找到前一天的数据点，检查是否超过阈值
-      if (dataPointDate === previousDayStr) {
-        return dataPoint.value > this.params.temperatureThreshold;
-      }
+    const temperatureValue = this.getPreviousTemperatureValue(timestamp);
+    if (temperatureValue === null) {
+      return false; // 如果没有找到上一期的数据，默认不触发温度计规则
     }
 
-    // 如果没有找到前一天的数据，默认不触发温度计规则
-    return false;
+    return temperatureValue > this.params.temperatureThreshold;
   }
 
-  // 获取前一天的温度计数值，用于显示和判断
-  private getPreviousDayTemperatureValue(timestamp: string): number | null {
+  // 获取上一期的温度计数值，用于显示和判断
+  private getPreviousTemperatureValue(timestamp: string): number | null {
     if (!this.params.temperatureData) {
       return null;
     }
 
-    // 计算前一天的日期
     const currentTime = new Date(timestamp);
-    const previousDay = new Date(currentTime);
-    previousDay.setDate(previousDay.getDate() - 1);
-    const previousDayStr = previousDay.toISOString().split('T')[0]; // YYYY-MM-DD格式
+    const timeframe = this.params.temperatureTimeframe || '1D';
 
-    // 找到前一天的温度计数值
+    // 根据时间间隔计算上一期的时间
+    let previousTime: Date;
+    let compareFunction: (dataPointTime: Date, targetTime: Date) => boolean;
+
+    if (timeframe === '8H') {
+      // 8小时模式：找上一个8小时的数据点
+      previousTime = new Date(currentTime.getTime() - 8 * 60 * 60 * 1000);
+      
+      // 8H模式下寻找最接近的前一个8小时时间点
+      compareFunction = (dataPointTime: Date, targetTime: Date) => {
+        const timeDiff = Math.abs(dataPointTime.getTime() - targetTime.getTime());
+        return timeDiff <= 4 * 60 * 60 * 1000; // 允许4小时的误差范围
+      };
+    } else {
+      // 1D模式：找前一天的数据点（保持原有逻辑）
+      previousTime = new Date(currentTime);
+      previousTime.setDate(previousTime.getDate() - 1);
+
+      compareFunction = (dataPointTime: Date, targetTime: Date) => {
+        const dataPointDateStr = dataPointTime.toISOString().split('T')[0];
+        const targetDateStr = targetTime.toISOString().split('T')[0];
+        return dataPointDateStr === targetDateStr;
+      };
+    }
+
+    // 查找匹配的温度计数据点
     for (const dataPoint of this.params.temperatureData) {
-      const dataPointDate = new Date(dataPoint.timestamp).toISOString().split('T')[0];
-
-      if (dataPointDate === previousDayStr) {
+      const dataPointTime = new Date(dataPoint.timestamp);
+      
+      if (compareFunction(dataPointTime, previousTime)) {
         return dataPoint.value;
       }
     }
 
-    // 如果没有找到前一天的数据，返回null
+    // 如果没有找到上一期的数据，返回null
     return null;
   }
 
@@ -1139,7 +1148,7 @@ class BTCDOM2StrategyEngine {
     const periodPnlPercent = prevValue > 0 ? periodPnl / prevValue : 0;
 
     // 获取前一天的温度计数值用于显示
-    const previousDayTemperatureValue = this.getPreviousDayTemperatureValue(timestamp);
+    const previousTemperatureValue = this.getPreviousTemperatureValue(timestamp);
 
     return {
       timestamp,
@@ -1166,7 +1175,7 @@ class BTCDOM2StrategyEngine {
         (isInTemperatureHigh ? `${selectionReason} (${temperatureRuleReason})` : selectionReason) :
         inactiveReason,
       shortCandidates: [...selectedCandidates, ...rejectedCandidates],
-      temperatureValue: previousDayTemperatureValue
+      temperatureValue: previousTemperatureValue
     };
   }
 }
@@ -1584,6 +1593,7 @@ export async function POST(request: NextRequest) {
       useTemperatureRule: rawParams.useTemperatureRule !== undefined ? rawParams.useTemperatureRule : false,
       temperatureSymbol: rawParams.temperatureSymbol !== undefined ? rawParams.temperatureSymbol : 'OTHERS',
       temperatureThreshold: rawParams.temperatureThreshold !== undefined ? rawParams.temperatureThreshold : 60,
+      temperatureTimeframe: rawParams.temperatureTimeframe !== undefined ? rawParams.temperatureTimeframe : '1D',
       temperatureData: rawParams.temperatureData || [],
     };
 

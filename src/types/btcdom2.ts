@@ -31,6 +31,7 @@ export interface BTCDOM2StrategyParams {
   useTemperatureRule: boolean;  // 是否启用温度计规则
   temperatureSymbol: string;    // 温度计监控的Symbol (默认OTHERS)
   temperatureThreshold: number; // 温度计阈值 (默认60)
+  temperatureTimeframe: string; // 温度计时间间隔 (默认1D)
   temperatureData?: TemperatureDataPoint[]; // 温度计原始数据（运行时获取）
 }
 

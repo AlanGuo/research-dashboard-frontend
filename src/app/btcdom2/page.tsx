@@ -62,7 +62,8 @@ export default function BTCDOM2Dashboard() {
       allocationStrategy: defaultConfig.allocationStrategy as PositionAllocationStrategy, // 类型转换
       useTemperatureRule: defaultConfig.useTemperatureRule,
       temperatureSymbol: defaultConfig.temperatureSymbol,
-      temperatureThreshold: defaultConfig.temperatureThreshold
+      temperatureThreshold: defaultConfig.temperatureThreshold,
+      temperatureTimeframe: defaultConfig.temperatureTimeframe
     };
   });
 
@@ -247,6 +248,7 @@ export default function BTCDOM2Dashboard() {
         const temperatureResponse = await fetch(
           `/api/btcdom2/temperature-periods?` +
           `symbol=${encodeURIComponent(paramsToUse.temperatureSymbol)}&` +
+          `timeframe=${encodeURIComponent(paramsToUse.temperatureTimeframe)}&` +
           `startDate=${encodeURIComponent(startDateISO)}&` +
           `endDate=${encodeURIComponent(endDateISO)}`,
           {
@@ -412,6 +414,10 @@ export default function BTCDOM2Dashboard() {
     setParams(prev => ({ ...prev, temperatureThreshold: threshold }));
   }, []);
 
+  const handleTemperatureTimeframeChange = useCallback((timeframe: string) => {
+    setParams(prev => ({ ...prev, temperatureTimeframe: timeframe }));
+  }, []);
+
   // 获取缓存状态
   const fetchCacheStatus = useCallback(async () => {
     try {
@@ -430,7 +436,7 @@ export default function BTCDOM2Dashboard() {
     try {
       const url = clearAll 
         ? '/api/btcdom2/temperature-cache?clearAll=true'
-        : `/api/btcdom2/temperature-cache?symbol=${params.temperatureSymbol}&timeframe=1D`;
+        : `/api/btcdom2/temperature-cache?symbol=${params.temperatureSymbol}&timeframe=${params.temperatureTimeframe}`;
       
       const response = await fetch(url, { method: 'DELETE' });
       const result = await response.json();
@@ -442,7 +448,7 @@ export default function BTCDOM2Dashboard() {
     } catch (error) {
       console.error('清除缓存失败:', error);
     }
-  }, [params.temperatureSymbol, fetchCacheStatus]);
+  }, [params.temperatureSymbol, params.temperatureTimeframe, fetchCacheStatus]);
 
   // 标准化权重 - 直接加载默认配置的权重参数
   const normalizeWeights = useCallback(() => {
@@ -792,9 +798,11 @@ export default function BTCDOM2Dashboard() {
                     enabled={params.useTemperatureRule}
                     symbol={params.temperatureSymbol}
                     threshold={params.temperatureThreshold}
+                    timeframe={params.temperatureTimeframe}
                     onEnabledChange={handleTemperatureRuleEnabledChange}
                     onSymbolChange={handleTemperatureSymbolChange}
                     onThresholdChange={handleTemperatureThresholdChange}
+                    onTimeframeChange={handleTemperatureTimeframeChange}
                     disabled={loading}
                   />
                   
