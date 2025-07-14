@@ -1545,7 +1545,7 @@ export async function POST(request: NextRequest) {
       // 温度计规则参数默认值
       useTemperatureRule: rawParams.useTemperatureRule !== undefined ? rawParams.useTemperatureRule : false,
       temperatureSymbol: rawParams.temperatureSymbol !== undefined ? rawParams.temperatureSymbol : 'OTHERS',
-      temperatureThreshold: rawParams.temperatureThreshold !== undefined ? rawParams.temperatureThreshold : 60,
+      temperatureThreshold: rawParams.temperatureThreshold !== undefined ? rawParams.temperatureThreshold : 55,
       temperaturePeriods: rawParams.temperaturePeriods || [],
     };
 

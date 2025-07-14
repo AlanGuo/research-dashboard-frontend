@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     const timeframe = searchParams.get('timeframe') || '1D';
     const startDate = searchParams.get('startDate') || '2020-01-01T00:00:00.000Z';
     const endDate = searchParams.get('endDate') || new Date().toISOString();
-    const threshold = searchParams.get('threshold') || '60';
+    const threshold = searchParams.get('threshold') || '55';
 
     // 构建后端API URL
     const apiBaseUrl = config.api?.baseUrl;
