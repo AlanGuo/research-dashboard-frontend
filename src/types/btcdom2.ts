@@ -364,3 +364,29 @@ export interface TemperaturePeriodsResponse {
   data?: TemperaturePeriodsData;
   message?: string;
 }
+
+// 缓存状态条目
+export interface CacheStatusEntry {
+  cacheKey: string;
+  symbol: string;
+  timeframe: string;
+  dataPoints: number;
+  dateRange: {
+    start: string;
+    end: string;
+  } | null;
+  lastUpdated: string;
+  memorySizeKB: number;
+}
+
+// 缓存状态数据
+export interface CacheStatusData {
+  cacheStatus: 'not_initialized' | 'active';
+  totalEntries: number;
+  totalDataPoints?: number;
+  totalMemoryKB?: number;
+  totalMemoryMB?: number;
+  entries: CacheStatusEntry[];
+  lastChecked?: string;
+  message?: string;
+}

@@ -17,7 +17,9 @@ import {
   PositionInfo,
   PositionAllocationStrategy,
   TemperaturePeriodsResponse,
-  TemperatureDataPoint
+  TemperatureDataPoint,
+  CacheStatusData,
+  CacheStatusEntry
 } from '@/types/btcdom2';
 import { getBTCDOM2Config, validateBTCDOM2Params } from '@/lib/btcdom2-utils';
 import { fetchLivePerformanceData, convertLiveDataToChartFormat } from '@/lib/btcdom2-live-utils';
@@ -76,8 +78,7 @@ export default function BTCDOM2Dashboard() {
   const [liveError, setLiveError] = useState<string | null>(null);
 
   // 温度计数据状态
-  const [temperatureData, setTemperatureData] = useState<TemperatureDataPoint[]>([]);
-  const [cacheStatus, setCacheStatus] = useState<any>(null);
+  const [cacheStatus, setCacheStatus] = useState<CacheStatusData | null>(null);
 
   // UI状态
   const [showAdvancedSettings, setShowAdvancedSettings] = useState<boolean>(false);
@@ -86,7 +87,8 @@ export default function BTCDOM2Dashboard() {
   // 初始化缓存状态
   useEffect(() => {
     fetchCacheStatus();
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // fetchCacheStatus is stable (empty useCallback deps)
 
   // 工具函数：格式化时间（使用UTC+0时区）
   const formatPeriodTime = (timestamp: string): string => {
@@ -295,7 +297,7 @@ export default function BTCDOM2Dashboard() {
         console.log(`[回测] 请求的时间范围: ${paramsToUse.startDate} - ${paramsToUse.endDate}`);
 
         setBacktestResult(result.data);
-        setTemperatureData(fetchedTemperatureData); // 保存温度计原始数据
+        // Temperature data is passed directly to backend via backtestParams
 
         // 同时加载实盘数据
         try {
@@ -826,7 +828,7 @@ export default function BTCDOM2Dashboard() {
                       </div>
                       {cacheStatus.entries && cacheStatus.entries.length > 0 && (
                         <div className="mt-1 text-gray-500">
-                          {cacheStatus.entries.map((entry: any, index: number) => (
+                          {cacheStatus.entries.map((entry: CacheStatusEntry, index: number) => (
                             <div key={index} className="flex justify-between">
                               <span>{entry.cacheKey}</span>
                               <span>{entry.dataPoints} 点 ({entry.memorySizeKB}KB)</span>

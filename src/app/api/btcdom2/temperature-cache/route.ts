@@ -17,11 +17,12 @@ interface CachedTemperatureData {
 // 由于JavaScript模块系统的限制，我们需要通过全局对象来访问缓存
 // 在temperature-periods/route.ts中，我们需要将缓存暴露到全局
 declare global {
+  // eslint-disable-next-line no-var
   var temperatureCache: Map<string, CachedTemperatureData> | undefined;
 }
 
 // 获取缓存状态
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     // 访问全局缓存对象
     const cache = global.temperatureCache;

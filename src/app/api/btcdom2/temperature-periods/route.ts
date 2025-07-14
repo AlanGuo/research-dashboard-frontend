@@ -3,6 +3,7 @@ import config from '@/config/index';
 
 // 全局类型声明
 declare global {
+  // eslint-disable-next-line no-var
   var temperatureCache: Map<string, CachedTemperatureData> | undefined;
 }
 
@@ -20,10 +21,15 @@ interface CachedTemperatureData {
 }
 
 // 内存缓存存储
-const temperatureCache = new Map<string, CachedTemperatureData>();
+let temperatureCache: Map<string, CachedTemperatureData>;
 
-// 将缓存暴露到全局供其他API访问
-global.temperatureCache = temperatureCache;
+// 初始化缓存并暴露到全局供其他API访问
+if (!global.temperatureCache) {
+  temperatureCache = new Map<string, CachedTemperatureData>();
+  global.temperatureCache = temperatureCache;
+} else {
+  temperatureCache = global.temperatureCache;
+}
 
 // 生成缓存键
 function getCacheKey(symbol: string, timeframe: string): string {
@@ -36,7 +42,13 @@ async function fetchTemperatureData(
   timeframe: string,
   startDate: string,
   endDate: string
-): Promise<any> {
+): Promise<{
+  success: boolean;
+  data?: {
+    data: TemperatureDataPoint[];
+  };
+  message?: string;
+}> {
   const apiBaseUrl = config.api?.baseUrl;
   if (!apiBaseUrl) {
     throw new Error('API base URL not configured');
@@ -159,7 +171,7 @@ export async function GET(request: NextRequest) {
             finalData = cachedData.data;
           }
         } catch (error) {
-          console.warn(`[温度计缓存] 增量更新出错，使用缓存数据:`, error.message);
+          console.warn(`[温度计缓存] 增量更新出错，使用缓存数据:`, error instanceof Error ? error.message : String(error));
           finalData = cachedData.data;
         }
       } else {
