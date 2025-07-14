@@ -25,6 +25,6 @@
     "allocationStrategy": "BY_VOLUME",
     "useTemperatureRule": true,
     "temperatureSymbol": "OTHERS",
-    "temperatureThreshold": 55
+    "temperatureThreshold": 60
   }
 }

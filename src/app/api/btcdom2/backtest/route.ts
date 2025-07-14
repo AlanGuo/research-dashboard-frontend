@@ -44,8 +44,8 @@ const ARRAY_POOL = {
 
 // 生成候选者选择的缓存键
 function getCandidateSelectionCacheKey(
-  rankings: RankingItem[], 
-  btcPriceChange: number, 
+  rankings: RankingItem[],
+  btcPriceChange: number,
   params: BTCDOM2StrategyParams
 ): string {
   // 使用关键参数生成缓存键，降低精度提高命中率
@@ -246,19 +246,19 @@ class BTCDOM2StrategyEngine {
     const currentTime = new Date(timestamp);
     const previousDay = new Date(currentTime);
     previousDay.setDate(previousDay.getDate() - 1);
-    
+
     // 找到前一天的温度计数值
     const previousDayStr = previousDay.toISOString().split('T')[0]; // YYYY-MM-DD格式
-    
+
     for (const dataPoint of this.params.temperatureData) {
       const dataPointDate = new Date(dataPoint.timestamp).toISOString().split('T')[0];
-      
+
       // 如果找到前一天的数据点，检查是否超过阈值
       if (dataPointDate === previousDayStr) {
         return dataPoint.value > this.params.temperatureThreshold;
       }
     }
-    
+
     // 如果没有找到前一天的数据，默认不触发温度计规则
     return false;
   }
@@ -274,16 +274,16 @@ class BTCDOM2StrategyEngine {
     const previousDay = new Date(currentTime);
     previousDay.setDate(previousDay.getDate() - 1);
     const previousDayStr = previousDay.toISOString().split('T')[0]; // YYYY-MM-DD格式
-    
+
     // 找到前一天的温度计数值
     for (const dataPoint of this.params.temperatureData) {
       const dataPointDate = new Date(dataPoint.timestamp).toISOString().split('T')[0];
-      
+
       if (dataPointDate === previousDayStr) {
         return dataPoint.value;
       }
     }
-    
+
     // 如果没有找到前一天的数据，返回null
     return null;
   }
@@ -382,7 +382,7 @@ class BTCDOM2StrategyEngine {
 
     // 生成缓存键
     const cacheKey = getCandidateSelectionCacheKey(rankings, btcPriceChange, this.params);
-    
+
     // 检查缓存
     const cachedResult = CANDIDATE_SELECTION_CACHE.get(cacheKey);
     if (cachedResult) {
@@ -436,7 +436,7 @@ class BTCDOM2StrategyEngine {
     // 如果预筛选后没有符合条件的候选者，快速返回
     if (preFilteredItems.length === 0) {
       const rejectedCandidates = stats.filteredRankings.map(item => ({
-        symbol: item.symbol, 
+        symbol: item.symbol,
         rank: item.rank,
         priceChange24h: isNaN(item.priceChange24h) ? 0 : item.priceChange24h,
         volume24h: item.volume24h,
@@ -469,7 +469,7 @@ class BTCDOM2StrategyEngine {
     // 直接处理候选者评分 - 对于小量数据，直接处理比并行处理更高效
     stepStartTime = performance.now();
     const allCandidates: ShortCandidate[] = [];
-    
+
     for (const item of preFilteredItems) {
       const priceChange = isNaN(item.priceChange24h) ? 0 : item.priceChange24h;
 
@@ -534,14 +534,14 @@ class BTCDOM2StrategyEngine {
 
       allCandidates.push(candidate);
     }
-    
+
     stepEndTime = performance.now();
     console.debug(`[PERF] selectShortCandidates - candidate scoring 耗时: ${(stepEndTime - stepStartTime).toFixed(2)}ms`);
-    
+
     // 限制候选者数量以提高效率
     const maxCandidates = this.params.maxShortPositions * 2;
     selectedCount = Math.min(allCandidates.length, maxCandidates);
-    
+
     // 将结果添加到数组池
     ARRAY_POOL.tempCandidates.push(...allCandidates.slice(0, maxCandidates));
 
@@ -637,7 +637,7 @@ class BTCDOM2StrategyEngine {
     // 检查温度计规则
     const isInTemperatureHigh = this.isInTemperatureHighPeriod(timestamp);
     let temperatureRuleReason = '';
-    
+
     if (isInTemperatureHigh) {
       temperatureRuleReason = `温度计高于${this.params.temperatureThreshold}，禁止持有空头仓位`;
     }
@@ -801,7 +801,7 @@ class BTCDOM2StrategyEngine {
             let soldFundingFee = 0;
             const soldRankingItem = previousData?.rankings?.find(r => r.symbol === prevPosition.symbol);
             const soldFundingRateHistory = soldRankingItem?.fundingRateHistory || [];
-            
+
             if (soldFundingRateHistory.length > 0 && validQuantity > 0) {
               for (const funding of soldFundingRateHistory) {
                 // 对于做空头寸：资金费率为负数时支付，为正数时收取
@@ -1002,7 +1002,7 @@ class BTCDOM2StrategyEngine {
           let soldFundingFee = 0;
           const soldRankingItem = previousData?.rankings?.find(r => r.symbol === prevPosition.symbol);
           const soldFundingRateHistory = soldRankingItem?.fundingRateHistory || [];
-          
+
           if (soldFundingRateHistory.length > 0 && validQuantity > 0) {
             for (const funding of soldFundingRateHistory) {
               // 对于做空头寸：资金费率为负数时支付，为正数时收取
@@ -1162,8 +1162,8 @@ class BTCDOM2StrategyEngine {
       accumulatedFundingFee: accumulatedFundingFee + totalFundingFee,
       cashPosition,
       isActive,
-      rebalanceReason: isActive ? 
-        (isInTemperatureHigh ? `${selectionReason} (${temperatureRuleReason})` : selectionReason) : 
+      rebalanceReason: isActive ?
+        (isInTemperatureHigh ? `${selectionReason} (${temperatureRuleReason})` : selectionReason) :
         inactiveReason,
       shortCandidates: [...selectedCandidates, ...rejectedCandidates],
       temperatureValue: previousDayTemperatureValue
@@ -1583,7 +1583,7 @@ export async function POST(request: NextRequest) {
       // 温度计规则参数默认值
       useTemperatureRule: rawParams.useTemperatureRule !== undefined ? rawParams.useTemperatureRule : false,
       temperatureSymbol: rawParams.temperatureSymbol !== undefined ? rawParams.temperatureSymbol : 'OTHERS',
-      temperatureThreshold: rawParams.temperatureThreshold !== undefined ? rawParams.temperatureThreshold : 55,
+      temperatureThreshold: rawParams.temperatureThreshold !== undefined ? rawParams.temperatureThreshold : 60,
       temperatureData: rawParams.temperatureData || [],
     };
 
@@ -1664,14 +1664,14 @@ export async function POST(request: NextRequest) {
       const snapshot = await strategyEngine.generateSnapshot(dataPoint, previousSnapshot, previousData);
       const snapshotEnd = performance.now();
       snapshotGenerationTimes.push(snapshotEnd - snapshotStart);
-      
+
       // 记录空仓状态日志
       if (!snapshot.isActive) {
         const timestamp = new Date(snapshot.timestamp).toISOString();
         const reason = snapshot.rebalanceReason;
         console.debug(`[空仓记录] 时间: ${timestamp}, 原因: ${reason}`);
       }
-      
+
       snapshots.push(snapshot);
       previousSnapshot = snapshot;
     }
@@ -1707,7 +1707,7 @@ export async function POST(request: NextRequest) {
     // 性能监控总结
     const totalBacktestTime = performance.now() - backtestStartTime;
     const performanceTime = performance.now() - performanceStartTime;
-    const avgSnapshotTime = snapshotGenerationTimes.length > 0 
+    const avgSnapshotTime = snapshotGenerationTimes.length > 0
       ? snapshotGenerationTimes.reduce((sum, time) => sum + time, 0) / snapshotGenerationTimes.length
       : 0;
 
