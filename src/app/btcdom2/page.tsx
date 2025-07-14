@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -77,10 +77,16 @@ export default function BTCDOM2Dashboard() {
 
   // 温度计数据状态
   const [temperatureData, setTemperatureData] = useState<TemperatureDataPoint[]>([]);
+  const [cacheStatus, setCacheStatus] = useState<any>(null);
 
   // UI状态
   const [showAdvancedSettings, setShowAdvancedSettings] = useState<boolean>(false);
   const [showOptimization, setShowOptimization] = useState<boolean>(false);
+
+  // 初始化缓存状态
+  useEffect(() => {
+    fetchCacheStatus();
+  }, []);
 
   // 工具函数：格式化时间（使用UTC+0时区）
   const formatPeriodTime = (timestamp: string): string => {
@@ -403,6 +409,38 @@ export default function BTCDOM2Dashboard() {
   const handleTemperatureThresholdChange = useCallback((threshold: number) => {
     setParams(prev => ({ ...prev, temperatureThreshold: threshold }));
   }, []);
+
+  // 获取缓存状态
+  const fetchCacheStatus = useCallback(async () => {
+    try {
+      const response = await fetch('/api/btcdom2/temperature-cache');
+      const result = await response.json();
+      if (result.success) {
+        setCacheStatus(result.data);
+      }
+    } catch (error) {
+      console.error('获取缓存状态失败:', error);
+    }
+  }, []);
+
+  // 清除缓存
+  const clearCache = useCallback(async (clearAll = false) => {
+    try {
+      const url = clearAll 
+        ? '/api/btcdom2/temperature-cache?clearAll=true'
+        : `/api/btcdom2/temperature-cache?symbol=${params.temperatureSymbol}&timeframe=1D`;
+      
+      const response = await fetch(url, { method: 'DELETE' });
+      const result = await response.json();
+      
+      if (result.success) {
+        console.log('缓存清除成功:', result.message);
+        fetchCacheStatus(); // 刷新状态
+      }
+    } catch (error) {
+      console.error('清除缓存失败:', error);
+    }
+  }, [params.temperatureSymbol, fetchCacheStatus]);
 
   // 标准化权重 - 直接加载默认配置的权重参数
   const normalizeWeights = useCallback(() => {
@@ -757,7 +795,47 @@ export default function BTCDOM2Dashboard() {
                     onThresholdChange={handleTemperatureThresholdChange}
                     disabled={loading}
                   />
-
+                  
+                  {/* 缓存状态显示 */}
+                  {cacheStatus && (
+                    <div className="mt-2 p-2 bg-gray-50 rounded text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-600">
+                          缓存状态: {cacheStatus.totalEntries} 项, {cacheStatus.totalDataPoints} 数据点, {cacheStatus.totalMemoryMB}MB
+                        </span>
+                        <div className="space-x-1">
+                          <button
+                            onClick={() => fetchCacheStatus()}
+                            className="px-2 py-1 text-xs bg-blue-100 text-blue-600 rounded hover:bg-blue-200"
+                          >
+                            刷新
+                          </button>
+                          <button
+                            onClick={() => clearCache(false)}
+                            className="px-2 py-1 text-xs bg-yellow-100 text-yellow-600 rounded hover:bg-yellow-200"
+                          >
+                            清除当前
+                          </button>
+                          <button
+                            onClick={() => clearCache(true)}
+                            className="px-2 py-1 text-xs bg-red-100 text-red-600 rounded hover:bg-red-200"
+                          >
+                            清除全部
+                          </button>
+                        </div>
+                      </div>
+                      {cacheStatus.entries && cacheStatus.entries.length > 0 && (
+                        <div className="mt-1 text-gray-500">
+                          {cacheStatus.entries.map((entry: any, index: number) => (
+                            <div key={index} className="flex justify-between">
+                              <span>{entry.cacheKey}</span>
+                              <span>{entry.dataPoints} 点 ({entry.memorySizeKB}KB)</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
