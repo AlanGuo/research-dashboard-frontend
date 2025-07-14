@@ -20,6 +20,7 @@ export interface OptimizationConfig {
     useTemperatureRule?: boolean;
     temperatureSymbol?: string;
     temperatureThreshold?: number;
+    temperatureTimeframe?: string;
   };
   
   // 优化目标

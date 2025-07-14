@@ -422,7 +422,8 @@ export class ParameterOptimizer {
       // 温度计规则参数默认值
       useTemperatureRule: config.baseParams.useTemperatureRule ?? false,
       temperatureSymbol: config.baseParams.temperatureSymbol ?? 'OTHERS',
-      temperatureThreshold: config.baseParams.temperatureThreshold ?? 60
+      temperatureThreshold: config.baseParams.temperatureThreshold ?? 60,
+      temperatureTimeframe: config.baseParams.temperatureTimeframe ?? '1D'
     };
 
     console.log('调用优化API，参数:', strategyParams);
@@ -1404,7 +1405,8 @@ export class ParameterOptimizer {
       // 温度计规则参数默认值
       useTemperatureRule: config.baseParams.useTemperatureRule ?? false,
       temperatureSymbol: config.baseParams.temperatureSymbol ?? 'OTHERS',
-      temperatureThreshold: config.baseParams.temperatureThreshold ?? 60
+      temperatureThreshold: config.baseParams.temperatureThreshold ?? 60,
+      temperatureTimeframe: config.baseParams.temperatureTimeframe ?? '1D'
     };
 
     // 调用优化API
