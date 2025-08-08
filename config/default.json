@@ -26,6 +26,6 @@
     "useTemperatureRule": true,
     "temperatureSymbol": "OTHERS",
     "temperatureTimeframe": "8H",
-    "temperatureThreshold": 65
+    "temperatureThreshold": 60
   }
 }
