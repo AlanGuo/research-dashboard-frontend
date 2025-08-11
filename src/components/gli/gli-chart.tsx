@@ -656,6 +656,8 @@ export function GliChart({ data, params, trendPeriods, howellLiquidityData: prop
       }
     }
     
+    // 调试完成，移除详细日志
+    
     return result;
   }, [data, benchmarkData, params.interval, params.offset]);
   
@@ -1123,17 +1125,19 @@ export function GliChart({ data, params, trendPeriods, howellLiquidityData: prop
               );
             })}
 
-            {/* 根据参数显示不同的数据系列 */}
+            {/* 根据参数显示不同的数据系列 - 修复：移除stackId，添加baseLine */}
             {params.unl_active && (
               <Area
                 type="monotone"
                 dataKey="netUsdLiquidity"
                 name="美元净流动性(UNL)"
-                stackId="1"
                 fill={themeColors.components.netUsdLiquidity}
                 stroke={themeColors.components.netUsdLiquidity}
                 isAnimationActive={false}
                 yAxisId="left"
+                connectNulls={true}
+                dot={false}
+                baseLine={0}
               />
             )}
             
@@ -1142,11 +1146,13 @@ export function GliChart({ data, params, trendPeriods, howellLiquidityData: prop
                 type="monotone"
                 dataKey="ecb"
                 name="ECB"
-                stackId="1"
                 fill={themeColors.components.ecb}
                 stroke={themeColors.components.ecb}
                 isAnimationActive={false}
                 yAxisId="left"
+                connectNulls={true}
+                dot={false}
+                baseLine={0}
               />
             )}
             
@@ -1155,11 +1161,13 @@ export function GliChart({ data, params, trendPeriods, howellLiquidityData: prop
                 type="monotone"
                 dataKey="pbc"
                 name="PBC"
-                stackId="1"
                 fill={themeColors.components.pbc}
                 stroke={themeColors.components.pbc}
                 isAnimationActive={false}
                 yAxisId="left"
+                connectNulls={true}
+                dot={false}
+                baseLine={0}
               />
             )}
             
@@ -1168,11 +1176,13 @@ export function GliChart({ data, params, trendPeriods, howellLiquidityData: prop
                 type="monotone"
                 dataKey="boj"
                 name="BOJ"
-                stackId="1"
                 fill={themeColors.components.boj}
                 stroke={themeColors.components.boj}
                 isAnimationActive={false}
                 yAxisId="left"
+                connectNulls={true}
+                dot={false}
+                baseLine={0}
               />
             )}
             
@@ -1181,11 +1191,13 @@ export function GliChart({ data, params, trendPeriods, howellLiquidityData: prop
                 type="monotone"
                 dataKey="other_cb_total"
                 name="Other Central Banks"
-                stackId="1"
                 fill={themeColors.components.other_cb}
                 stroke={themeColors.components.other_cb}
                 isAnimationActive={false}
                 yAxisId="left"
+                connectNulls={true}
+                dot={false}
+                baseLine={0}
               />
             )}
             
@@ -1195,11 +1207,13 @@ export function GliChart({ data, params, trendPeriods, howellLiquidityData: prop
                 type="monotone"
                 dataKey="usa"
                 name="USA M2"
-                stackId="1"
                 fill={themeColors.components.usa}
                 stroke={themeColors.components.usa}
                 isAnimationActive={false}
                 yAxisId="left"
+                connectNulls={true}
+                dot={false}
+                baseLine={0}
               />
             )}
             
@@ -1208,11 +1222,13 @@ export function GliChart({ data, params, trendPeriods, howellLiquidityData: prop
                 type="monotone"
                 dataKey="eu"
                 name="Europe M2"
-                stackId="1"
                 fill={themeColors.components.europe}
                 stroke={themeColors.components.europe}
                 isAnimationActive={false}
                 yAxisId="left"
+                connectNulls={true}
+                dot={false}
+                baseLine={0}
               />
             )}
             
@@ -1221,11 +1237,13 @@ export function GliChart({ data, params, trendPeriods, howellLiquidityData: prop
                 type="monotone"
                 dataKey="china"
                 name="China M2"
-                stackId="1"
                 fill={themeColors.components.china}
                 stroke={themeColors.components.china}
                 isAnimationActive={false}
                 yAxisId="left"
+                connectNulls={true}
+                dot={false}
+                baseLine={0}
               />
             )}
             
@@ -1234,11 +1252,13 @@ export function GliChart({ data, params, trendPeriods, howellLiquidityData: prop
                 type="monotone"
                 dataKey="japan"
                 name="Japan M2"
-                stackId="1"
                 fill={themeColors.components.japan}
                 stroke={themeColors.components.japan}
                 isAnimationActive={false}
                 yAxisId="left"
+                connectNulls={true}
+                dot={false}
+                baseLine={0}
               />
             )}
             
@@ -1247,11 +1267,13 @@ export function GliChart({ data, params, trendPeriods, howellLiquidityData: prop
                 type="monotone"
                 dataKey="other_m2_total"
                 name="Other M2"
-                stackId="1"
                 fill={themeColors.components.other_m2}
                 stroke={themeColors.components.other_m2}
                 isAnimationActive={false}
                 yAxisId="left"
+                connectNulls={true}
+                dot={false}
+                baseLine={0}
               />
             )}
             
