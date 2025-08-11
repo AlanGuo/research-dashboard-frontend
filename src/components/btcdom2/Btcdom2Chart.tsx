@@ -150,6 +150,18 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
   const combinedChartData = useMemo(() => {
     const firstLiveIndex = chartData.findIndex(point => point.hasLiveData);
 
+    // 调试：输出firstLiveIndex和相关信息
+    console.log('[图表调试] firstLiveIndex:', firstLiveIndex);
+    if (firstLiveIndex >= 0) {
+      console.log('[图表调试] 第一个实盘数据点:', {
+        index: firstLiveIndex,
+        timestamp: chartData[firstLiveIndex]?.timestamp,
+        date: chartData[firstLiveIndex]?.date,
+        hasLiveData: chartData[firstLiveIndex]?.hasLiveData,
+        liveReturn: chartData[firstLiveIndex]?.liveReturn
+      });
+    }
+
     const result = chartData.map((point, index) => {
       const strategyReturnPercent = point.totalReturnPercent;
 
@@ -160,12 +172,30 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
       if (firstLiveIndex === -1) {
         // 没有实盘数据，全部使用实线
         backtestSolidPercent = strategyReturnPercent;
-      } else if (index <= firstLiveIndex) {
-        // 实盘开始前
+      } else if (index < firstLiveIndex) {
+        // 实盘开始前，使用实线
         backtestSolidPercent = strategyReturnPercent;
-      } else {
-        // 从第一个实盘数据点开始使用虚线
+      } else if (index === firstLiveIndex) {
+        // 分界点：两条线都有数据，确保连续性
+        backtestSolidPercent = strategyReturnPercent;
         backtestDashedPercent = strategyReturnPercent;
+      } else {
+        // 实盘开始后，使用虚线
+        backtestDashedPercent = strategyReturnPercent;
+      }
+
+      // 调试：输出分界点前后的数据情况
+      if (firstLiveIndex >= 0 && Math.abs(index - firstLiveIndex) <= 2) {
+        console.log(`[图表调试] 索引${index}(分界点${firstLiveIndex}):`, {
+          timestamp: point.timestamp,
+          date: point.date,
+          hasLiveData: point.hasLiveData,
+          liveReturn: point.liveReturn,
+          strategyReturnPercent: strategyReturnPercent?.toFixed(2),
+          backtestSolidPercent: backtestSolidPercent?.toFixed(2),
+          backtestDashedPercent: backtestDashedPercent?.toFixed(2),
+          liveStrategyReturnPercent: point.liveStrategyReturnPercent?.toFixed(2)
+        });
       }
 
       return {
@@ -175,6 +205,19 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
         backtestDashedPercent,
         dataType: 'backtest' as const
       };
+    });
+
+    // 调试：统计undefined数据点
+    const solidUndefinedCount = result.filter(p => p.backtestSolidPercent === undefined).length;
+    const dashedUndefinedCount = result.filter(p => p.backtestDashedPercent === undefined).length;
+    const liveUndefinedCount = result.filter(p => p.liveStrategyReturnPercent === undefined).length;
+    
+    console.log('[图表调试] 数据统计:', {
+      总数据点: result.length,
+      实线undefined数量: solidUndefinedCount,
+      虚线undefined数量: dashedUndefinedCount,
+      实盘undefined数量: liveUndefinedCount,
+      实盘数据点数量: result.length - liveUndefinedCount
     });
 
     return result;
