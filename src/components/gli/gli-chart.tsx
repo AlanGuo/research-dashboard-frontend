@@ -1125,7 +1125,7 @@ export function GliChart({ data, params, trendPeriods, howellLiquidityData: prop
               );
             })}
 
-            {/* 根据参数显示不同的数据系列 - 修复：移除stackId，添加baseLine */}
+            {/* 根据参数显示不同的数据系列 - 修复：恢复stackId实现正确堆叠 */}
             {params.unl_active && (
               <Area
                 type="monotone"
@@ -1137,7 +1137,7 @@ export function GliChart({ data, params, trendPeriods, howellLiquidityData: prop
                 yAxisId="left"
                 connectNulls={true}
                 dot={false}
-                baseLine={0}
+                stackId="1"
               />
             )}
             
@@ -1152,7 +1152,7 @@ export function GliChart({ data, params, trendPeriods, howellLiquidityData: prop
                 yAxisId="left"
                 connectNulls={true}
                 dot={false}
-                baseLine={0}
+                stackId="1"
               />
             )}
             
@@ -1167,7 +1167,7 @@ export function GliChart({ data, params, trendPeriods, howellLiquidityData: prop
                 yAxisId="left"
                 connectNulls={true}
                 dot={false}
-                baseLine={0}
+                stackId="1"
               />
             )}
             
@@ -1182,7 +1182,7 @@ export function GliChart({ data, params, trendPeriods, howellLiquidityData: prop
                 yAxisId="left"
                 connectNulls={true}
                 dot={false}
-                baseLine={0}
+                stackId="1"
               />
             )}
             
@@ -1197,7 +1197,7 @@ export function GliChart({ data, params, trendPeriods, howellLiquidityData: prop
                 yAxisId="left"
                 connectNulls={true}
                 dot={false}
-                baseLine={0}
+                stackId="1"
               />
             )}
             
@@ -1213,7 +1213,7 @@ export function GliChart({ data, params, trendPeriods, howellLiquidityData: prop
                 yAxisId="left"
                 connectNulls={true}
                 dot={false}
-                baseLine={0}
+                stackId="1"
               />
             )}
             
@@ -1228,7 +1228,7 @@ export function GliChart({ data, params, trendPeriods, howellLiquidityData: prop
                 yAxisId="left"
                 connectNulls={true}
                 dot={false}
-                baseLine={0}
+                stackId="1"
               />
             )}
             
@@ -1243,7 +1243,7 @@ export function GliChart({ data, params, trendPeriods, howellLiquidityData: prop
                 yAxisId="left"
                 connectNulls={true}
                 dot={false}
-                baseLine={0}
+                stackId="1"
               />
             )}
             
@@ -1258,7 +1258,7 @@ export function GliChart({ data, params, trendPeriods, howellLiquidityData: prop
                 yAxisId="left"
                 connectNulls={true}
                 dot={false}
-                baseLine={0}
+                stackId="1"
               />
             )}
             
@@ -1273,7 +1273,7 @@ export function GliChart({ data, params, trendPeriods, howellLiquidityData: prop
                 yAxisId="left"
                 connectNulls={true}
                 dot={false}
-                baseLine={0}
+                stackId="1"
               />
             )}
             
