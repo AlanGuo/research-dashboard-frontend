@@ -184,26 +184,6 @@ export default function BTCDOM2Dashboard() {
 
     console.log(`[数据合并] 开始合并数据：回测 ${backtestData.length} 条，实盘 ${liveData.length} 条`);
 
-    // 调试：检查实盘数据的时间范围
-    if (liveData.length > 0) {
-      console.log('[数据合并调试] 实盘数据时间范围:', {
-        第一条: liveData[0].timestamp,
-        最后一条: liveData[liveData.length - 1].timestamp,
-        前5条: liveData.slice(0, 5).map(d => d.timestamp),
-        后5条: liveData.slice(-5).map(d => d.timestamp)
-      });
-    }
-
-    // 调试：检查回测数据的时间范围
-    if (backtestData.length > 0) {
-      console.log('[数据合并调试] 回测数据时间范围:', {
-        第一条: backtestData[0].timestamp,
-        最后一条: backtestData[backtestData.length - 1].timestamp,
-        前5条: backtestData.slice(0, 5).map(d => d.timestamp),
-        后5条: backtestData.slice(-5).map(d => d.timestamp)
-      });
-    }
-
     // 创建实盘数据的时间戳映射
     const liveDataMap = new Map<string, BTCDOM2ChartData>();
     liveData.forEach(livePoint => {
