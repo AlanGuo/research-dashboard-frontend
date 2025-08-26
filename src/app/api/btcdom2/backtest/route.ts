@@ -721,13 +721,43 @@ class BTCDOM2StrategyEngine {
         const prevAmount = previousSnapshot?.btcPosition?.amount ?? validBtcAmount;
         const previousBtcPrice = previousSnapshot?.btcPosition?.currentPrice;
 
+        // 计算加权平均成本价和交易类型
+        let newEntryPrice: number;
+        let periodTradingType: 'buy' | 'sell' | 'hold';
+        
+        if (previousSnapshot?.btcPosition) {
+          const prevQuantity = previousSnapshot.btcPosition.quantity ?? 0;
+          const prevEntryPrice = previousSnapshot.btcPosition.entryPrice ?? btcPrice;
+          const quantityDiff = validBtcQuantity - prevQuantity;
+          
+          if (Math.abs(quantityDiff) < 0.0001) {
+            // 数量基本没变，保持原均价
+            newEntryPrice = prevEntryPrice;
+            periodTradingType = 'hold';
+          } else if (quantityDiff > 0) {
+            // 加仓，计算加权平均成本价
+            newEntryPrice = (prevQuantity * prevEntryPrice + quantityDiff * btcPrice) / validBtcQuantity;
+            periodTradingType = 'buy';
+          } else {
+            // 减仓，保持原均价（部分卖出不影响剩余持仓的成本价）
+            newEntryPrice = prevEntryPrice;
+            periodTradingType = 'sell';
+          }
+        } else {
+          // 新开仓
+          newEntryPrice = btcPrice;
+          periodTradingType = 'buy';
+        }
+
         btcPosition = {
           symbol: 'BTCUSDT',
           side: 'LONG',
           amount: validBtcAmount,
           quantity: validBtcQuantity,
-          entryPrice: previousSnapshot?.btcPosition?.entryPrice || btcPrice,
+          entryPrice: newEntryPrice, // 使用加权平均成本价
           currentPrice: btcPrice,
+          periodTradingPrice: btcPrice, // 当期交易价格
+          periodTradingType: periodTradingType, // 当期交易类型
           pnl: validBtcPnl, // 第一期为0，后续期基于价格变化计算
           pnlPercent: prevAmount > 0 ? validBtcPnl / prevAmount : 0,
           tradingFee: validBtcTradingFee,
@@ -759,6 +789,8 @@ class BTCDOM2StrategyEngine {
           amount: validPrevAmount,
           quantity: validPrevQuantity,
           currentPrice: btcPrice,
+          periodTradingPrice: btcPrice, // 当期卖出价格
+          periodTradingType: 'sell' as const, // 当期交易类型为卖出
           pnl: validFinalPnl,
           pnlPercent: validPrevAmount > 0 ? validFinalPnl / validPrevAmount : 0,
           tradingFee: validSellFee,
@@ -830,6 +862,8 @@ class BTCDOM2StrategyEngine {
               amount: validAmount,
               quantity: validQuantity,
               currentPrice,
+              periodTradingPrice: currentPrice, // 当期卖出价格
+              periodTradingType: 'buy' as const, // 对于做空，平仓是买入操作
               pnl: validPnl,
               pnlPercent: -priceChangePercent,
               tradingFee: validTradingFee,
@@ -943,14 +977,44 @@ class BTCDOM2StrategyEngine {
         const previousShortPosition = previousSnapshot?.shortPositions?.find(pos => pos.symbol === candidate.symbol);
         const previousPrice = previousShortPosition?.currentPrice;
 
+        // 计算做空品种的加权平均成本价和交易类型
+        let shortEntryPrice: number;
+        let shortPeriodTradingType: 'buy' | 'sell' | 'hold';
+        
+        if (previousShortPosition) {
+          const prevQuantity = previousShortPosition.quantity ?? 0;
+          const prevEntryPrice = previousShortPosition.entryPrice ?? price;
+          const quantityDiff = quantity - prevQuantity;
+          
+          if (Math.abs(quantityDiff) < 0.0001) {
+            // 数量基本没变，保持原均价
+            shortEntryPrice = prevEntryPrice;
+            shortPeriodTradingType = 'hold';
+          } else if (quantityDiff > 0) {
+            // 加仓（对于做空，增加数量仍然是"sell"操作）
+            shortEntryPrice = (prevQuantity * prevEntryPrice + quantityDiff * price) / quantity;
+            shortPeriodTradingType = 'sell';
+          } else {
+            // 减仓（对于做空，减少数量是"buy"回补操作）
+            shortEntryPrice = prevEntryPrice;
+            shortPeriodTradingType = 'buy';
+          }
+        } else {
+          // 新开仓（对于做空，开仓是"sell"操作）
+          shortEntryPrice = price;
+          shortPeriodTradingType = 'sell';
+        }
+
           return {
             symbol: candidate.symbol,
             displaySymbol: candidate.futureSymbol || candidate.symbol,
             side: 'SHORT',
             amount: allocation,
             quantity,
-            entryPrice: previousShortPosition?.entryPrice || price,
+            entryPrice: shortEntryPrice, // 使用加权平均成本价
             currentPrice: price,
+            periodTradingPrice: price, // 当期交易价格
+            periodTradingType: shortPeriodTradingType, // 当期交易类型
             pnl: isNaN(pnl) ? 0 : pnl,
             pnlPercent: isNaN(pnlPercent) ? 0 : pnlPercent,
             tradingFee: isNaN(tradingFee) ? 0 : tradingFee,
@@ -1069,6 +1133,8 @@ class BTCDOM2StrategyEngine {
           amount: validPrevAmount,
           quantity: validPrevQuantity,
           currentPrice: btcPrice,
+          periodTradingPrice: btcPrice, // 当期卖出价格
+          periodTradingType: 'sell' as const, // 当期交易类型为卖出
           pnl: validFinalPnl,
           pnlPercent: validPrevAmount > 0 ? validFinalPnl / validPrevAmount : 0,
           tradingFee: validSellFee,

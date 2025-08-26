@@ -26,6 +26,7 @@ import {
   ArrowDown,
   Minus
 } from 'lucide-react';
+import { PriceComparisonTable } from './PriceComparisonTable';
 
 interface BTCDOM2PositionTableProps {
   snapshot: StrategySnapshot;
@@ -236,7 +237,7 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
       .filter(pos => {
         if (!params) return true;
         // 如果是BTC相关的卖出持仓，只在选择做多BTC时显示
-        if (pos.symbol === 'BTC' || pos.side === 'LONG') {
+        if (pos.symbol === 'BTCUSDT' || pos.side === 'LONG') {
           return params.longBtc;
         }
         // 如果是做空相关的卖出持仓，只在选择做空ALT时显示
@@ -727,6 +728,12 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
           </CardContent>
         </Card>
       )}
+
+      {/* 价格对比表格 - 仅开发环境可见 */}
+      <PriceComparisonTable
+        marketDataTimestamp={snapshot.timestamp}
+        positions={allPositions}
+      />
     </div>
   );
 }

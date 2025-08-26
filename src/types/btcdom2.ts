@@ -120,8 +120,10 @@ export interface PositionInfo {
   side: 'LONG' | 'SHORT';     // 多头或空头
   amount: number;             // 持仓金额 (USDT)
   quantity: number;           // 持仓数量
-  entryPrice: number;         // 开仓价格
+  entryPrice: number;         // 持仓均价（加权平均成本价）
   currentPrice: number;       // 当前价格
+  periodTradingPrice?: number; // 当期交易价格（用于与实盘对比）
+  periodTradingType?: 'buy' | 'sell' | 'hold'; // 当期交易类型
   pnl: number;               // 盈亏
   pnlPercent: number;        // 盈亏百分比
   tradingFee: number;        // 当期交易手续费
@@ -390,4 +392,72 @@ export interface CacheStatusData {
   entries: CacheStatusEntry[];
   lastChecked?: string;
   message?: string;
+}
+
+// 交易日志条目
+export interface TradingLogEntry {
+  _id?: string;
+  order_id: string;
+  action: string;
+  error_message: string | null;
+  execution_id: string;
+  fee: number;
+  fee_asset: string;
+  fee_usdt_value: number;
+  market_data_timestamp: Date | string;
+  price: number;
+  quantity: number;
+  side: string;
+  status: string;
+  symbol: string;
+  target_quantity: number;
+  timestamp: string;
+}
+
+// 交易日志响应
+export interface TradingLogsResponse {
+  success: boolean;
+  data: TradingLogEntry[];
+  count: number;
+  query?: {
+    startTimestamp?: string;
+    endTimestamp?: string;
+    marketDataTimestamp?: string;
+  };
+  error?: string;
+  details?: string;
+}
+
+// 价格对比数据
+export interface PriceComparison {
+  symbol: string;
+  status: 'holding' | 'closed'; // holding: 持仓中, closed: 已平仓
+  position: PositionInfo; // 保存position引用用于判断做空/做多逻辑
+  backtest: {
+    entryPrice?: number;
+    exitPrice?: number;
+  };
+  live: {
+    entryPrice?: number;
+    exitPrice?: number;
+  };
+  differences: {
+    entryPriceDiff?: number;
+    entryPriceDiffPercent?: number;
+    exitPriceDiff?: number;
+    exitPriceDiffPercent?: number;
+  };
+}
+
+// 价格对比汇总数据
+export interface PriceComparisonSummary {
+  marketDataTimestamp: string;
+  comparisons: PriceComparison[];
+  statistics: {
+    totalSymbols: number;
+    averageEntryPriceDiff: number;
+    averageEntryPriceDiffPercent: number;
+    averageExitPriceDiff: number;
+    averageExitPriceDiffPercent: number;
+  };
 }
