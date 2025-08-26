@@ -733,6 +733,7 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
       <PriceComparisonTable
         marketDataTimestamp={snapshot.timestamp}
         positions={allPositions}
+        backtestResult={backtestResult}
       />
     </div>
   );

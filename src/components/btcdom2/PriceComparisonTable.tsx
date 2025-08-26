@@ -11,29 +11,37 @@ import {
   TableHeader,
   TableRow
 } from '@/components/ui/table';
-import { AlertTriangle, TrendingUp, TrendingDown, Eye, Loader2 } from 'lucide-react';
+import { AlertTriangle, Eye, Loader2 } from 'lucide-react';
 import { 
   TradingLogEntry, 
   TradingLogsResponse, 
   PriceComparison, 
-  PositionInfo 
+  PositionInfo,
+  PnlDifferenceCalculation,
+  TotalPnlDifferenceSummary,
+  BTCDOM2BacktestResult
 } from '@/types/btcdom2';
 
 interface PriceComparisonTableProps {
   marketDataTimestamp: string;
   positions: PositionInfo[];
   className?: string;
+  backtestResult?: BTCDOM2BacktestResult; // 完整回测结果，用于全期数盈亏汇总
 }
 
 export function PriceComparisonTable({ 
   marketDataTimestamp, 
   positions,
-  className = ""
+  className = "",
+  backtestResult
 }: PriceComparisonTableProps) {
   const [tradingLogs, setTradingLogs] = useState<TradingLogEntry[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [priceComparisons, setPriceComparisons] = useState<PriceComparison[]>([]);
+  const [totalPnlSummary, setTotalPnlSummary] = useState<TotalPnlDifferenceSummary | null>(null);
+  const [totalTradingLogs, setTotalTradingLogs] = useState<TradingLogEntry[]>([]);
+  const [totalLoading, setTotalLoading] = useState<boolean>(false);
 
   // 工具函数：格式化时间（使用UTC+0时区）
   const formatPeriodTime = (timestamp: string): string => {
@@ -41,10 +49,59 @@ export function PriceComparisonTable({
     return `${date.getUTCFullYear()}-${(date.getUTCMonth() + 1).toString().padStart(2, '0')}-${date.getUTCDate().toString().padStart(2, '0')} ${date.getUTCHours().toString().padStart(2, '0')}:${date.getUTCMinutes().toString().padStart(2, '0')}`;
   };
 
-  // 仅在开发环境显示
-  if (process.env.NODE_ENV !== 'development') {
-    return null;
-  }
+  // 计算盈亏差异
+  const calculatePnlDifference = (
+    position: PositionInfo,
+    backtestEntryPrice?: number,
+    liveEntryPrice?: number,
+    backtestExitPrice?: number,
+    liveExitPrice?: number,
+    isClosingTrade: boolean = false
+  ): PnlDifferenceCalculation => {
+    let entryPnlDiff: number | undefined;
+    let exitPnlDiff: number | undefined;
+    let hasValidData = false;
+    let calculationNote = '';
+
+    const quantity = position.quantity;
+    const side = position.side;
+
+    // 计算开仓盈亏差异
+    if (backtestEntryPrice !== undefined && liveEntryPrice !== undefined && !isClosingTrade) {
+      if (side === 'LONG') {
+        // 做多：实盘开仓价低于回测价格有利（节省成本）
+        entryPnlDiff = (liveEntryPrice - backtestEntryPrice) * quantity * -1;
+      } else {
+        // 做空：实盘开仓价高于回测价格有利（获得更高卖价）
+        entryPnlDiff = (liveEntryPrice - backtestEntryPrice) * quantity;
+      }
+      hasValidData = true;
+      calculationNote += `开仓差异: ${side === 'LONG' ? '做多' : '做空'} ${quantity.toFixed(6)}个 `;
+    }
+
+    // 计算平仓盈亏差异
+    if (backtestExitPrice !== undefined && liveExitPrice !== undefined && isClosingTrade) {
+      if (side === 'LONG') {
+        // 做多：实盘平仓价高于回测价格有利（获得更高卖价）
+        exitPnlDiff = (liveExitPrice - backtestExitPrice) * quantity;
+      } else {
+        // 做空：实盘平仓价低于回测价格有利（以更低价格回购）
+        exitPnlDiff = (backtestExitPrice - liveExitPrice) * quantity;
+      }
+      hasValidData = true;
+      calculationNote += `平仓差异: ${side === 'LONG' ? '做多' : '做空'} ${quantity.toFixed(6)}个 `;
+    }
+
+    const totalPnlDiff = (entryPnlDiff || 0) + (exitPnlDiff || 0);
+
+    return {
+      entryPnlDiff,
+      exitPnlDiff,
+      totalPnlDiff,
+      hasValidData,
+      calculationNote: calculationNote || '无可计算数据'
+    };
+  };
 
   // 获取交易日志数据
   useEffect(() => {
@@ -67,9 +124,10 @@ export function PriceComparisonTable({
         } else {
           throw new Error(data.error || '获取交易日志失败');
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('获取交易日志失败:', err);
-        setError(err.message || '获取交易日志失败');
+        const errorMessage = err instanceof Error ? err.message : '获取交易日志失败';
+        setError(errorMessage);
         setTradingLogs([]);
       } finally {
         setLoading(false);
@@ -78,6 +136,45 @@ export function PriceComparisonTable({
 
     fetchTradingLogs();
   }, [marketDataTimestamp]);
+
+  // 获取全期数交易日志数据（用于全期盈亏汇总）
+  useEffect(() => {
+    const fetchTotalTradingLogs = async () => {
+      if (!backtestResult || !backtestResult.snapshots.length) {
+        setTotalTradingLogs([]);
+        setTotalPnlSummary(null);
+        return;
+      }
+
+      setTotalLoading(true);
+
+      try {
+        const firstSnapshot = backtestResult.snapshots[0];
+        const lastSnapshot = backtestResult.snapshots[backtestResult.snapshots.length - 1];
+        
+        const response = await fetch(`/api/btcdom2/trading-logs?startTimestamp=${encodeURIComponent(firstSnapshot.timestamp)}&endTimestamp=${encodeURIComponent(lastSnapshot.timestamp)}`);
+        const data: TradingLogsResponse = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || `HTTP ${response.status}`);
+        }
+
+        if (data.success) {
+          setTotalTradingLogs(data.data || []);
+        } else {
+          throw new Error(data.error || '获取全期交易日志失败');
+        }
+      } catch (err: unknown) {
+        console.error('获取全期交易日志失败:', err);
+        setTotalTradingLogs([]);
+        setTotalPnlSummary(null);
+      } finally {
+        setTotalLoading(false);
+      }
+    };
+
+    fetchTotalTradingLogs();
+  }, [backtestResult]);
 
   // 处理价格对比计算
   useEffect(() => {
@@ -153,6 +250,14 @@ export function PriceComparisonTable({
             exitPriceDiff,
             exitPriceDiffPercent,
           },
+          pnlDifference: calculatePnlDifference(
+            position,
+            undefined,
+            undefined,
+            backtestExitPrice,
+            liveExitPrice,
+            true
+          ),
         };
       } else {
         // 开仓或加仓操作：显示开仓价格
@@ -183,6 +288,14 @@ export function PriceComparisonTable({
             exitPriceDiff: undefined,
             exitPriceDiffPercent: undefined,
           },
+          pnlDifference: calculatePnlDifference(
+            position,
+            backtestEntryPrice,
+            liveEntryPrice,
+            undefined,
+            undefined,
+            false
+          ),
         };
       }
 
@@ -192,11 +305,205 @@ export function PriceComparisonTable({
     setPriceComparisons(comparisons);
   }, [tradingLogs, positions]);
 
+  // 计算全期数盈亏差异汇总
+  useEffect(() => {
+    if (!backtestResult || !backtestResult.snapshots.length || !totalTradingLogs.length) {
+      setTotalPnlSummary(null);
+      return;
+    }
+
+    const snapshots = backtestResult.snapshots;
+    const firstSnapshot = snapshots[0];
+    const lastSnapshot = snapshots[snapshots.length - 1];
+
+    // 按标的和时间戳创建交易日志查找索引
+    const tradingLogIndex = new Map<string, Map<string, TradingLogEntry[]>>();
+    
+    // 标准化symbol名称 (去掉USDT后缀)
+    const normalizeSymbol = (symbol: string) => {
+      return symbol.replace('USDT', '').toUpperCase();
+    };
+
+    totalTradingLogs.forEach(log => {
+      const normalizedSymbol = normalizeSymbol(log.symbol);
+      const timestamp = new Date(log.timestamp).toISOString();
+      
+      if (!tradingLogIndex.has(normalizedSymbol)) {
+        tradingLogIndex.set(normalizedSymbol, new Map());
+      }
+      
+      const symbolLogs = tradingLogIndex.get(normalizedSymbol)!;
+      if (!symbolLogs.has(timestamp)) {
+        symbolLogs.set(timestamp, []);
+      }
+      
+      symbolLogs.get(timestamp)!.push(log);
+    });
+
+    // 初始化汇总数据
+    const summary: TotalPnlDifferenceSummary = {
+      btcLongPnlDiff: 0,
+      altShortPnlDiff: 0,
+      totalPnlDiff: 0,
+      totalPeriods: snapshots.length,
+      validCalculations: 0,
+      totalCalculations: 0,
+      periodRange: {
+        startPeriod: 1,
+        endPeriod: snapshots.length,
+        startTimestamp: firstSnapshot.timestamp,
+        endTimestamp: lastSnapshot.timestamp
+      },
+      breakdown: {
+        btcLong: {
+          entryPnlDiff: 0,
+          exitPnlDiff: 0,
+          totalTransactions: 0
+        },
+        altShort: {
+          entryPnlDiff: 0,
+          exitPnlDiff: 0,
+          totalTransactions: 0
+        }
+      }
+    };
+
+    // 遍历所有快照计算盈亏差异
+    snapshots.forEach(snapshot => {
+      const allPositions = [
+        ...(snapshot.btcPosition ? [snapshot.btcPosition] : []),
+        ...snapshot.shortPositions,
+        ...(snapshot.soldPositions || [])
+      ];
+
+      allPositions.forEach(position => {
+        summary.totalCalculations++;
+        
+        const positionSymbol = normalizeSymbol(position.symbol);
+        
+        // 查找对应的交易日志
+        const symbolLogs = tradingLogIndex.get(positionSymbol);
+        if (!symbolLogs) return;
+
+        // 查找最接近时间戳的交易记录（允许一定误差）
+        const relevantLogs: TradingLogEntry[] = [];
+        const targetTime = new Date(snapshot.timestamp).getTime();
+        
+        for (const [logTimestamp, logs] of symbolLogs.entries()) {
+          const logTime = new Date(logTimestamp).getTime();
+          const timeDiff = Math.abs(logTime - targetTime);
+          
+          // 允许8小时内的时间差（考虑到回测的粒度）
+          if (timeDiff <= 8 * 60 * 60 * 1000) {
+            relevantLogs.push(...logs.filter(log => log.status === 'SUCCESS'));
+          }
+        }
+
+        if (relevantLogs.length === 0) return;
+
+        // 按时间排序取最近的交易记录
+        const sortedLogs = relevantLogs.sort((a, b) => 
+          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        );
+
+        // 判断持仓状态和交易类型
+        const isClosed = position.isSoldOut === true;
+        const tradingType = position.periodTradingType;
+        
+        const isClosingTrade = isClosed || 
+          (position.side === 'LONG' && tradingType === 'sell') ||
+          (position.side === 'SHORT' && tradingType === 'buy');
+
+        let pnlDiff = 0;
+        let isValidCalculation = false;
+        const isBtcPosition = normalizeSymbol(position.symbol) === 'BTC';
+
+        if (isClosingTrade) {
+          // 平仓操作
+          const liveExitPrice = sortedLogs[0]?.price;
+          const backtestExitPrice = position.periodTradingPrice || position.currentPrice;
+
+          if (liveExitPrice !== undefined && backtestExitPrice !== undefined) {
+            if (position.side === 'LONG') {
+              // 做多平仓：实盘价格高更有利
+              pnlDiff = (liveExitPrice - backtestExitPrice) * position.quantity;
+            } else {
+              // 做空平仓：实盘价格低更有利
+              pnlDiff = (backtestExitPrice - liveExitPrice) * position.quantity;
+            }
+            isValidCalculation = true;
+          }
+        } else {
+          // 开仓操作
+          const liveEntryPrice = sortedLogs[0]?.price;
+          const backtestEntryPrice = position.periodTradingPrice || position.entryPrice;
+
+          if (liveEntryPrice !== undefined && backtestEntryPrice !== undefined) {
+            if (position.side === 'LONG') {
+              // 做多开仓：实盘价格低更有利
+              pnlDiff = (liveEntryPrice - backtestEntryPrice) * position.quantity * -1;
+            } else {
+              // 做空开仓：实盘价格高更有利
+              pnlDiff = (liveEntryPrice - backtestEntryPrice) * position.quantity;
+            }
+            isValidCalculation = true;
+          }
+        }
+
+        if (isValidCalculation) {
+          summary.validCalculations++;
+          summary.totalPnlDiff += pnlDiff;
+
+          if (isBtcPosition) {
+            summary.btcLongPnlDiff += pnlDiff;
+            summary.breakdown.btcLong.totalTransactions++;
+            
+            if (isClosingTrade) {
+              summary.breakdown.btcLong.exitPnlDiff += pnlDiff;
+            } else {
+              summary.breakdown.btcLong.entryPnlDiff += pnlDiff;
+            }
+          } else {
+            summary.altShortPnlDiff += pnlDiff;
+            summary.breakdown.altShort.totalTransactions++;
+            
+            if (isClosingTrade) {
+              summary.breakdown.altShort.exitPnlDiff += pnlDiff;
+            } else {
+              summary.breakdown.altShort.entryPnlDiff += pnlDiff;
+            }
+          }
+        }
+      });
+    });
+
+    setTotalPnlSummary(summary);
+  }, [backtestResult, totalTradingLogs]);
+
   // 格式化价格
   const formatPrice = (price: number | undefined) => {
     if (price === undefined || price === null) return '--';
     return `$${price.toFixed(6)}`;
   };
+
+  // 格式化盈亏金额
+  const formatPnlAmount = (amount: number | undefined) => {
+    if (amount === undefined || amount === null) return '--';
+    const sign = amount >= 0 ? '+' : '';
+    return `${sign}$${amount.toFixed(2)}`;
+  };
+
+  // 获取盈亏金额颜色
+  const getPnlColor = (amount: number | undefined) => {
+    if (amount === undefined || amount === null) return 'text-gray-400 dark:text-gray-500';
+    if (Math.abs(amount) < 0.01) return 'text-gray-600 dark:text-gray-400';
+    return amount > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
+  };
+
+  // 仅在开发环境显示
+  if (process.env.NODE_ENV !== 'development') {
+    return null;
+  }
 
   // 格式化价差
   const formatPriceDiff = (diff: number | undefined, percent: number | undefined, position: PositionInfo, isEntry: boolean) => {
@@ -375,6 +682,88 @@ export function PriceComparisonTable({
                 <span className="ml-1 font-medium">{formatPeriodTime(marketDataTimestamp)}</span>
               </div>
             </div>
+
+
+            {/* 全期数盈亏差异汇总 */}
+            {totalPnlSummary && totalPnlSummary.validCalculations > 0 && (
+              <div className="mt-4 pt-4 border-t-2 border-blue-300 dark:border-blue-700">
+                <div className="flex items-center gap-2 mb-3">
+                  <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                    全期数盈亏差异汇总
+                  </h4>
+                  {totalLoading && (
+                    <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                  )}
+                </div>
+                
+                {/* 总体汇总卡片 */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <div className="text-xs text-blue-600 dark:text-blue-400 mb-1">BTC多头差异</div>
+                    <div className={`text-lg font-mono font-bold ${getPnlColor(totalPnlSummary.btcLongPnlDiff)}`}>
+                      {formatPnlAmount(totalPnlSummary.btcLongPnlDiff)}
+                    </div>
+                    <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                      {totalPnlSummary.breakdown.btcLong.totalTransactions} 次交易
+                    </div>
+                  </div>
+                  
+                  <div className="bg-orange-50 dark:bg-orange-900/10 p-4 rounded-lg border border-orange-200 dark:border-orange-800">
+                    <div className="text-xs text-orange-600 dark:text-orange-400 mb-1">ALT做空差异</div>
+                    <div className={`text-lg font-mono font-bold ${getPnlColor(totalPnlSummary.altShortPnlDiff)}`}>
+                      {formatPnlAmount(totalPnlSummary.altShortPnlDiff)}
+                    </div>
+                    <div className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                      {totalPnlSummary.breakdown.altShort.totalTransactions} 次交易
+                    </div>
+                  </div>
+                  
+                  <div className="bg-purple-50 dark:bg-purple-900/10 p-4 rounded-lg border border-purple-200 dark:border-purple-800">
+                    <div className="text-xs text-purple-600 dark:text-purple-400 mb-1">总盈亏差异</div>
+                    <div className={`text-lg font-mono font-bold ${getPnlColor(totalPnlSummary.totalPnlDiff)}`}>
+                      {formatPnlAmount(totalPnlSummary.totalPnlDiff)}
+                    </div>
+                    <div className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                      {totalPnlSummary.validCalculations}/{totalPnlSummary.totalCalculations} 有效计算
+                    </div>
+                  </div>
+                </div>
+
+                {/* 期数和统计信息 */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm bg-blue-50 dark:bg-blue-900/10 p-3 rounded-lg">
+                  <div>
+                    <span className="text-blue-600 dark:text-blue-400">分析期数:</span>
+                    <span className="ml-1 font-medium text-blue-700 dark:text-blue-300">
+                      {totalPnlSummary.totalPeriods} 期
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-blue-600 dark:text-blue-400">时间范围:</span>
+                    <span className="ml-1 font-medium text-blue-700 dark:text-blue-300">
+                      {formatPeriodTime(totalPnlSummary.periodRange.startTimestamp)} 至 {formatPeriodTime(totalPnlSummary.periodRange.endTimestamp)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-blue-600 dark:text-blue-400">BTC交易:</span>
+                    <span className="ml-1 font-medium text-blue-700 dark:text-blue-300">
+                      开仓: {formatPnlAmount(totalPnlSummary.breakdown.btcLong.entryPnlDiff)} / 
+                      平仓: {formatPnlAmount(totalPnlSummary.breakdown.btcLong.exitPnlDiff)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-blue-600 dark:text-blue-400">ALT交易:</span>
+                    <span className="ml-1 font-medium text-blue-700 dark:text-blue-300">
+                      开仓: {formatPnlAmount(totalPnlSummary.breakdown.altShort.entryPnlDiff)} / 
+                      平仓: {formatPnlAmount(totalPnlSummary.breakdown.altShort.exitPnlDiff)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-3 text-xs text-blue-600 dark:text-blue-400">
+                  <p>全期汇总说明：统计整个回测期间所有交易的价格差异对总收益的影响</p>
+                </div>
+              </div>
+            )}
             {priceComparisons.length > 0 && (
               <div className="mt-3 text-xs text-gray-600 dark:text-gray-400">
                 <div className="flex items-center gap-4">
