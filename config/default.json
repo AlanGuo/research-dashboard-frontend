@@ -11,7 +11,7 @@
     "analytics": false
   },
   "btcdom2": {
-    "initialCapital": 10000,
+    "initialCapital": 5000,
     "btcRatio": 0.5,
     "priceChangeWeight": 0.15,
     "volumeWeight": 0.35,
@@ -27,6 +27,6 @@
     "temperatureSymbol": "OTHERS",
     "temperatureTimeframe": "8H",
     "temperatureThreshold": 60,
-    "startDate": "2025-07-12T08:00:00.000Z"
+    "startDate": "2025-08-26T16:00:00.000Z"
   }
 }
