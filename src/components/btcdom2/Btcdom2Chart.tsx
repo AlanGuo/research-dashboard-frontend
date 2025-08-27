@@ -52,7 +52,7 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
   });
 
   // 实盘数据对齐开关
-  const [alignLiveData, setAlignLiveData] = useState(true);
+  const [alignLiveData, setAlignLiveData] = useState(false);
 
   // 切换曲线可见性 - 使用 useCallback 避免不必要的重新渲染
   const toggleVisibility = useCallback((key: keyof typeof visibility) => {
