@@ -29,6 +29,9 @@ interface PriceComparisonTableProps {
   backtestResult?: BTCDOM2BacktestResult; // 完整回测结果，用于全期数盈亏汇总
 }
 
+// 初始资金常量
+const INITIAL_CAPITAL = 5000;
+
 export function PriceComparisonTable({ 
   marketDataTimestamp, 
   positions,
@@ -528,35 +531,6 @@ export function PriceComparisonTable({
           summary.validCalculations++;
           summary.totalPnlDiff += pnlDiff;
 
-          // 添加调试信息（仅在开发环境）
-          if (process.env.NODE_ENV === 'development' && isBtcPosition) {
-            const priceInfo = isClosingTrade 
-              ? `回测平仓价: ${position.periodTradingPrice || position.currentPrice}, 实盘平仓价: ${relevantLog?.price}` 
-              : `回测开仓价: ${position.periodTradingPrice || position.entryPrice}, 实盘开仓价: ${relevantLog?.price}`;
-            
-            // 添加详细的数量计算信息
-            const quantityInfo = position.quantityChange ? 
-              `quantityChange: {type: ${position.quantityChange.type}, previousQuantity: ${position.quantityChange.previousQuantity}, currentQuantity: ${position.quantity}}` :
-              `quantityChange: null, currentQuantity: ${position.quantity}`;
-              
-            console.log(`[全期数BTC调试] 期数${snapshotIndex + 1}: ${position.symbol}, 交易类型: ${isClosingTrade ? '平仓' : '开仓'}, 持仓方向: ${position.side}, 数量: ${tradingQuantity}, ${priceInfo}, 盈亏差异: $${pnlDiff.toFixed(2)}, 是否已卖出: ${position.isSoldOut}, 交易类型: ${position.periodTradingType}`);
-            console.log(`[全期数BTC数量调试] 期数${snapshotIndex + 1}: ${quantityInfo}, 计算出的交易数量: ${tradingQuantity}`);
-          }
-
-          // 添加ALT做空调试信息
-          if (process.env.NODE_ENV === 'development' && !isBtcPosition && position.side === 'SHORT') {
-            const priceInfo = isClosingTrade 
-              ? `回测平仓价: ${position.periodTradingPrice || position.currentPrice}, 实盘平仓价: ${relevantLog?.price}` 
-              : `回测开仓价: ${position.periodTradingPrice || position.entryPrice}, 实盘开仓价: ${relevantLog?.price}`;
-            
-            const quantityInfo = position.quantityChange ? 
-              `quantityChange: {type: ${position.quantityChange.type}, previousQuantity: ${position.quantityChange.previousQuantity}, currentQuantity: ${position.quantity}}` :
-              `quantityChange: null, currentQuantity: ${position.quantity}`;
-              
-            console.log(`[全期数ALT调试] 期数${snapshotIndex + 1}: ${position.symbol}, 交易类型: ${isClosingTrade ? '平仓' : '开仓'}, 持仓方向: ${position.side}, 数量: ${tradingQuantity}, ${priceInfo}, 盈亏差异: $${pnlDiff.toFixed(2)}, 是否已卖出: ${position.isSoldOut}, 交易类型: ${position.periodTradingType}`);
-            console.log(`[全期数ALT数量调试] 期数${snapshotIndex + 1}: ${quantityInfo}, 计算出的交易数量: ${tradingQuantity}, 实盘交易数量: ${relevantLog?.quantity}`);
-          }
-
           if (isBtcPosition) {
             summary.btcLongPnlDiff += pnlDiff;
             summary.breakdown.btcLong.totalTransactions++;
@@ -579,12 +553,6 @@ export function PriceComparisonTable({
         }
       });
     });
-
-    // 添加全期数汇总调试信息
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[全期数BTC汇总] 总差异: $${summary.btcLongPnlDiff.toFixed(2)}, 开仓: $${summary.breakdown.btcLong.entryPnlDiff.toFixed(2)}, 平仓: $${summary.breakdown.btcLong.exitPnlDiff.toFixed(2)}, 交易次数: ${summary.breakdown.btcLong.totalTransactions}`);
-      console.log(`[全期数总汇总] BTC交易差异: $${summary.btcLongPnlDiff.toFixed(2)}, ALT做空差异: $${summary.altShortPnlDiff.toFixed(2)}, 总盈亏差异: $${summary.totalPnlDiff.toFixed(2)}`);
-    }
 
     setTotalPnlSummary(summary);
   }, [backtestResult, totalTradingLogs]);
@@ -615,7 +583,7 @@ export function PriceComparisonTable({
   }
 
   // 格式化价差金额（考虑价格和数量差异）
-  const formatPriceDiffAmount = (diff: number | undefined, percent: number | undefined, position: PositionInfo, isEntry: boolean, relevantLog?: any) => {
+  const formatPriceDiffAmount = (diff: number | undefined, percent: number | undefined, position: PositionInfo, isEntry: boolean, relevantLog?: TradingLogEntry) => {
     if (diff === undefined || percent === undefined) return '--';
     
     // 获取回测价格
@@ -881,6 +849,21 @@ export function PriceComparisonTable({
     return amount > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
   };
 
+  // 计算单个交易的影响率
+  const calculateImpactRate = (diffAmount: number | undefined): string => {
+    if (diffAmount === undefined || diffAmount === null) return '--';
+    const impactRate = (diffAmount / INITIAL_CAPITAL) * 100;
+    const sign = impactRate >= 0 ? '+' : '';
+    return `${sign}${impactRate.toFixed(3)}%`;
+  };
+
+  // 获取影响率颜色
+  const getImpactRateColor = (diffAmount: number | undefined) => {
+    if (diffAmount === undefined || diffAmount === null) return 'text-gray-400 dark:text-gray-500';
+    if (Math.abs(diffAmount) < 0.01) return 'text-gray-600 dark:text-gray-400';
+    return diffAmount > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
+  };
+
   if (loading) {
     return (
       <div className={`mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800 ${className}`}>
@@ -944,9 +927,11 @@ export function PriceComparisonTable({
                   <TableHead className="text-right">回测开仓价</TableHead>
                   <TableHead className="text-right">实盘开仓价</TableHead>
                   <TableHead className="text-right">开仓金额差异</TableHead>
+                  <TableHead className="text-right w-20">开仓影响率</TableHead>
                   <TableHead className="text-right">回测平仓价</TableHead>
                   <TableHead className="text-right">实盘平仓价</TableHead>
                   <TableHead className="text-right">平仓金额差异</TableHead>
+                  <TableHead className="text-right w-20">平仓影响率</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1054,6 +1039,71 @@ export function PriceComparisonTable({
                     <TableCell className={`text-right font-mono text-sm ${getDiffAmountColor(comparison.differences.entryPriceDiff, comparison.position, true)}`}>
                       {formatPriceDiffAmount(comparison.differences.entryPriceDiff, comparison.differences.entryPriceDiffPercent, comparison.position, true, comparison.relevantLog)}
                     </TableCell>
+                    <TableCell className={`text-right font-mono text-xs ${getImpactRateColor((() => {
+                      // 计算开仓差异金额用于影响率显示
+                      if (comparison.differences.entryPriceDiff === undefined) return undefined;
+                      
+                      const position = comparison.position;
+                      let tradingQuantity = 0;
+                      
+                      if (position.tradingQuantity !== undefined) {
+                        tradingQuantity = Math.abs(position.tradingQuantity);
+                      } else {
+                        const relevantLog = comparison.relevantLog;
+                        tradingQuantity = relevantLog?.quantity || 0;
+                        
+                        if (tradingQuantity === 0) {
+                          const tradingType = position.periodTradingType;
+                          const quantityChange = position.quantityChange;
+                          
+                          if (tradingType === 'buy' || tradingType === 'sell' || quantityChange?.type === 'new') {
+                            tradingQuantity = position.quantity;
+                          } else if (quantityChange?.type === 'increase' && quantityChange.previousQuantity) {
+                            tradingQuantity = position.quantity - quantityChange.previousQuantity;
+                          }
+                        }
+                      }
+                      
+                      let realDiffAmount = comparison.differences.entryPriceDiff * Math.abs(tradingQuantity);
+                      if (position.side === 'SHORT') {
+                        realDiffAmount = -realDiffAmount;
+                      }
+                      
+                      return realDiffAmount;
+                    })())}`}>
+                      {(() => {
+                        // 计算开仓差异金额用于影响率显示
+                        if (comparison.differences.entryPriceDiff === undefined) return '--';
+                        
+                        const position = comparison.position;
+                        let tradingQuantity = 0;
+                        
+                        if (position.tradingQuantity !== undefined) {
+                          tradingQuantity = Math.abs(position.tradingQuantity);
+                        } else {
+                          const relevantLog = comparison.relevantLog;
+                          tradingQuantity = relevantLog?.quantity || 0;
+                          
+                          if (tradingQuantity === 0) {
+                            const tradingType = position.periodTradingType;
+                            const quantityChange = position.quantityChange;
+                            
+                            if (tradingType === 'buy' || tradingType === 'sell' || quantityChange?.type === 'new') {
+                              tradingQuantity = position.quantity;
+                            } else if (quantityChange?.type === 'increase' && quantityChange.previousQuantity) {
+                              tradingQuantity = position.quantity - quantityChange.previousQuantity;
+                            }
+                          }
+                        }
+                        
+                        let realDiffAmount = comparison.differences.entryPriceDiff * Math.abs(tradingQuantity);
+                        if (position.side === 'SHORT') {
+                          realDiffAmount = -realDiffAmount;
+                        }
+                        
+                        return calculateImpactRate(realDiffAmount);
+                      })()}
+                    </TableCell>
                     <TableCell className="text-right font-mono text-sm">
                       {formatPrice(comparison.backtest.exitPrice)}
                     </TableCell>
@@ -1063,28 +1113,122 @@ export function PriceComparisonTable({
                     <TableCell className={`text-right font-mono text-sm ${getDiffAmountColor(comparison.differences.exitPriceDiff, comparison.position, false)}`}>
                       {formatPriceDiffAmount(comparison.differences.exitPriceDiff, comparison.differences.exitPriceDiffPercent, comparison.position, false, comparison.relevantLog)}
                     </TableCell>
+                    <TableCell className={`text-right font-mono text-xs ${getImpactRateColor((() => {
+                      // 计算平仓差异金额用于影响率显示
+                      if (comparison.differences.exitPriceDiff === undefined) return undefined;
+                      
+                      const position = comparison.position;
+                      let tradingQuantity = 0;
+                      
+                      if (position.tradingQuantity !== undefined) {
+                        tradingQuantity = Math.abs(position.tradingQuantity);
+                      } else {
+                        const relevantLog = comparison.relevantLog;
+                        tradingQuantity = relevantLog?.quantity || 0;
+                        
+                        if (tradingQuantity === 0) {
+                          const quantityChange = position.quantityChange;
+                          
+                          if (quantityChange?.previousQuantity && (quantityChange?.type === 'sold' || quantityChange?.type === 'decrease')) {
+                            tradingQuantity = quantityChange.previousQuantity - position.quantity;
+                          } else if (quantityChange?.type === 'sold') {
+                            tradingQuantity = position.quantity;
+                          }
+                        }
+                      }
+                      
+                      let realDiffAmount = comparison.differences.exitPriceDiff * Math.abs(tradingQuantity);
+                      // 平仓逻辑：对于做多，调整显示逻辑
+                      if (position.side === 'LONG') {
+                        realDiffAmount = -realDiffAmount;
+                      }
+                      
+                      return realDiffAmount;
+                    })())}`}>
+                      {(() => {
+                        // 计算平仓差异金额用于影响率显示
+                        if (comparison.differences.exitPriceDiff === undefined) return '--';
+                        
+                        const position = comparison.position;
+                        let tradingQuantity = 0;
+                        
+                        if (position.tradingQuantity !== undefined) {
+                          tradingQuantity = Math.abs(position.tradingQuantity);
+                        } else {
+                          const relevantLog = comparison.relevantLog;
+                          tradingQuantity = relevantLog?.quantity || 0;
+                          
+                          if (tradingQuantity === 0) {
+                            const quantityChange = position.quantityChange;
+                            
+                            if (quantityChange?.previousQuantity && (quantityChange?.type === 'sold' || quantityChange?.type === 'decrease')) {
+                              tradingQuantity = quantityChange.previousQuantity - position.quantity;
+                            } else if (quantityChange?.type === 'sold') {
+                              tradingQuantity = position.quantity;
+                            }
+                          }
+                        }
+                        
+                        let realDiffAmount = comparison.differences.exitPriceDiff * Math.abs(tradingQuantity);
+                        // 平仓逻辑：对于做多，调整显示逻辑
+                        if (position.side === 'LONG') {
+                          realDiffAmount = -realDiffAmount;
+                        }
+                        
+                        return calculateImpactRate(realDiffAmount);
+                      })()}
+                    </TableCell>
                   </TableRow>
                 ))}
                 
                 {/* 汇总行 */}
                 {priceComparisons.length > 0 && (() => {
                   const { totalEntryDiffAmount, totalExitDiffAmount } = calculateSummaryAmounts();
+                  const totalDiffAmount = totalEntryDiffAmount + totalExitDiffAmount;
+                  const entryImpactPercent = (totalEntryDiffAmount / INITIAL_CAPITAL) * 100;
+                  const exitImpactPercent = (totalExitDiffAmount / INITIAL_CAPITAL) * 100;
+                  const totalImpactPercent = (totalDiffAmount / INITIAL_CAPITAL) * 100;
+                  
                   return (
-                    <TableRow className="border-t-2 border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/10">
-                      <TableCell className="font-bold text-green-800 dark:text-green-200">汇总</TableCell>
-                      <TableCell></TableCell>
-                      <TableCell></TableCell>
-                      <TableCell></TableCell>
-                      <TableCell></TableCell>
-                      <TableCell className={`text-right font-mono text-sm font-bold ${getSummaryAmountColor(totalEntryDiffAmount)}`}>
-                        {formatSummaryAmount(totalEntryDiffAmount)}
-                      </TableCell>
-                      <TableCell></TableCell>
-                      <TableCell></TableCell>
-                      <TableCell className={`text-right font-mono text-sm font-bold ${getSummaryAmountColor(totalExitDiffAmount)}`}>
-                        {formatSummaryAmount(totalExitDiffAmount)}
-                      </TableCell>
-                    </TableRow>
+                    <>
+                      <TableRow className="border-t-2 border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/10">
+                        <TableCell className="font-bold text-green-800 dark:text-green-200">汇总</TableCell>
+                        <TableCell></TableCell>
+                        <TableCell></TableCell>
+                        <TableCell></TableCell>
+                        <TableCell></TableCell>
+                        <TableCell className={`text-right font-mono text-sm font-bold ${getSummaryAmountColor(totalEntryDiffAmount)}`}>
+                          {formatSummaryAmount(totalEntryDiffAmount)}
+                        </TableCell>
+                        <TableCell className={`text-right font-mono text-xs font-bold ${getSummaryAmountColor(totalEntryDiffAmount)}`}>
+                          {entryImpactPercent >= 0 ? '+' : ''}{entryImpactPercent.toFixed(3)}%
+                        </TableCell>
+                        <TableCell></TableCell>
+                        <TableCell></TableCell>
+                        <TableCell className={`text-right font-mono text-sm font-bold ${getSummaryAmountColor(totalExitDiffAmount)}`}>
+                          {formatSummaryAmount(totalExitDiffAmount)}
+                        </TableCell>
+                        <TableCell className={`text-right font-mono text-xs font-bold ${getSummaryAmountColor(totalExitDiffAmount)}`}>
+                          {exitImpactPercent >= 0 ? '+' : ''}{exitImpactPercent.toFixed(3)}%
+                        </TableCell>
+                      </TableRow>
+                      {/* 收益率影响行 */}
+                      <TableRow className="bg-blue-50 dark:bg-blue-900/10 border-b border-blue-200 dark:border-blue-800">
+                        <TableCell className="font-medium text-blue-800 dark:text-blue-200">总体影响</TableCell>
+                        <TableCell></TableCell>
+                        <TableCell></TableCell>
+                        <TableCell></TableCell>
+                        <TableCell></TableCell>
+                        <TableCell colSpan={2} className={`text-center font-mono text-sm font-bold ${getSummaryAmountColor(totalDiffAmount)}`}>
+                          合计: {formatSummaryAmount(totalDiffAmount)} ({totalImpactPercent >= 0 ? '+' : ''}{totalImpactPercent.toFixed(3)}%)
+                        </TableCell>
+                        <TableCell></TableCell>
+                        <TableCell></TableCell>
+                        <TableCell colSpan={2} className="text-center text-xs text-blue-600 dark:text-blue-400">
+                          对收益率总影响
+                        </TableCell>
+                      </TableRow>
+                    </>
                   );
                 })()}
               </TableBody>
@@ -1201,18 +1345,85 @@ export function PriceComparisonTable({
               </div>
             )}
             {priceComparisons.length > 0 && (
-              <div className="mt-3 text-xs text-gray-600 dark:text-gray-400">
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-1">
-                    <div className="w-3 h-3 bg-green-100 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded"></div>
-                    <span>持仓中：显示开仓价格对比</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-3 h-3 bg-gray-100 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-800 rounded"></div>
-                    <span>已平仓：显示平仓价格对比</span>
+              <>
+                {/* 当期价差分析卡片 */}
+                {(() => {
+                  const { totalEntryDiffAmount, totalExitDiffAmount } = calculateSummaryAmounts();
+                  const totalDiffAmount = totalEntryDiffAmount + totalExitDiffAmount;
+                  const totalImpactPercent = (totalDiffAmount / INITIAL_CAPITAL) * 100;
+                  
+                  return (
+                    <div className="mt-6 pt-4 border-t-2 border-purple-300 dark:border-purple-700">
+                      <h4 className="text-sm font-medium text-purple-800 dark:text-purple-200 mb-3">
+                        当期价差分析
+                      </h4>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="bg-purple-50 dark:bg-purple-900/10 p-4 rounded-lg border border-purple-200 dark:border-purple-800">
+                          <div className="text-xs text-purple-600 dark:text-purple-400 mb-1">开仓价差影响</div>
+                          <div className={`text-lg font-mono font-bold ${getPnlColor(totalEntryDiffAmount)}`}>
+                            {formatPnlAmount(totalEntryDiffAmount)}
+                          </div>
+                          <div className={`text-xs ${getPnlColor(totalEntryDiffAmount)} mt-1`}>
+                            {((totalEntryDiffAmount / INITIAL_CAPITAL) * 100) >= 0 ? '+' : ''}
+                            {((totalEntryDiffAmount / INITIAL_CAPITAL) * 100).toFixed(3)}%
+                          </div>
+                        </div>
+                        
+                        <div className="bg-orange-50 dark:bg-orange-900/10 p-4 rounded-lg border border-orange-200 dark:border-orange-800">
+                          <div className="text-xs text-orange-600 dark:text-orange-400 mb-1">平仓价差影响</div>
+                          <div className={`text-lg font-mono font-bold ${getPnlColor(totalExitDiffAmount)}`}>
+                            {formatPnlAmount(totalExitDiffAmount)}
+                          </div>
+                          <div className={`text-xs ${getPnlColor(totalExitDiffAmount)} mt-1`}>
+                            {((totalExitDiffAmount / INITIAL_CAPITAL) * 100) >= 0 ? '+' : ''}
+                            {((totalExitDiffAmount / INITIAL_CAPITAL) * 100).toFixed(3)}%
+                          </div>
+                        </div>
+                        
+                        <div className="bg-indigo-50 dark:bg-indigo-900/10 p-4 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                          <div className="text-xs text-indigo-600 dark:text-indigo-400 mb-1">总价差影响</div>
+                          <div className={`text-lg font-mono font-bold ${getPnlColor(totalDiffAmount)}`}>
+                            {formatPnlAmount(totalDiffAmount)}
+                          </div>
+                          <div className={`text-xs ${getPnlColor(totalDiffAmount)} mt-1`}>
+                            {totalImpactPercent >= 0 ? '+' : ''}{totalImpactPercent.toFixed(3)}%
+                          </div>
+                        </div>
+                        
+                        <div className="bg-gray-50 dark:bg-gray-900/10 p-4 rounded-lg border border-gray-200 dark:border-gray-800">
+                          <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">价差期望影响</div>
+                          <div className="text-lg font-mono font-bold text-gray-900 dark:text-gray-100">
+                            基于 {priceComparisons.length} 笔交易
+                          </div>
+                          <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                            平均每笔: {Math.abs(totalDiffAmount / priceComparisons.length).toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-3 text-xs text-purple-600 dark:text-purple-400">
+                        <p>当期分析说明：显示本期所有交易的价差对收益率的累计影响</p>
+                        <p className="mt-1">• 正值表示实盘交易相比回测更有利，负值表示实盘交易不如回测</p>
+                        <p className="mt-1">• 影响百分比 = 价差金额 ÷ 初始资金($5,000) × 100%</p>
+                      </div>
+                    </div>
+                  );
+                })()}
+                
+                <div className="mt-3 text-xs text-gray-600 dark:text-gray-400">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 bg-green-100 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded"></div>
+                      <span>持仓中：显示开仓价格对比</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 bg-gray-100 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-800 rounded"></div>
+                      <span>已平仓：显示平仓价格对比</span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </>
             )}
           </div>
         </CardContent>
