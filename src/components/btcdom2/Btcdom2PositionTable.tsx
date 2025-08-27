@@ -103,6 +103,96 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
     };
   };
 
+  // 计算和格式化交易数量
+  const calculateTradingQuantity = (position: any) => {
+    // 优先使用预计算的 tradingQuantity 字段
+    if (position.tradingQuantity !== undefined) {
+      const quantity = position.tradingQuantity;
+      
+      if (quantity === 0) {
+        return { quantity: 0, display: '--', color: 'text-gray-400 dark:text-gray-500' };
+      }
+      
+      // 根据持仓方向和交易数量确定显示
+      let displayQuantity = quantity;
+      // 对于做空，如果 tradingQuantity 为正数（买入/平仓），显示为正数绿色
+      // 如果为负数（卖出/开仓），显示为负数红色
+      
+      const sign = displayQuantity > 0 ? '+' : '';
+      const color = displayQuantity > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
+      
+      const display = `${sign}${displayQuantity.toLocaleString(undefined, {
+        minimumFractionDigits: 4,
+        maximumFractionDigits: 4
+      })}`;
+      
+      return { quantity: displayQuantity, display, color };
+    }
+    
+    // 如果没有 tradingQuantity，回退到原来的计算逻辑
+    if (!position.quantityChange && !position.isNewPosition && !position.isSoldOut) {
+      return { quantity: 0, display: '--', color: 'text-gray-400 dark:text-gray-500' };
+    }
+
+    let tradingQuantity = 0;
+    let isPositive = false;
+    
+    if (position.quantityChange) {
+      switch (position.quantityChange.type) {
+        case 'new':
+          tradingQuantity = position.quantity;
+          isPositive = position.side === 'LONG';
+          break;
+        case 'increase':
+          if (position.quantityChange.previousQuantity !== undefined) {
+            tradingQuantity = position.quantity - position.quantityChange.previousQuantity;
+          } else {
+            tradingQuantity = position.quantity;
+          }
+          isPositive = position.side === 'LONG';
+          break;
+        case 'decrease':
+          if (position.quantityChange.previousQuantity !== undefined) {
+            tradingQuantity = position.quantityChange.previousQuantity - position.quantity;
+          } else {
+            tradingQuantity = position.quantity;
+          }
+          isPositive = position.side === 'SHORT';
+          break;
+        case 'sold':
+          tradingQuantity = position.quantity;
+          isPositive = position.side === 'SHORT';
+          break;
+        case 'same':
+          tradingQuantity = 0;
+          break;
+        default:
+          tradingQuantity = 0;
+      }
+    } else if (position.isNewPosition) {
+      tradingQuantity = position.quantity;
+      isPositive = position.side === 'LONG';
+    } else if (position.isSoldOut) {
+      tradingQuantity = position.quantity;
+      isPositive = position.side === 'SHORT';
+    }
+
+    if (tradingQuantity === 0) {
+      return { quantity: 0, display: '--', color: 'text-gray-400 dark:text-gray-500' };
+    }
+
+    const finalQuantity = isPositive ? tradingQuantity : -tradingQuantity;
+    const sign = finalQuantity > 0 ? '+' : '';
+    const color = finalQuantity > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
+    
+    const display = `${sign}${finalQuantity.toLocaleString(undefined, {
+      minimumFractionDigits: 4,
+      maximumFractionDigits: 4
+    })}`;
+
+    return { quantity: finalQuantity, display, color };
+  };
+
   // 计算到当前期数的BTC累计盈亏
   const calculateBtcCumulativePnl = (): { amount: number; rate: number } => {
     if (!backtestResult || !periodNumber) {
@@ -365,6 +455,7 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                 <TableHead className="w-20">方向</TableHead>
                 <TableHead className="text-right">金额</TableHead>
                 <TableHead className="text-right">数量</TableHead>
+                <TableHead className="text-right">交易数量</TableHead>
                 <TableHead className="text-right">手续费</TableHead>
                 <TableHead className="text-right">资金费</TableHead>
                 <TableHead className="text-right">24H涨跌</TableHead>
@@ -481,6 +572,16 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                         </div>
                       )}
                     </div>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {(() => {
+                      const tradingQuantityInfo = calculateTradingQuantity(position);
+                      return (
+                        <span className={`font-medium ${tradingQuantityInfo.color}`}>
+                          {tradingQuantityInfo.display}
+                        </span>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell className={`text-right font-medium ${getPnlColor(position.tradingFee || 0)}`}>
                     {formatCurrency(position.tradingFee || 0)}

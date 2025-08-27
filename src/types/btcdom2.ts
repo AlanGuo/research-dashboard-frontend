@@ -124,6 +124,7 @@ export interface PositionInfo {
   currentPrice: number;       // 当前价格
   periodTradingPrice?: number; // 当期交易价格（用于与实盘对比）
   periodTradingType?: 'buy' | 'sell' | 'hold'; // 当期交易类型
+  tradingQuantity?: number;    // 本期实际交易数量（正数表示买入，负数表示卖出，0表示无交易）
   pnl: number;               // 盈亏
   pnlPercent: number;        // 盈亏百分比
   tradingFee: number;        // 当期交易手续费
@@ -442,6 +443,7 @@ export interface PriceComparison {
   symbol: string;
   status: 'holding' | 'closed'; // holding: 持仓中, closed: 已平仓
   position: PositionInfo; // 保存position引用用于判断做空/做多逻辑
+  relevantLog?: TradingLogEntry; // 对应的实盘交易日志
   backtest: {
     entryPrice?: number;
     exitPrice?: number;
