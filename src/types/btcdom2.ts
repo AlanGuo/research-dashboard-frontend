@@ -488,6 +488,29 @@ export interface TotalPnlDifferenceSummary {
   };
 }
 
+// 当期盈亏差异汇总统计
+export interface CurrentPeriodPnlDifferenceSummary {
+  btcLongPnlDiff: number;       // BTC多头盈亏差异
+  altShortPnlDiff: number;      // ALT做空盈亏差异
+  totalPnlDiff: number;         // 总盈亏差异
+  periodNumber: number;         // 期数
+  validCalculations: number;    // 有效计算次数
+  totalCalculations: number;    // 总计算次数
+  periodTimestamp: string;      // 期数时间戳
+  breakdown: {                  // 详细分解
+    btcLong: {
+      entryPnlDiff: number;     // BTC开仓差异
+      exitPnlDiff: number;      // BTC平仓差异
+      totalTransactions: number; // 交易次数
+    };
+    altShort: {
+      entryPnlDiff: number;     // ALT开仓差异
+      exitPnlDiff: number;      // ALT平仓差异
+      totalTransactions: number; // 交易次数
+    };
+  };
+}
+
 // 价格对比汇总数据
 export interface PriceComparisonSummary {
   marketDataTimestamp: string;

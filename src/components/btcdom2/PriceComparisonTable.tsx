@@ -29,6 +29,11 @@ interface PriceComparisonTableProps {
   backtestResult?: BTCDOM2BacktestResult; // 完整回测结果，用于全期数盈亏汇总
 }
 
+// 标准化symbol名称 (去掉USDT后缀)
+const normalizeSymbol = (symbol: string) => {
+  return symbol.replace('USDT', '').toUpperCase();
+};
+
 export function PriceComparisonTable({ 
   marketDataTimestamp, 
   positions,
@@ -188,11 +193,6 @@ export function PriceComparisonTable({
     }
 
     const comparisons: PriceComparison[] = [];
-
-    // 标准化symbol名称 (去掉USDT后缀)
-    const normalizeSymbol = (symbol: string) => {
-      return symbol.replace('USDT', '').toUpperCase();
-    };
 
     positions.forEach(position => {
       const positionSymbol = normalizeSymbol(position.symbol);
@@ -373,7 +373,7 @@ export function PriceComparisonTable({
     };
 
     // 遍历所有快照计算盈亏差异
-    snapshots.forEach(snapshot => {
+    snapshots.forEach((snapshot, snapshotIndex) => {
       const allPositions = [
         ...(snapshot.btcPosition ? [snapshot.btcPosition] : []),
         ...snapshot.shortPositions,
@@ -383,32 +383,67 @@ export function PriceComparisonTable({
       allPositions.forEach(position => {
         summary.totalCalculations++;
         
+        // 防止重复计算：soldPositions中的BTC可能已经在前面的快照中计算过
+        // 只有当这是该持仓的最终处理快照时才计算
         const positionSymbol = normalizeSymbol(position.symbol);
+        const isBtcPosition = positionSymbol === 'BTC';
+        
+        // 对于soldPositions，检查是否是重复计算
+        if (snapshot.soldPositions && snapshot.soldPositions.includes(position)) {
+          // 这是一个已卖出的持仓，检查它是否在之前的快照中已经作为已卖出持仓计算过
+          let shouldSkip = false;
+          
+          // 检查前面的快照是否已经包含这个已卖出的持仓
+          for (let i = 0; i < snapshotIndex; i++) {
+            const prevSnapshot = snapshots[i];
+            
+            // 只检查前面快照的soldPositions中是否有相同symbol的已卖出持仓
+            if (prevSnapshot.soldPositions) {
+              const prevSoldPosition = prevSnapshot.soldPositions.find(prevPos => 
+                normalizeSymbol(prevPos.symbol) === positionSymbol
+              );
+              
+              if (prevSoldPosition) {
+                shouldSkip = true;
+                break;
+              }
+            }
+          }
+          
+          if (shouldSkip) {
+            return; // 跳过重复计算
+          }
+        }
         
         // 查找对应的交易日志
         const symbolLogs = tradingLogIndex.get(positionSymbol);
         if (!symbolLogs) return;
 
-        // 查找最接近时间戳的交易记录（允许一定误差）
-        const relevantLogs: TradingLogEntry[] = [];
-        const targetTime = new Date(snapshot.timestamp).getTime();
-        
-        for (const [logTimestamp, logs] of symbolLogs.entries()) {
-          const logTime = new Date(logTimestamp).getTime();
-          const timeDiff = Math.abs(logTime - targetTime);
-          
-          // 允许8小时内的时间差（考虑到回测的粒度）
-          if (timeDiff <= 8 * 60 * 60 * 1000) {
-            relevantLogs.push(...logs.filter(log => log.status === 'SUCCESS'));
-          }
+        // 获取该symbol的所有交易记录
+        const allLogsForSymbol: TradingLogEntry[] = [];
+        for (const logs of symbolLogs.values()) {
+          allLogsForSymbol.push(...logs.filter(log => log.status === 'SUCCESS'));
         }
 
-        if (relevantLogs.length === 0) return;
+        if (allLogsForSymbol.length === 0) return;
 
-        // 按时间排序取最近的交易记录
-        const sortedLogs = relevantLogs.sort((a, b) => 
+        // 按时间排序所有交易记录
+        const sortedLogs = allLogsForSymbol.sort((a, b) => 
           new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
         );
+
+        // 根据期数和交易类型找到对应的交易记录
+        let relevantLog = sortedLogs[0]; // 默认使用第一条记录
+        
+        // 如果有periodTradingPrice，尝试匹配最接近的价格
+        if (position.periodTradingPrice) {
+          const targetPrice = position.periodTradingPrice;
+          relevantLog = sortedLogs.reduce((closest, current) => {
+            const closestDiff = Math.abs(closest.price - targetPrice);
+            const currentDiff = Math.abs(current.price - targetPrice);
+            return currentDiff < closestDiff ? current : closest;
+          });
+        }
 
         // 判断持仓状态和交易类型
         const isClosed = position.isSoldOut === true;
@@ -420,36 +455,58 @@ export function PriceComparisonTable({
 
         let pnlDiff = 0;
         let isValidCalculation = false;
-        const isBtcPosition = normalizeSymbol(position.symbol) === 'BTC';
+
+        // 计算交易数量（与当期汇总逻辑一致）
+        let tradingQuantity = 0;
+        if (isClosingTrade) {
+          // 平仓：计算平仓数量
+          if (position.quantityChange?.previousQuantity && (position.quantityChange?.type === 'sold' || position.quantityChange?.type === 'decrease')) {
+            tradingQuantity = position.quantityChange.previousQuantity - position.quantity;
+          } else if (position.quantityChange?.type === 'sold') {
+            tradingQuantity = position.quantity;
+          } else {
+            tradingQuantity = position.quantity; // 兜底逻辑
+          }
+        } else {
+          // 开仓：计算开仓数量
+          if (tradingType === 'buy' || tradingType === 'sell' || position.quantityChange?.type === 'new') {
+            tradingQuantity = position.quantity;
+          } else if (position.quantityChange?.type === 'increase' && position.quantityChange.previousQuantity) {
+            tradingQuantity = position.quantity - position.quantityChange.previousQuantity;
+          } else {
+            tradingQuantity = position.quantity; // 兜底逻辑
+          }
+        }
 
         if (isClosingTrade) {
           // 平仓操作
-          const liveExitPrice = sortedLogs[0]?.price;
+          const liveExitPrice = relevantLog?.price;
           const backtestExitPrice = position.periodTradingPrice || position.currentPrice;
 
           if (liveExitPrice !== undefined && backtestExitPrice !== undefined) {
-            if (position.side === 'LONG') {
-              // 做多平仓：实盘价格高更有利
-              pnlDiff = (liveExitPrice - backtestExitPrice) * position.quantity;
-            } else {
-              // 做空平仓：实盘价格低更有利
-              pnlDiff = (backtestExitPrice - liveExitPrice) * position.quantity;
-            }
+            // 计算价格差异
+            const priceDiff = backtestExitPrice - liveExitPrice;
+            // 计算金额差异（使用实际交易数量）
+            const realDiffAmount = priceDiff * Math.abs(tradingQuantity);
+            // 平仓：对于做空保持原样，与当期汇总逻辑一致
+            pnlDiff = realDiffAmount;
             isValidCalculation = true;
           }
         } else {
           // 开仓操作
-          const liveEntryPrice = sortedLogs[0]?.price;
+          const liveEntryPrice = relevantLog?.price;
           const backtestEntryPrice = position.periodTradingPrice || position.entryPrice;
 
           if (liveEntryPrice !== undefined && backtestEntryPrice !== undefined) {
-            if (position.side === 'LONG') {
-              // 做多开仓：实盘价格低更有利
-              pnlDiff = (liveEntryPrice - backtestEntryPrice) * position.quantity * -1;
-            } else {
-              // 做空开仓：实盘价格高更有利
-              pnlDiff = (liveEntryPrice - backtestEntryPrice) * position.quantity;
+            // 计算价格差异
+            const priceDiff = backtestEntryPrice - liveEntryPrice;
+            // 计算金额差异（使用实际交易数量）
+            let realDiffAmount = priceDiff * Math.abs(tradingQuantity);
+            // 开仓：对于做空调整符号，与当期汇总逻辑一致
+            if (position.side === 'SHORT') {
+              realDiffAmount = -realDiffAmount;
             }
+            pnlDiff = realDiffAmount;
             isValidCalculation = true;
           }
         }
@@ -457,6 +514,14 @@ export function PriceComparisonTable({
         if (isValidCalculation) {
           summary.validCalculations++;
           summary.totalPnlDiff += pnlDiff;
+
+          // 添加调试信息（仅在开发环境）
+          if (process.env.NODE_ENV === 'development' && isBtcPosition) {
+            const priceInfo = isClosingTrade 
+              ? `回测平仓价: ${position.periodTradingPrice || position.currentPrice}, 实盘平仓价: ${relevantLog?.price}` 
+              : `回测开仓价: ${position.periodTradingPrice || position.entryPrice}, 实盘开仓价: ${relevantLog?.price}`;
+            console.log(`[全期数BTC调试] 期数${snapshotIndex + 1}: ${position.symbol}, 交易类型: ${isClosingTrade ? '平仓' : '开仓'}, 持仓方向: ${position.side}, 数量: ${tradingQuantity}, ${priceInfo}, 盈亏差异: $${pnlDiff.toFixed(2)}, 是否已卖出: ${position.isSoldOut}, 交易类型: ${position.periodTradingType}`);
+          }
 
           if (isBtcPosition) {
             summary.btcLongPnlDiff += pnlDiff;
@@ -481,13 +546,19 @@ export function PriceComparisonTable({
       });
     });
 
+    // 添加全期数汇总调试信息
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[全期数BTC汇总] 总差异: $${summary.btcLongPnlDiff.toFixed(2)}, 开仓: $${summary.breakdown.btcLong.entryPnlDiff.toFixed(2)}, 平仓: $${summary.breakdown.btcLong.exitPnlDiff.toFixed(2)}, 交易次数: ${summary.breakdown.btcLong.totalTransactions}`);
+      console.log(`[全期数总汇总] BTC交易差异: $${summary.btcLongPnlDiff.toFixed(2)}, ALT做空差异: $${summary.altShortPnlDiff.toFixed(2)}, 总盈亏差异: $${summary.totalPnlDiff.toFixed(2)}`);
+    }
+
     setTotalPnlSummary(summary);
   }, [backtestResult, totalTradingLogs]);
 
   // 格式化价格
   const formatPrice = (price: number | undefined) => {
     if (price === undefined || price === null) return '--';
-    return `$${price.toFixed(6)}`;
+    return `$${price}`;
   };
 
   // 格式化盈亏金额
@@ -509,11 +580,33 @@ export function PriceComparisonTable({
     return null;
   }
 
-  // 格式化价差
-  const formatPriceDiff = (diff: number | undefined, percent: number | undefined, position: PositionInfo, isEntry: boolean) => {
+  // 格式化价差金额（价差 × 交易数量）
+  const formatPriceDiffAmount = (diff: number | undefined, percent: number | undefined, position: PositionInfo, isEntry: boolean) => {
     if (diff === undefined || percent === undefined) return '--';
     
-    let displayDiff = diff;
+    // 计算交易数量
+    let tradingQuantity = 0;
+    const tradingType = position.periodTradingType;
+    const quantityChange = position.quantityChange;
+    
+    if (isEntry) {
+      // 开仓/加仓：使用当期交易的数量
+      if (tradingType === 'buy' || tradingType === 'sell' || quantityChange?.type === 'new') {
+        tradingQuantity = position.quantity;
+      } else if (quantityChange?.type === 'increase' && quantityChange.previousQuantity) {
+        tradingQuantity = position.quantity - quantityChange.previousQuantity;
+      }
+    } else {
+      // 平仓/减仓：使用平仓的数量
+      if (quantityChange?.previousQuantity && (quantityChange?.type === 'sold' || quantityChange?.type === 'decrease')) {
+        tradingQuantity = quantityChange.previousQuantity - position.quantity;
+      } else if (quantityChange?.type === 'sold') {
+        tradingQuantity = position.quantity;
+      }
+    }
+    
+    // 计算真实价差金额
+    let realDiffAmount = diff * Math.abs(tradingQuantity);
     let displayPercent = percent;
     
     // 对于做空，调整显示逻辑
@@ -521,34 +614,150 @@ export function PriceComparisonTable({
       // 对于做空，我们希望实盘价格有利的情况显示为正数
       if (isEntry) {
         // 开仓：实盘开仓价高有利，所以当diff < 0时，显示为正数
-        displayDiff = -diff;
+        realDiffAmount = -realDiffAmount;
         displayPercent = -percent;
       } else {
         // 平仓：实盘平仓价低有利，所以当diff > 0时，显示为正数（保持原样）
-        // displayDiff = diff; // 保持原样
+        // realDiffAmount = realDiffAmount; // 保持原样
       }
     }
     
-    const diffStr = displayDiff > 0 ? `+$${Math.abs(displayDiff).toFixed(6)}` : `-$${Math.abs(displayDiff).toFixed(6)}`;
+    const diffStr = realDiffAmount > 0 ? `+$${Math.abs(realDiffAmount).toFixed(2)}` : `-$${Math.abs(realDiffAmount).toFixed(2)}`;
     const percentStr = displayPercent > 0 ? `+${displayPercent.toFixed(3)}%` : `${displayPercent.toFixed(3)}%`;
     
-    return `${diffStr} (${percentStr})`;
+    return (
+      <div>
+        <div className="font-medium">{diffStr}</div>
+        <div className="text-xs opacity-75">({percentStr})</div>
+      </div>
+    );
   };
 
-  // 获取价差颜色 - 基于显示值判断颜色
-  const getDiffColor = (diff: number | undefined, position: PositionInfo, isEntry: boolean) => {
+  // 获取价差金额颜色 - 基于真实金额差异判断颜色
+  const getDiffAmountColor = (diff: number | undefined, position: PositionInfo, isEntry: boolean) => {
     if (diff === undefined || diff === null) return 'text-gray-400 dark:text-gray-500';
-    if (Math.abs(diff) < 0.000001) return 'text-gray-600 dark:text-gray-400'; // 基本相等
     
-    let displayDiff = diff;
+    // 计算交易数量
+    let tradingQuantity = 0;
+    const tradingType = position.periodTradingType;
+    const quantityChange = position.quantityChange;
     
-    // 对于做空，调整显示逻辑 - 与formatPriceDiff保持一致
-    if (position.side === 'SHORT' && isEntry) {
-      displayDiff = -diff;
+    if (isEntry) {
+      // 开仓/加仓：使用当期交易的数量
+      if (tradingType === 'buy' || tradingType === 'sell' || quantityChange?.type === 'new') {
+        tradingQuantity = position.quantity;
+      } else if (quantityChange?.type === 'increase' && quantityChange.previousQuantity) {
+        tradingQuantity = position.quantity - quantityChange.previousQuantity;
+      }
+    } else {
+      // 平仓/减仓：使用平仓的数量
+      if (quantityChange?.previousQuantity && (quantityChange?.type === 'sold' || quantityChange?.type === 'decrease')) {
+        tradingQuantity = quantityChange.previousQuantity - position.quantity;
+      } else if (quantityChange?.type === 'sold') {
+        tradingQuantity = position.quantity;
+      }
     }
     
-    // 根据调整后的显示值判断颜色：正数绿色，负数红色
-    return displayDiff > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
+    // 计算真实价差金额
+    let realDiffAmount = diff * Math.abs(tradingQuantity);
+    
+    // 对于做空，调整显示逻辑
+    if (position.side === 'SHORT' && isEntry) {
+      realDiffAmount = -realDiffAmount;
+    }
+    
+    if (Math.abs(realDiffAmount) < 0.01) return 'text-gray-600 dark:text-gray-400'; // 基本相等
+    
+    // 根据调整后的真实金额判断颜色：正数绿色，负数红色
+    return realDiffAmount > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
+  };
+
+  // 计算开仓和平仓金额差异汇总
+  const calculateSummaryAmounts = () => {
+    let totalEntryDiffAmount = 0;
+    let totalExitDiffAmount = 0;
+    
+    // 标准化symbol名称 (去掉USDT后缀)
+    const normalizeSymbol = (symbol: string) => {
+      return symbol.replace('USDT', '').toUpperCase();
+    };
+
+    priceComparisons.forEach(comparison => {
+      const position = comparison.position;
+      const tradingType = position.periodTradingType;
+      const quantityChange = position.quantityChange;
+
+      // 计算开仓金额差异
+      if (comparison.differences.entryPriceDiff !== undefined) {
+        let tradingQuantity = 0;
+        if (tradingType === 'buy' || tradingType === 'sell' || quantityChange?.type === 'new') {
+          tradingQuantity = position.quantity;
+        } else if (quantityChange?.type === 'increase' && quantityChange.previousQuantity) {
+          tradingQuantity = position.quantity - quantityChange.previousQuantity;
+        }
+
+        let realDiffAmount = comparison.differences.entryPriceDiff * Math.abs(tradingQuantity);
+        if (position.side === 'SHORT') {
+          realDiffAmount = -realDiffAmount;
+        }
+        
+        totalEntryDiffAmount += realDiffAmount;
+      }
+
+      // 计算平仓金额差异
+      if (comparison.differences.exitPriceDiff !== undefined) {
+        let tradingQuantity = 0;
+        if (quantityChange?.previousQuantity && (quantityChange?.type === 'sold' || quantityChange?.type === 'decrease')) {
+          tradingQuantity = quantityChange.previousQuantity - position.quantity;
+        } else if (quantityChange?.type === 'sold') {
+          tradingQuantity = position.quantity;
+        }
+
+        const realDiffAmount = comparison.differences.exitPriceDiff * Math.abs(tradingQuantity);
+        // 平仓逻辑：对于做空，保持原样
+        
+        totalExitDiffAmount += realDiffAmount;
+      }
+    });
+
+    // 添加当期汇总调试信息
+    if (process.env.NODE_ENV === 'development') {
+      const btcEntryDiff = priceComparisons.filter(c => normalizeSymbol(c.position.symbol) === 'BTC' && c.differences.entryPriceDiff !== undefined)
+        .reduce((sum, c) => {
+          const pos = c.position;
+          const qty = pos.periodTradingType === 'buy' || pos.periodTradingType === 'sell' || pos.quantityChange?.type === 'new' ? pos.quantity : 
+                      pos.quantityChange?.type === 'increase' && pos.quantityChange.previousQuantity ? pos.quantity - pos.quantityChange.previousQuantity : 0;
+          let amt = c.differences.entryPriceDiff! * Math.abs(qty);
+          if (pos.side === 'SHORT') amt = -amt;
+          return sum + amt;
+        }, 0);
+      
+      const btcExitDiff = priceComparisons.filter(c => normalizeSymbol(c.position.symbol) === 'BTC' && c.differences.exitPriceDiff !== undefined)
+        .reduce((sum, c) => {
+          const pos = c.position;
+          const qty = pos.quantityChange?.previousQuantity && (pos.quantityChange?.type === 'sold' || pos.quantityChange?.type === 'decrease') ? 
+                      pos.quantityChange.previousQuantity - pos.quantity : pos.quantityChange?.type === 'sold' ? pos.quantity : 0;
+          return sum + (c.differences.exitPriceDiff! * Math.abs(qty));
+        }, 0);
+        
+      console.log(`[当期BTC汇总] 开仓差异: $${btcEntryDiff.toFixed(2)}, 平仓差异: $${btcExitDiff.toFixed(2)}, 总计: $${(btcEntryDiff + btcExitDiff).toFixed(2)}`);
+      console.log(`[当期总汇总] 总开仓差异: $${totalEntryDiffAmount.toFixed(2)}, 总平仓差异: $${totalExitDiffAmount.toFixed(2)}, 总计: $${(totalEntryDiffAmount + totalExitDiffAmount).toFixed(2)}`);
+    }
+
+    return { totalEntryDiffAmount, totalExitDiffAmount };
+  };
+
+  // 格式化汇总金额
+  const formatSummaryAmount = (amount: number) => {
+    if (Math.abs(amount) < 0.01) return '$0.00';
+    const sign = amount > 0 ? '+' : '';
+    return `${sign}$${amount.toFixed(2)}`;
+  };
+
+  // 获取汇总金额颜色
+  const getSummaryAmountColor = (amount: number) => {
+    if (Math.abs(amount) < 0.01) return 'text-gray-600 dark:text-gray-400';
+    return amount > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
   };
 
   if (loading) {
@@ -610,12 +819,13 @@ export function PriceComparisonTable({
                 <TableRow>
                   <TableHead className="w-20">标的</TableHead>
                   <TableHead className="w-16">状态</TableHead>
+                  <TableHead className="text-right">交易数量</TableHead>
                   <TableHead className="text-right">回测开仓价</TableHead>
                   <TableHead className="text-right">实盘开仓价</TableHead>
-                  <TableHead className="text-right">开仓价差</TableHead>
+                  <TableHead className="text-right">开仓金额差异</TableHead>
                   <TableHead className="text-right">回测平仓价</TableHead>
                   <TableHead className="text-right">实盘平仓价</TableHead>
-                  <TableHead className="text-right">平仓价差</TableHead>
+                  <TableHead className="text-right">平仓金额差异</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -635,13 +845,73 @@ export function PriceComparisonTable({
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right font-mono text-sm">
+                      {(() => {
+                        const position = comparison.position;
+                        const tradingType = position.periodTradingType;
+                        const isShort = position.side === 'SHORT';
+                        
+                        // 查找对应的交易日志获取实际交易数量
+                        const positionSymbol = normalizeSymbol(position.symbol);
+                        const relevantLogs = tradingLogs.filter(log => {
+                          const logSymbol = normalizeSymbol(log.symbol);
+                          return logSymbol === positionSymbol && log.status === 'SUCCESS';
+                        });
+                        
+                        if (relevantLogs.length === 0) {
+                          return <span className="text-gray-400 dark:text-gray-500">--</span>;
+                        }
+                        
+                        // 使用交易日志中的quantity
+                        const tradingQuantity = relevantLogs[0]?.quantity || position.quantity;
+                        
+                        // 根据交易类型和持仓方向确定符号和颜色
+                        let sign = '';
+                        let colorClass = 'text-gray-600 dark:text-gray-400';
+                        let operation = '';
+                        
+                        if (isShort) {
+                          // 做空交易：开仓用负号（红色），平仓用正号（绿色）
+                          if (tradingType === 'sell') {
+                            sign = '-';
+                            colorClass = 'text-red-600 dark:text-red-400';
+                            operation = '做空开仓';
+                          } else if (tradingType === 'buy') {
+                            sign = '+';
+                            colorClass = 'text-green-600 dark:text-green-400';
+                            operation = '做空平仓';
+                          } else {
+                            return <span className="text-gray-400 dark:text-gray-500">持仓不变</span>;
+                          }
+                        } else {
+                          // 做多交易：开仓用正号（绿色），平仓用负号（红色）
+                          if (tradingType === 'buy') {
+                            sign = '+';
+                            colorClass = 'text-green-600 dark:text-green-400';
+                            operation = '做多开仓';
+                          } else if (tradingType === 'sell') {
+                            sign = '-';
+                            colorClass = 'text-red-600 dark:text-red-400';
+                            operation = '做多平仓';
+                          } else {
+                            return <span className="text-gray-400 dark:text-gray-500">持仓不变</span>;
+                          }
+                        }
+                        
+                        return (
+                          <span className={colorClass} title={operation}>
+                            {sign}{tradingQuantity}
+                          </span>
+                        );
+                      })()}
+                    </TableCell>
+                    <TableCell className="text-right font-mono text-sm">
                       {formatPrice(comparison.backtest.entryPrice)}
                     </TableCell>
                     <TableCell className="text-right font-mono text-sm">
                       {formatPrice(comparison.live.entryPrice)}
                     </TableCell>
-                    <TableCell className={`text-right font-mono text-sm ${getDiffColor(comparison.differences.entryPriceDiff, comparison.position, true)}`}>
-                      {formatPriceDiff(comparison.differences.entryPriceDiff, comparison.differences.entryPriceDiffPercent, comparison.position, true)}
+                    <TableCell className={`text-right font-mono text-sm ${getDiffAmountColor(comparison.differences.entryPriceDiff, comparison.position, true)}`}>
+                      {formatPriceDiffAmount(comparison.differences.entryPriceDiff, comparison.differences.entryPriceDiffPercent, comparison.position, true)}
                     </TableCell>
                     <TableCell className="text-right font-mono text-sm">
                       {formatPrice(comparison.backtest.exitPrice)}
@@ -649,11 +919,33 @@ export function PriceComparisonTable({
                     <TableCell className="text-right font-mono text-sm">
                       {formatPrice(comparison.live.exitPrice)}
                     </TableCell>
-                    <TableCell className={`text-right font-mono text-sm ${getDiffColor(comparison.differences.exitPriceDiff, comparison.position, false)}`}>
-                      {formatPriceDiff(comparison.differences.exitPriceDiff, comparison.differences.exitPriceDiffPercent, comparison.position, false)}
+                    <TableCell className={`text-right font-mono text-sm ${getDiffAmountColor(comparison.differences.exitPriceDiff, comparison.position, false)}`}>
+                      {formatPriceDiffAmount(comparison.differences.exitPriceDiff, comparison.differences.exitPriceDiffPercent, comparison.position, false)}
                     </TableCell>
                   </TableRow>
                 ))}
+                
+                {/* 汇总行 */}
+                {priceComparisons.length > 0 && (() => {
+                  const { totalEntryDiffAmount, totalExitDiffAmount } = calculateSummaryAmounts();
+                  return (
+                    <TableRow className="border-t-2 border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/10">
+                      <TableCell className="font-bold text-green-800 dark:text-green-200">汇总</TableCell>
+                      <TableCell></TableCell>
+                      <TableCell></TableCell>
+                      <TableCell></TableCell>
+                      <TableCell></TableCell>
+                      <TableCell className={`text-right font-mono text-sm font-bold ${getSummaryAmountColor(totalEntryDiffAmount)}`}>
+                        {formatSummaryAmount(totalEntryDiffAmount)}
+                      </TableCell>
+                      <TableCell></TableCell>
+                      <TableCell></TableCell>
+                      <TableCell className={`text-right font-mono text-sm font-bold ${getSummaryAmountColor(totalExitDiffAmount)}`}>
+                        {formatSummaryAmount(totalExitDiffAmount)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })()}
               </TableBody>
             </Table>
           </div>
@@ -687,7 +979,6 @@ export function PriceComparisonTable({
               </div>
             </div>
 
-
             {/* 全期数盈亏差异汇总 */}
             {totalPnlSummary && totalPnlSummary.validCalculations > 0 && (
               <div className="mt-4 pt-4 border-t-2 border-blue-300 dark:border-blue-700">
@@ -703,7 +994,7 @@ export function PriceComparisonTable({
                 {/* 总体汇总卡片 */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                   <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                    <div className="text-xs text-blue-600 dark:text-blue-400 mb-1">BTC多头差异</div>
+                    <div className="text-xs text-blue-600 dark:text-blue-400 mb-1">BTC交易差异</div>
                     <div className={`text-lg font-mono font-bold ${getPnlColor(totalPnlSummary.btcLongPnlDiff)}`}>
                       {formatPnlAmount(totalPnlSummary.btcLongPnlDiff)}
                     </div>

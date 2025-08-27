@@ -68,7 +68,7 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
   // 格式化价格（不带正负号前缀）
   const formatPrice = (amount: number | null) => {
     const validAmount = amount ?? 0;
-    return `$${validAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `$${validAmount}`;
   };
 
   // 格式化金额（不带正负号前缀）
@@ -617,7 +617,7 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
       )}
 
       {/* 做空候选标的详情 */}
-      {snapshot.shortCandidates && snapshot.shortCandidates.length > 0 && (
+      {false && snapshot.shortCandidates && snapshot.shortCandidates.length > 0 && (
         <Card className="mt-4">
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2">
