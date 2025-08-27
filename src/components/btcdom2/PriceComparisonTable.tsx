@@ -29,11 +29,6 @@ interface PriceComparisonTableProps {
   backtestResult?: BTCDOM2BacktestResult; // 完整回测结果，用于全期数盈亏汇总
 }
 
-// 标准化symbol名称 (去掉USDT后缀)
-const normalizeSymbol = (symbol: string) => {
-  return symbol.replace('USDT', '').toUpperCase();
-};
-
 export function PriceComparisonTable({ 
   marketDataTimestamp, 
   positions,
@@ -193,6 +188,11 @@ export function PriceComparisonTable({
     }
 
     const comparisons: PriceComparison[] = [];
+
+    // 标准化symbol名称 (去掉USDT后缀)
+    const normalizeSymbol = (symbol: string) => {
+      return symbol.replace('USDT', '').toUpperCase();
+    };
 
     positions.forEach(position => {
       const positionSymbol = normalizeSymbol(position.symbol);
@@ -558,7 +558,7 @@ export function PriceComparisonTable({
   // 格式化价格
   const formatPrice = (price: number | undefined) => {
     if (price === undefined || price === null) return '--';
-    return `$${price}`;
+    return `$${price.toFixed(6)}`;
   };
 
   // 格式化盈亏金额
@@ -848,58 +848,78 @@ export function PriceComparisonTable({
                       {(() => {
                         const position = comparison.position;
                         const tradingType = position.periodTradingType;
+                        const quantityChange = position.quantityChange;
                         const isShort = position.side === 'SHORT';
                         
-                        // 查找对应的交易日志获取实际交易数量
-                        const positionSymbol = normalizeSymbol(position.symbol);
-                        const relevantLogs = tradingLogs.filter(log => {
-                          const logSymbol = normalizeSymbol(log.symbol);
-                          return logSymbol === positionSymbol && log.status === 'SUCCESS';
-                        });
-                        
-                        if (relevantLogs.length === 0) {
-                          return <span className="text-gray-400 dark:text-gray-500">--</span>;
-                        }
-                        
-                        // 使用交易日志中的quantity
-                        const tradingQuantity = relevantLogs[0]?.quantity || position.quantity;
-                        
-                        // 根据交易类型和持仓方向确定符号和颜色
+                        // 计算交易变化数量
+                        let changeQuantity = 0;
                         let sign = '';
                         let colorClass = 'text-gray-600 dark:text-gray-400';
                         let operation = '';
                         
+                        // 判断交易操作类型
                         if (isShort) {
-                          // 做空交易：开仓用负号（红色），平仓用正号（绿色）
-                          if (tradingType === 'sell') {
+                          // 做空交易
+                          if (tradingType === 'sell' || quantityChange?.type === 'new' || quantityChange?.type === 'increase') {
+                            // 做空开仓/加仓：卖出操作
+                            if (quantityChange?.type === 'increase' && quantityChange.previousQuantity) {
+                              changeQuantity = position.quantity - quantityChange.previousQuantity;
+                            } else {
+                              changeQuantity = position.quantity;
+                            }
                             sign = '-';
                             colorClass = 'text-red-600 dark:text-red-400';
-                            operation = '做空开仓';
-                          } else if (tradingType === 'buy') {
+                            operation = quantityChange?.type === 'increase' ? '做空加仓' : '做空开仓';
+                          } else if (tradingType === 'buy' || quantityChange?.type === 'sold' || quantityChange?.type === 'decrease') {
+                            // 做空平仓/减仓：买入操作
+                            if (quantityChange?.previousQuantity) {
+                              changeQuantity = quantityChange.previousQuantity - position.quantity;
+                            } else {
+                              changeQuantity = position.quantity;
+                            }
                             sign = '+';
                             colorClass = 'text-green-600 dark:text-green-400';
-                            operation = '做空平仓';
+                            operation = quantityChange?.type === 'decrease' ? '做空减仓' : '做空平仓';
                           } else {
+                            // 持仓不变或其他情况
                             return <span className="text-gray-400 dark:text-gray-500">持仓不变</span>;
                           }
                         } else {
-                          // 做多交易：开仓用正号（绿色），平仓用负号（红色）
-                          if (tradingType === 'buy') {
+                          // 做多交易
+                          if (tradingType === 'buy' || quantityChange?.type === 'new' || quantityChange?.type === 'increase') {
+                            // 做多开仓/加仓：买入操作
+                            if (quantityChange?.type === 'increase' && quantityChange.previousQuantity) {
+                              changeQuantity = position.quantity - quantityChange.previousQuantity;
+                            } else {
+                              changeQuantity = position.quantity;
+                            }
                             sign = '+';
                             colorClass = 'text-green-600 dark:text-green-400';
-                            operation = '做多开仓';
-                          } else if (tradingType === 'sell') {
+                            operation = quantityChange?.type === 'increase' ? '做多加仓' : '做多开仓';
+                          } else if (tradingType === 'sell' || quantityChange?.type === 'sold' || quantityChange?.type === 'decrease') {
+                            // 做多平仓/减仓：卖出操作
+                            if (quantityChange?.previousQuantity) {
+                              changeQuantity = quantityChange.previousQuantity - position.quantity;
+                            } else {
+                              changeQuantity = position.quantity;
+                            }
                             sign = '-';
                             colorClass = 'text-red-600 dark:text-red-400';
-                            operation = '做多平仓';
+                            operation = quantityChange?.type === 'decrease' ? '做多减仓' : '做多平仓';
                           } else {
+                            // 持仓不变或其他情况
                             return <span className="text-gray-400 dark:text-gray-500">持仓不变</span>;
                           }
                         }
                         
+                        const formattedQuantity = changeQuantity.toLocaleString(undefined, {
+                          minimumFractionDigits: 4,
+                          maximumFractionDigits: 4
+                        });
+                        
                         return (
                           <span className={colorClass} title={operation}>
-                            {sign}{tradingQuantity}
+                            {sign}{formattedQuantity}
                           </span>
                         );
                       })()}
