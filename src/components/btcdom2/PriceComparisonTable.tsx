@@ -105,6 +105,8 @@ export function PriceComparisonTable({
 
   // 获取交易日志数据
   useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return;
+    
     const fetchTradingLogs = async () => {
       if (!marketDataTimestamp) return;
 
@@ -139,6 +141,8 @@ export function PriceComparisonTable({
 
   // 获取全期数交易日志数据（用于全期盈亏汇总）
   useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return;
+    
     const fetchTotalTradingLogs = async () => {
       if (!backtestResult || !backtestResult.snapshots.length) {
         setTotalTradingLogs([]);
