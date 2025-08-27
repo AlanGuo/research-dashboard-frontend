@@ -51,27 +51,29 @@ export async function GET(request: NextRequest) {
 
     const data = await backendResponse.json();
     return NextResponse.json(data);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[Trading Logs API] API调用异常:', error);
     
     let errorMessage = '获取交易日志失败';
     let statusCode = 500;
     
-    if (error.name === 'TimeoutError' || error.message?.includes('timeout')) {
-      errorMessage = '后端API调用超时';
-      statusCode = 504;
-    } else if (error.code === 'ECONNREFUSED') {
-      errorMessage = '无法连接到后端服务';
-      statusCode = 503;
-    } else if (error.message) {
-      errorMessage = `API调用失败: ${error.message}`;
+    if (error instanceof Error) {
+      if (error.name === 'TimeoutError' || error.message?.includes('timeout')) {
+        errorMessage = '后端API调用超时';
+        statusCode = 504;
+      } else if ('code' in error && error.code === 'ECONNREFUSED') {
+        errorMessage = '无法连接到后端服务';
+        statusCode = 503;
+      } else {
+        errorMessage = `API调用失败: ${error.message}`;
+      }
     }
 
     return NextResponse.json(
       { 
         success: false, 
         error: errorMessage,
-        details: error.message || error.toString()
+        details: error instanceof Error ? error.message : String(error)
       },
       { status: statusCode }
     );
