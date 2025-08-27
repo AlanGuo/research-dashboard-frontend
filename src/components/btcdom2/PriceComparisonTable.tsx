@@ -807,32 +807,6 @@ export function PriceComparisonTable({
       }
     });
 
-    // 添加当期汇总调试信息
-    if (process.env.NODE_ENV === 'development') {
-      const btcEntryDiff = priceComparisons.filter(c => normalizeSymbol(c.position.symbol) === 'BTC' && c.differences.entryPriceDiff !== undefined)
-        .reduce((sum, c) => {
-          const pos = c.position;
-          const qty = pos.periodTradingType === 'buy' || pos.periodTradingType === 'sell' || pos.quantityChange?.type === 'new' ? pos.quantity : 
-                      pos.quantityChange?.type === 'increase' && pos.quantityChange.previousQuantity ? pos.quantity - pos.quantityChange.previousQuantity : 0;
-          let amt = c.differences.entryPriceDiff! * Math.abs(qty);
-          if (pos.side === 'SHORT') amt = -amt;
-          return sum + amt;
-        }, 0);
-      
-      const btcExitDiff = priceComparisons.filter(c => normalizeSymbol(c.position.symbol) === 'BTC' && c.differences.exitPriceDiff !== undefined)
-        .reduce((sum, c) => {
-          const pos = c.position;
-          const qty = pos.quantityChange?.previousQuantity && (pos.quantityChange?.type === 'sold' || pos.quantityChange?.type === 'decrease') ? 
-                      pos.quantityChange.previousQuantity - pos.quantity : pos.quantityChange?.type === 'sold' ? pos.quantity : 0;
-          let amt = c.differences.exitPriceDiff! * Math.abs(qty);
-          if (pos.side === 'LONG') amt = -amt;
-          return sum + amt;
-        }, 0);
-        
-      console.log(`[当期BTC汇总] 开仓差异: $${btcEntryDiff.toFixed(2)}, 平仓差异: $${btcExitDiff.toFixed(2)}, 总计: $${(btcEntryDiff + btcExitDiff).toFixed(2)}`);
-      console.log(`[当期总汇总] 总开仓差异: $${totalEntryDiffAmount.toFixed(2)}, 总平仓差异: $${totalExitDiffAmount.toFixed(2)}, 总计: $${(totalEntryDiffAmount + totalExitDiffAmount).toFixed(2)}`);
-    }
-
     return { totalEntryDiffAmount, totalExitDiffAmount };
   };
 
