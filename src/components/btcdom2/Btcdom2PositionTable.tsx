@@ -104,7 +104,7 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
   };
 
   // 计算和格式化交易数量
-  const calculateTradingQuantity = (position: any) => {
+  const calculateTradingQuantity = (position: PositionInfo) => {
     // 优先使用预计算的 tradingQuantity 字段
     if (position.tradingQuantity !== undefined) {
       const quantity = position.tradingQuantity;
@@ -114,7 +114,7 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
       }
       
       // 根据持仓方向和交易数量确定显示
-      let displayQuantity = quantity;
+      const displayQuantity = quantity;
       // 对于做空，如果 tradingQuantity 为正数（买入/平仓），显示为正数绿色
       // 如果为负数（卖出/开仓），显示为负数红色
       
