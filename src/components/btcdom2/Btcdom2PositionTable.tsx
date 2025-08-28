@@ -13,7 +13,8 @@ import {
 import {
   StrategySnapshot,
   BTCDOM2StrategyParams,
-  BTCDOM2BacktestResult
+  BTCDOM2BacktestResult,
+  PositionInfo
 } from '@/types/btcdom2';
 import {
   TrendingUp,
