@@ -21,22 +21,27 @@ import {
   TotalPnlDifferenceSummary,
   BTCDOM2BacktestResult
 } from '@/types/btcdom2';
+import { getConfigValue } from '@/config';
 
 interface PriceComparisonTableProps {
   marketDataTimestamp: string;
   positions: PositionInfo[];
   className?: string;
   backtestResult?: BTCDOM2BacktestResult; // 完整回测结果，用于全期数盈亏汇总
+  previousBalance?: number; // 上一期的资产总额，用于计算影响百分比
+  initialCapital?: number; // 初始资金，默认5000
 }
 
-// 初始资金常量
-const INITIAL_CAPITAL = 5000;
+// 从配置文件获取默认初始资金
+const DEFAULT_INITIAL_CAPITAL = getConfigValue('btcdom2.initialCapital', 5000);
 
 export function PriceComparisonTable({ 
   marketDataTimestamp, 
   positions,
   className = "",
-  backtestResult
+  backtestResult,
+  previousBalance,
+  initialCapital = DEFAULT_INITIAL_CAPITAL
 }: PriceComparisonTableProps) {
   const [tradingLogs, setTradingLogs] = useState<TradingLogEntry[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -734,11 +739,6 @@ export function PriceComparisonTable({
   const calculateSummaryAmounts = () => {
     let totalEntryDiffAmount = 0;
     let totalExitDiffAmount = 0;
-    
-    // 标准化symbol名称 (去掉USDT后缀)
-    const normalizeSymbol = (symbol: string) => {
-      return symbol.replace('USDT', '').toUpperCase();
-    };
 
     priceComparisons.forEach(comparison => {
       const position = comparison.position;
@@ -826,7 +826,9 @@ export function PriceComparisonTable({
   // 计算单个交易的影响率
   const calculateImpactRate = (diffAmount: number | undefined): string => {
     if (diffAmount === undefined || diffAmount === null) return '--';
-    const impactRate = (diffAmount / INITIAL_CAPITAL) * 100;
+    // 使用上一期资产总额，如果没有则回退到初始资金
+    const baseAmount = previousBalance || initialCapital;
+    const impactRate = (diffAmount / baseAmount) * 100;
     const sign = impactRate >= 0 ? '+' : '';
     return `${sign}${impactRate.toFixed(3)}%`;
   };
@@ -1159,9 +1161,10 @@ export function PriceComparisonTable({
                 {priceComparisons.length > 0 && (() => {
                   const { totalEntryDiffAmount, totalExitDiffAmount } = calculateSummaryAmounts();
                   const totalDiffAmount = totalEntryDiffAmount + totalExitDiffAmount;
-                  const entryImpactPercent = (totalEntryDiffAmount / INITIAL_CAPITAL) * 100;
-                  const exitImpactPercent = (totalExitDiffAmount / INITIAL_CAPITAL) * 100;
-                  const totalImpactPercent = (totalDiffAmount / INITIAL_CAPITAL) * 100;
+                  const baseAmount = previousBalance || initialCapital;
+                  const entryImpactPercent = (totalEntryDiffAmount / baseAmount) * 100;
+                  const exitImpactPercent = (totalExitDiffAmount / baseAmount) * 100;
+                  const totalImpactPercent = (totalDiffAmount / baseAmount) * 100;
                   
                   return (
                     <>
@@ -1237,7 +1240,91 @@ export function PriceComparisonTable({
                 <span className="ml-1 font-medium">{formatPeriodTime(marketDataTimestamp)}</span>
               </div>
             </div>
-
+            {priceComparisons.length > 0 && (
+              <>
+                {/* 当期价差分析卡片 */}
+                {(() => {
+                  const { totalEntryDiffAmount, totalExitDiffAmount } = calculateSummaryAmounts();
+                  const totalDiffAmount = totalEntryDiffAmount + totalExitDiffAmount;
+                  const baseAmount = previousBalance || initialCapital;
+                  const totalImpactPercent = (totalDiffAmount / baseAmount) * 100;
+                  
+                  return (
+                    <div className="mt-6 pt-4 border-t-2 border-purple-300 dark:border-purple-700">
+                      <h4 className="text-sm font-medium text-purple-800 dark:text-purple-200 mb-3">
+                        当期价差分析
+                      </h4>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="bg-purple-50 dark:bg-purple-900/10 p-4 rounded-lg border border-purple-200 dark:border-purple-800">
+                          <div className="text-xs text-purple-600 dark:text-purple-400 mb-1">开仓价差影响</div>
+                          <div className={`text-lg font-mono font-bold ${getPnlColor(totalEntryDiffAmount)}`}>
+                            {formatPnlAmount(totalEntryDiffAmount)}
+                          </div>
+                          <div className={`text-xs ${getPnlColor(totalEntryDiffAmount)} mt-1`}>
+                            {((totalEntryDiffAmount / baseAmount) * 100) >= 0 ? '+' : ''}
+                            {((totalEntryDiffAmount / baseAmount) * 100).toFixed(3)}%
+                          </div>
+                        </div>
+                        
+                        <div className="bg-orange-50 dark:bg-orange-900/10 p-4 rounded-lg border border-orange-200 dark:border-orange-800">
+                          <div className="text-xs text-orange-600 dark:text-orange-400 mb-1">平仓价差影响</div>
+                          <div className={`text-lg font-mono font-bold ${getPnlColor(totalExitDiffAmount)}`}>
+                            {formatPnlAmount(totalExitDiffAmount)}
+                          </div>
+                          <div className={`text-xs ${getPnlColor(totalExitDiffAmount)} mt-1`}>
+                            {((totalExitDiffAmount / baseAmount) * 100) >= 0 ? '+' : ''}
+                            {((totalExitDiffAmount / baseAmount) * 100).toFixed(3)}%
+                          </div>
+                        </div>
+                        
+                        <div className="bg-indigo-50 dark:bg-indigo-900/10 p-4 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                          <div className="text-xs text-indigo-600 dark:text-indigo-400 mb-1">总价差影响</div>
+                          <div className={`text-lg font-mono font-bold ${getPnlColor(totalDiffAmount)}`}>
+                            {formatPnlAmount(totalDiffAmount)}
+                          </div>
+                          <div className={`text-xs ${getPnlColor(totalDiffAmount)} mt-1`}>
+                            {totalImpactPercent >= 0 ? '+' : ''}{totalImpactPercent.toFixed(3)}%
+                          </div>
+                        </div>
+                        
+                        <div className="bg-gray-50 dark:bg-gray-900/10 p-4 rounded-lg border border-gray-200 dark:border-gray-800">
+                          <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">价差期望影响</div>
+                          <div className="text-lg font-mono font-bold text-gray-900 dark:text-gray-100">
+                            基于 {priceComparisons.length} 笔交易
+                          </div>
+                          <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                            平均每笔: {Math.abs(totalDiffAmount / priceComparisons.length).toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-3 text-xs text-purple-600 dark:text-purple-400">
+                        <p>当期分析说明：显示本期所有交易的价差对收益率的累计影响</p>
+                        <p className="mt-1">• 正值表示实盘交易相比回测更有利，负值表示实盘交易不如回测</p>
+                        <p className="mt-1">• 影响百分比 = 价差金额 ÷ {previousBalance ? `上期资产总额($${previousBalance.toLocaleString()})` : `初始资金($${initialCapital.toLocaleString()})`} × 100%</p>
+                        {previousBalance && (
+                          <p className="mt-1 text-green-600 dark:text-green-400">✓ 使用上期实际资产总额计算，更准确反映对当期收益率的影响</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+                
+                <div className="mt-3 text-xs text-gray-600 dark:text-gray-400">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 bg-green-100 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded"></div>
+                      <span>持仓中：显示开仓价格对比</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 bg-gray-100 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-800 rounded"></div>
+                      <span>已平仓：显示平仓价格对比</span>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
             {/* 全期数盈亏差异汇总 */}
             {totalPnlSummary && totalPnlSummary.validCalculations > 0 && (
               <div className="mt-4 pt-4 border-t-2 border-blue-300 dark:border-blue-700">
@@ -1315,89 +1402,10 @@ export function PriceComparisonTable({
 
                 <div className="mt-3 text-xs text-blue-600 dark:text-blue-400">
                   <p>全期汇总说明：统计整个回测期间所有交易的价格差异对总收益的影响</p>
+                  <p className="mt-1">• 全期汇总使用初始资金($${initialCapital.toLocaleString()})作为基准，反映价差对整体投资回报的影响</p>
+                  <p className="mt-1">• 与当期分析不同，全期汇总关注的是累积效应而非单期收益率影响</p>
                 </div>
               </div>
-            )}
-            {priceComparisons.length > 0 && (
-              <>
-                {/* 当期价差分析卡片 */}
-                {(() => {
-                  const { totalEntryDiffAmount, totalExitDiffAmount } = calculateSummaryAmounts();
-                  const totalDiffAmount = totalEntryDiffAmount + totalExitDiffAmount;
-                  const totalImpactPercent = (totalDiffAmount / INITIAL_CAPITAL) * 100;
-                  
-                  return (
-                    <div className="mt-6 pt-4 border-t-2 border-purple-300 dark:border-purple-700">
-                      <h4 className="text-sm font-medium text-purple-800 dark:text-purple-200 mb-3">
-                        当期价差分析
-                      </h4>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <div className="bg-purple-50 dark:bg-purple-900/10 p-4 rounded-lg border border-purple-200 dark:border-purple-800">
-                          <div className="text-xs text-purple-600 dark:text-purple-400 mb-1">开仓价差影响</div>
-                          <div className={`text-lg font-mono font-bold ${getPnlColor(totalEntryDiffAmount)}`}>
-                            {formatPnlAmount(totalEntryDiffAmount)}
-                          </div>
-                          <div className={`text-xs ${getPnlColor(totalEntryDiffAmount)} mt-1`}>
-                            {((totalEntryDiffAmount / INITIAL_CAPITAL) * 100) >= 0 ? '+' : ''}
-                            {((totalEntryDiffAmount / INITIAL_CAPITAL) * 100).toFixed(3)}%
-                          </div>
-                        </div>
-                        
-                        <div className="bg-orange-50 dark:bg-orange-900/10 p-4 rounded-lg border border-orange-200 dark:border-orange-800">
-                          <div className="text-xs text-orange-600 dark:text-orange-400 mb-1">平仓价差影响</div>
-                          <div className={`text-lg font-mono font-bold ${getPnlColor(totalExitDiffAmount)}`}>
-                            {formatPnlAmount(totalExitDiffAmount)}
-                          </div>
-                          <div className={`text-xs ${getPnlColor(totalExitDiffAmount)} mt-1`}>
-                            {((totalExitDiffAmount / INITIAL_CAPITAL) * 100) >= 0 ? '+' : ''}
-                            {((totalExitDiffAmount / INITIAL_CAPITAL) * 100).toFixed(3)}%
-                          </div>
-                        </div>
-                        
-                        <div className="bg-indigo-50 dark:bg-indigo-900/10 p-4 rounded-lg border border-indigo-200 dark:border-indigo-800">
-                          <div className="text-xs text-indigo-600 dark:text-indigo-400 mb-1">总价差影响</div>
-                          <div className={`text-lg font-mono font-bold ${getPnlColor(totalDiffAmount)}`}>
-                            {formatPnlAmount(totalDiffAmount)}
-                          </div>
-                          <div className={`text-xs ${getPnlColor(totalDiffAmount)} mt-1`}>
-                            {totalImpactPercent >= 0 ? '+' : ''}{totalImpactPercent.toFixed(3)}%
-                          </div>
-                        </div>
-                        
-                        <div className="bg-gray-50 dark:bg-gray-900/10 p-4 rounded-lg border border-gray-200 dark:border-gray-800">
-                          <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">价差期望影响</div>
-                          <div className="text-lg font-mono font-bold text-gray-900 dark:text-gray-100">
-                            基于 {priceComparisons.length} 笔交易
-                          </div>
-                          <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                            平均每笔: {Math.abs(totalDiffAmount / priceComparisons.length).toFixed(2)}
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="mt-3 text-xs text-purple-600 dark:text-purple-400">
-                        <p>当期分析说明：显示本期所有交易的价差对收益率的累计影响</p>
-                        <p className="mt-1">• 正值表示实盘交易相比回测更有利，负值表示实盘交易不如回测</p>
-                        <p className="mt-1">• 影响百分比 = 价差金额 ÷ 初始资金($5,000) × 100%</p>
-                      </div>
-                    </div>
-                  );
-                })()}
-                
-                <div className="mt-3 text-xs text-gray-600 dark:text-gray-400">
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-1">
-                      <div className="w-3 h-3 bg-green-100 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded"></div>
-                      <span>持仓中：显示开仓价格对比</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <div className="w-3 h-3 bg-gray-100 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-800 rounded"></div>
-                      <span>已平仓：显示平仓价格对比</span>
-                    </div>
-                  </div>
-                </div>
-              </>
             )}
           </div>
         </CardContent>

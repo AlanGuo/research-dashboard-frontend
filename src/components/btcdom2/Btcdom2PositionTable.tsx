@@ -835,6 +835,20 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
         marketDataTimestamp={snapshot.timestamp}
         positions={allPositions}
         backtestResult={backtestResult}
+        previousBalance={(() => {
+          // 计算上一期的资产总额
+          if (!backtestResult || !periodNumber || periodNumber <= 1) {
+            return undefined; // 第一期没有上一期，使用默认初始资金
+          }
+          
+          const previousIndex = periodNumber - 2; // 上一期的索引
+          if (previousIndex >= 0 && previousIndex < backtestResult.snapshots.length) {
+            return backtestResult.snapshots[previousIndex].totalValue;
+          }
+          
+          return undefined;
+        })()}
+        initialCapital={backtestResult?.params.initialCapital}
       />
     </div>
   );
