@@ -172,8 +172,7 @@ export interface StrategySnapshot {
   accumulatedFundingFee?: number;    // 累计总资金费
   
   // 现金余额详情（用于与实盘对比）
-  spot_usdt_balance: number;         // 现货USDT余额
-  futures_usdt_balance: number;      // 期货USDT余额
+  account_usdt_balance: number;      // 统一账户USDT余额
   
   // 策略状态
   isActive: boolean;                 // 策略是否持仓
@@ -617,8 +616,11 @@ export interface ShortPosition {
 export interface Positions {
   btc: BtcPosition;
   shorts: ShortPosition[];
-  spot_usdt_balance: number;
-  futures_usdt_balance: number;
+  // 新版统一账户余额
+  account_usdt_balance?: number;
+  // 旧版分离余额（向后兼容）
+  spot_usdt_balance?: number;
+  futures_usdt_balance?: number;
 }
 
 // 持仓历史记录
@@ -701,10 +703,8 @@ export interface EnhancedComprehensiveDifferenceSummary {
   totalHoldingAmountDiff: number;   // 总持仓金额差异
   totalCashBalanceDiff: number;     // 总现金余额差异
   totalPnlDiff: number;             // 总浮动盈亏差异
-  realSpotBalance: number;          // 实盘现货余额
-  realFuturesBalance: number;       // 实盘期货余额
-  backtestSpotBalance: number;      // 回测现货余额
-  backtestFuturesBalance: number;   // 回测期货余额
+  realCashBalance: number;          // 实盘统一账户余额
+  backtestCashBalance: number;      // 回测统一账户余额
   holdingAmountImpactPercent: number; // 持仓金额差异影响百分比
   cashBalanceImpactPercent: number; // 现金余额差异影响百分比
   

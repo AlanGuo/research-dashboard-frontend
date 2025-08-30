@@ -211,16 +211,18 @@ export function PriceComparisonTable({
     // 1. 先计算账户级别的现金余额差异（只计算一次）
     let backtestCashBalance = 0;
     let realCashBalance = 0;
-    let realSpotBalance = 0;
-    let realFuturesBalance = 0;
-    let backtestSpotBalance = 0;
-    let backtestFuturesBalance = 0;
     
-    // 获取实盘现金余额
+    // 获取实盘现金余额 - 使用统一账户余额
     if (positionHistory && positionHistory.positions) {
-      realSpotBalance = positionHistory.positions.spot_usdt_balance;
-      realFuturesBalance = positionHistory.positions.futures_usdt_balance;
-      realCashBalance = realSpotBalance + realFuturesBalance;
+      // 优先使用统一账户余额，如果不存在则使用旧的分离余额
+      if (positionHistory.positions.account_usdt_balance !== undefined) {
+        realCashBalance = positionHistory.positions.account_usdt_balance;
+      } else {
+        // 向后兼容：如果没有统一余额，使用分离的余额
+        const spotBalance = positionHistory.positions.spot_usdt_balance || 0;
+        const futuresBalance = positionHistory.positions.futures_usdt_balance || 0;
+        realCashBalance = spotBalance + futuresBalance;
+      }
     }
     
     // 获取回测现金余额 - 从回测结果中找到对应时间点的快照
@@ -230,9 +232,8 @@ export function PriceComparisonTable({
       );
       
       if (matchingSnapshot) {
-        backtestSpotBalance = matchingSnapshot.spot_usdt_balance;
-        backtestFuturesBalance = matchingSnapshot.futures_usdt_balance;
-        backtestCashBalance = backtestSpotBalance + backtestFuturesBalance;
+        // 使用统一账户余额，如果不存在则回退到原来的计算方式
+        backtestCashBalance = matchingSnapshot.account_usdt_balance;
       }
     }
     
@@ -305,10 +306,8 @@ export function PriceComparisonTable({
       totalHoldingAmountDiff: 0,
       totalCashBalanceDiff: accountLevelCashBalanceDiff, // 使用账户级别的现金余额差异
       totalPnlDiff: 0, // 总浮动盈亏差异
-      realSpotBalance: realSpotBalance, // 实盘现货余额
-      realFuturesBalance: realFuturesBalance, // 实盘期货余额
-      backtestSpotBalance: backtestSpotBalance, // 回测现货余额
-      backtestFuturesBalance: backtestFuturesBalance, // 回测期货余额
+      realCashBalance: realCashBalance, // 实盘统一账户余额
+      backtestCashBalance: backtestCashBalance, // 回测统一账户余额
       holdingAmountImpactPercent: 0,
       cashBalanceImpactPercent: 0,
       byPositionType: {
@@ -420,15 +419,7 @@ export function PriceComparisonTable({
 
 
 
-  // 计算单个交易的影响率
-  const calculateImpactRate = (diffAmount: number | undefined): string => {
-    if (diffAmount === undefined || diffAmount === null) return '--';
-    // 使用上一期资产总额，如果没有则回退到初始资金
-    const baseAmount = previousBalance || initialCapital;
-    const impactRate = (diffAmount / baseAmount) * 100;
-    const sign = impactRate >= 0 ? '+' : '';
-    return `${sign}${impactRate.toFixed(3)}%`;
-  };
+
 
 
   // 新的格式化函数
@@ -537,7 +528,7 @@ export function PriceComparisonTable({
               </div>
               
               <div className="overflow-x-auto">
-                <Table>总影响
+                <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-20">标的</TableHead>
@@ -650,12 +641,8 @@ export function PriceComparisonTable({
                           实盘余额 - 回测余额
                         </div>
                         <div className="text-xs text-gray-500 dark:text-gray-400 mt-2 space-y-1">
-                          <div className="font-medium">实盘余额: ${(enhancedSummary.realSpotBalance + enhancedSummary.realFuturesBalance).toFixed(2)}</div>
-                          <div className="ml-2">现货余额: ${enhancedSummary.realSpotBalance.toFixed(2)}</div>
-                          <div className="ml-2">期货余额: ${enhancedSummary.realFuturesBalance.toFixed(2)}</div>
-                          <div className="font-medium mt-2">回测余额: ${(enhancedSummary.backtestSpotBalance + enhancedSummary.backtestFuturesBalance).toFixed(2)}</div>
-                          <div className="ml-2">现货余额: ${enhancedSummary.backtestSpotBalance.toFixed(2)}</div>
-                          <div className="ml-2">期货余额: ${enhancedSummary.backtestFuturesBalance.toFixed(2)}</div>
+                          <div className="font-medium">实盘余额: ${enhancedSummary.realCashBalance.toFixed(2)}</div>
+                          <div className="font-medium mt-2">回测余额: ${enhancedSummary.backtestCashBalance.toFixed(2)}</div>
                         </div>
                       </CardContent>
                     </Card>

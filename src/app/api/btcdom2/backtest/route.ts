@@ -668,8 +668,7 @@ class BTCDOM2StrategyEngine {
     const soldPositions: PositionInfo[] = [];
     let btcPosition: PositionInfo | null = null;
     let shortPositions: PositionInfo[] = [];
-    let spot_usdt_balance = 0;
-    let futures_usdt_balance = 0;
+    let account_usdt_balance = 0; // 统一账户余额
     let totalValue = previousValue;
     let totalTradingFee = 0;
     let totalFundingFee = 0;
@@ -726,7 +725,7 @@ class BTCDOM2StrategyEngine {
         let newEntryPrice: number;
         let periodTradingType: 'buy' | 'sell' | 'hold';
         let btcTradingQuantity: number;
-        let btcQuantityChange: any;
+        let btcQuantityChange: { type: 'new' | 'increase' | 'decrease' | 'same' | 'sold'; previousQuantity?: number; changePercent?: number };
         
         if (previousSnapshot?.btcPosition) {
           const prevQuantity = previousSnapshot.btcPosition.quantity ?? 0;
@@ -767,7 +766,7 @@ class BTCDOM2StrategyEngine {
           newEntryPrice = btcPrice;
           periodTradingType = 'buy';
           btcTradingQuantity = validBtcQuantity;
-          btcQuantityChange = { type: 'new' };
+          btcQuantityChange = { type: 'new', previousQuantity: 0, changePercent: 0 };
         }
 
         btcPosition = {
@@ -1012,7 +1011,7 @@ class BTCDOM2StrategyEngine {
         let shortEntryPrice: number;
         let shortPeriodTradingType: 'buy' | 'sell' | 'hold';
         let shortTradingQuantity: number;
-        let shortQuantityChange: any;
+        let shortQuantityChange: { type: 'new' | 'increase' | 'decrease' | 'same' | 'sold'; previousQuantity?: number; changePercent?: number };
         
         if (previousShortPosition) {
           const prevQuantity = previousShortPosition.quantity ?? 0;
@@ -1053,7 +1052,7 @@ class BTCDOM2StrategyEngine {
           shortEntryPrice = price;
           shortPeriodTradingType = 'sell';
           shortTradingQuantity = quantity;
-          shortQuantityChange = { type: 'new' };
+          shortQuantityChange = { type: 'new', previousQuantity: 0, changePercent: 0 };
         }
 
           return {
@@ -1095,10 +1094,17 @@ class BTCDOM2StrategyEngine {
       const soldValueChange = soldPositions.reduce((sum, pos) => sum + pos.pnl, 0);
       totalValue = previousValue + btcValueChange + shortValueChange + soldValueChange + totalTradingFee + totalFundingFee;
       
-      // 计算现金余额分解
-      const totalShortPositionValue = shortPositions.reduce((sum, pos) => sum + pos.amount, 0);
-      spot_usdt_balance = totalValue - (btcPosition ? btcPosition.amount : 0) - totalShortPositionValue; // 现货剩余现金
-      futures_usdt_balance = totalShortPositionValue; // 期货占用的保证金
+      // 计算统一账户余额 - 只包含现金相关变化，不包含BTC持仓价值变化
+      let previousAccountBalance;
+      if (previousSnapshot?.account_usdt_balance !== undefined) {
+        previousAccountBalance = previousSnapshot.account_usdt_balance;
+      } else {
+        // 初始状态：总资金减去用于购买BTC的资金
+        const btcInvestment = btcPosition?.amount || 0;
+        previousAccountBalance = this.params.initialCapital - btcInvestment;
+      }
+      const cashPnl = (shortValueChange + soldValueChange); // 不包含btcValueChange
+      account_usdt_balance = previousAccountBalance + cashPnl - Math.abs(totalTradingFee) - Math.abs(totalFundingFee);
 
     } else {
       // 策略不活跃：无符合条件的标的或策略未启用，持有现金
@@ -1266,17 +1272,28 @@ class BTCDOM2StrategyEngine {
       } else {
         inactiveReason = '未知原因导致的空仓状态';
       }
-
-      const soldValueChange = soldPositions.reduce((sum, pos) => sum + pos.pnl, 0);
-      const btcValueChange = btcPosition ? btcPosition.pnl : 0;
-      totalValue = previousValue + btcValueChange + soldValueChange + totalTradingFee + totalFundingFee;
-      
-      // 计算现金余额分解
-      const totalShortPositionValue = shortPositions.reduce((sum, pos) => sum + pos.amount, 0);
-      const spot_usdt_balance = totalValue - (btcPosition ? btcPosition.amount : 0) - totalShortPositionValue; // 现货剩余现金
-      const futures_usdt_balance = totalShortPositionValue; // 期货占用的保证金
     }
 
+    const soldValueChange = soldPositions.reduce((sum, pos) => sum + pos.pnl, 0);
+    const btcValueChange = btcPosition ? btcPosition.pnl : 0;
+    totalValue = previousValue + btcValueChange + soldValueChange + totalTradingFee + totalFundingFee;
+    
+    // 计算统一账户余额 - 只包含现金相关变化，不包含BTC持仓价值变化
+    let previousAccountBalance;
+    if (previousSnapshot?.account_usdt_balance !== undefined) {
+      previousAccountBalance = previousSnapshot.account_usdt_balance;
+    } else {
+      // 初始状态：总资金减去用于购买BTC的资金
+      const btcInvestment = btcPosition?.amount || 0;
+      previousAccountBalance = this.params.initialCapital - btcInvestment;
+    }
+    
+    if (isActive) {
+      account_usdt_balance = previousAccountBalance + soldValueChange - Math.abs(totalTradingFee) - Math.abs(totalFundingFee);
+    } else {
+      account_usdt_balance = previousAccountBalance;
+    }
+  
     const totalPnl = totalValue - this.params.initialCapital;
     const totalPnlPercent = totalPnl / this.params.initialCapital;
 
@@ -1307,8 +1324,7 @@ class BTCDOM2StrategyEngine {
       accumulatedTradingFee: accumulatedTradingFee + totalTradingFee,
       totalFundingFee,
       accumulatedFundingFee: accumulatedFundingFee + totalFundingFee,
-      spot_usdt_balance,
-      futures_usdt_balance,
+      account_usdt_balance,
       isActive,
       rebalanceReason: isActive ?
         (isInTemperatureHigh ? `${selectionReason} (${temperatureRuleReason})` : selectionReason) :
@@ -1687,7 +1703,7 @@ function generateChartData(snapshots: StrategySnapshot[], params: BTCDOM2Strateg
       }, 0);
     }
 
-    const cashValue = snapshot.spot_usdt_balance + snapshot.futures_usdt_balance;
+    const cashValue = snapshot.account_usdt_balance;
 
     // 计算回撤
     const currentIndex = snapshots.indexOf(snapshot);

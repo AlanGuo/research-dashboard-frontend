@@ -20,7 +20,6 @@ import {
   TrendingUp,
   TrendingDown,
   Wallet,
-  DollarSign,
   AlertTriangle,
   Plus,
   ArrowUp,
