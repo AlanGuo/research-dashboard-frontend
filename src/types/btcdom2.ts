@@ -170,7 +170,10 @@ export interface StrategySnapshot {
   accumulatedTradingFee: number;     // 累计总手续费
   totalFundingFee?: number;          // 当期总资金费
   accumulatedFundingFee?: number;    // 累计总资金费
-  cashPosition: number;              // 现金持仓 (当无符合条件的做空标的时)
+  
+  // 现金余额详情（用于与实盘对比）
+  spot_usdt_balance: number;         // 现货USDT余额
+  futures_usdt_balance: number;      // 期货USDT余额
   
   // 策略状态
   isActive: boolean;                 // 策略是否持仓
@@ -526,12 +529,6 @@ export interface PriceComparisonSummary {
   };
 }
 
-// 实盘市值价格快照（从btcdom2_performance表获取）
-export interface MarketPriceSnapshot {
-  btc_price_used: number;
-  alt_prices_snapshot: Record<string, number>;
-  market_data_timestamp: string;
-}
 
 // 综合差异计算结果
 export interface ComprehensiveDifference {
@@ -548,11 +545,9 @@ export interface ComprehensiveDifference {
   // 价格对比
   backtestMarketPrice?: number; // 回测市值价格
   realMarketPrice?: number;     // 实盘市值价格
-  backtestExecutionPrice?: number; // 回测执行价格（平仓时）
-  realExecutionPrice?: number;  // 实盘执行价格（平仓时）
   
   // 计算说明
-  calculationType: 'market_value' | 'execution' | 'both' | 'none';
+  calculationType: 'market_value' | 'execution' | 'both' | 'none' | 'simplified';
   calculationNote: string;
   hasValidData: boolean;
 }
@@ -592,7 +587,6 @@ export interface ComprehensiveDifferenceSummary {
   dataQuality: {
     totalComparisons: number;      // 总对比数量
     validMarketPriceCount: number; // 有效市值价格数量
-    validExecutionPriceCount: number; // 有效执行价格数量
     quantityMismatchCount: number; // 数量不匹配的对比数量
   };
   
@@ -661,7 +655,7 @@ export interface EnhancedComprehensiveDifference {
   
   // 金额差异分解
   holdingAmountDiff: number;    // 持仓金额差异
-  tradingAmountDiff: number;    // 交易金额差异
+  cashBalanceDiff: number;      // 现金余额差异
   
   // 持仓数量对比
   backtestHoldingQuantity: number;     // 回测持仓数量
@@ -669,20 +663,14 @@ export interface EnhancedComprehensiveDifference {
   holdingQuantityDiff: number;         // 持仓数量差异
   holdingQuantityDiffPercent: number;  // 持仓数量差异百分比
   
-  // 交易数量对比
-  backtestTradingQuantity?: number;    // 回测交易数量
-  realTradingQuantity?: number;        // 实盘交易数量
-  tradingQuantityDiff?: number;        // 交易数量差异
-  tradingQuantityDiffPercent?: number; // 交易数量差异百分比
-  
   // 价格对比
   backtestMarketPrice?: number; // 回测市值价格
   realMarketPrice?: number;     // 实盘市值价格
-  backtestExecutionPrice?: number; // 回测执行价格（平仓时）
-  realExecutionPrice?: number;  // 实盘执行价格（平仓时）
+  holdingPriceDiff?: number;    // 持仓价格差异
+  holdingPriceDiffPercent?: number; // 持仓价格差异百分比
   
   // 计算说明
-  calculationType: 'market_value' | 'execution' | 'both' | 'none';
+  calculationType: 'market_value' | 'execution' | 'both' | 'none' | 'simplified';
   calculationNote: string;
   hasValidData: boolean;
 }
@@ -691,8 +679,7 @@ export interface EnhancedComprehensiveDifference {
 export interface EnhancedComprehensivePriceComparison {
   symbol: string;
   position: PositionInfo;
-  tradingLog: TradingLogEntry | null;
-  positionHistory: Btcdom2PositionHistory | null;  // 新增：实盘持仓历史数据
+  positionHistory: Btcdom2PositionHistory | null;  // 实盘持仓历史数据
   difference: EnhancedComprehensiveDifference;
   status: 'new_position' | 'holding' | 'partial_close' | 'full_close' | 'add_position';
 }
@@ -707,9 +694,9 @@ export interface EnhancedComprehensiveDifferenceSummary {
   
   // 新增：金额差异统计
   totalHoldingAmountDiff: number;   // 总持仓金额差异
-  totalTradingAmountDiff: number;   // 总交易金额差异
+  totalCashBalanceDiff: number;     // 总现金余额差异
   holdingAmountImpactPercent: number; // 持仓金额差异影响百分比
-  tradingAmountImpactPercent: number; // 交易金额差异影响百分比
+  cashBalanceImpactPercent: number; // 现金余额差异影响百分比
   
   // 按类型分组统计
   byPositionType: {
@@ -730,10 +717,8 @@ export interface EnhancedComprehensiveDifferenceSummary {
   dataQuality: {
     totalComparisons: number;      // 总对比数量
     validMarketPriceCount: number; // 有效市值价格数量
-    validExecutionPriceCount: number; // 有效执行价格数量
     validPositionHistoryCount: number; // 有效持仓历史数量
     holdingQuantityMismatchCount: number; // 持仓数量不匹配数量
-    tradingQuantityMismatchCount: number; // 交易数量不匹配数量
   };
   
   // 时间信息

@@ -668,7 +668,8 @@ class BTCDOM2StrategyEngine {
     const soldPositions: PositionInfo[] = [];
     let btcPosition: PositionInfo | null = null;
     let shortPositions: PositionInfo[] = [];
-    let cashPosition = 0;
+    let spot_usdt_balance = 0;
+    let futures_usdt_balance = 0;
     let totalValue = previousValue;
     let totalTradingFee = 0;
     let totalFundingFee = 0;
@@ -1093,6 +1094,11 @@ class BTCDOM2StrategyEngine {
       const shortValueChange = shortPositions.reduce((sum, pos) => sum + pos.pnl, 0);
       const soldValueChange = soldPositions.reduce((sum, pos) => sum + pos.pnl, 0);
       totalValue = previousValue + btcValueChange + shortValueChange + soldValueChange + totalTradingFee + totalFundingFee;
+      
+      // 计算现金余额分解
+      const totalShortPositionValue = shortPositions.reduce((sum, pos) => sum + pos.amount, 0);
+      spot_usdt_balance = totalValue - (btcPosition ? btcPosition.amount : 0) - totalShortPositionValue; // 现货剩余现金
+      futures_usdt_balance = totalShortPositionValue; // 期货占用的保证金
 
     } else {
       // 策略不活跃：无符合条件的标的或策略未启用，持有现金
@@ -1264,7 +1270,11 @@ class BTCDOM2StrategyEngine {
       const soldValueChange = soldPositions.reduce((sum, pos) => sum + pos.pnl, 0);
       const btcValueChange = btcPosition ? btcPosition.pnl : 0;
       totalValue = previousValue + btcValueChange + soldValueChange + totalTradingFee + totalFundingFee;
-      cashPosition = totalValue - (btcPosition ? btcPosition.amount : 0);
+      
+      // 计算现金余额分解
+      const totalShortPositionValue = shortPositions.reduce((sum, pos) => sum + pos.amount, 0);
+      const spot_usdt_balance = totalValue - (btcPosition ? btcPosition.amount : 0) - totalShortPositionValue; // 现货剩余现金
+      const futures_usdt_balance = totalShortPositionValue; // 期货占用的保证金
     }
 
     const totalPnl = totalValue - this.params.initialCapital;
@@ -1297,7 +1307,8 @@ class BTCDOM2StrategyEngine {
       accumulatedTradingFee: accumulatedTradingFee + totalTradingFee,
       totalFundingFee,
       accumulatedFundingFee: accumulatedFundingFee + totalFundingFee,
-      cashPosition,
+      spot_usdt_balance,
+      futures_usdt_balance,
       isActive,
       rebalanceReason: isActive ?
         (isInTemperatureHigh ? `${selectionReason} (${temperatureRuleReason})` : selectionReason) :
@@ -1676,7 +1687,7 @@ function generateChartData(snapshots: StrategySnapshot[], params: BTCDOM2Strateg
       }, 0);
     }
 
-    const cashValue = snapshot.cashPosition;
+    const cashValue = snapshot.spot_usdt_balance + snapshot.futures_usdt_balance;
 
     // 计算回撤
     const currentIndex = snapshots.indexOf(snapshot);

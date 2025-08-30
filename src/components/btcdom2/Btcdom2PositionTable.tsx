@@ -700,24 +700,6 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
         </div>
       )}
 
-      {/* 现金持仓 */}
-      {snapshot.cashPosition > 0 && (
-        <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <DollarSign className="w-5 h-5 text-green-600 dark:text-green-400" />
-              <span className="font-medium text-green-800 dark:text-green-200">现金持仓</span>
-            </div>
-            <span className="text-lg font-bold text-green-600 dark:text-green-400">
-              {formatCurrency(snapshot.cashPosition)}
-            </span>
-          </div>
-          <p className="text-sm text-green-700 dark:text-green-300 mt-2">
-            {snapshot.rebalanceReason}
-          </p>
-        </div>
-      )}
-
       {/* 做空候选标的详情 */}
       {false && snapshot.shortCandidates && snapshot.shortCandidates.length > 0 && (
         <Card className="mt-4">
