@@ -201,10 +201,16 @@ export function PriceComparisonTable({
     // 1. 先计算账户级别的现金余额差异（只计算一次）
     let backtestCashBalance = 0;
     let realCashBalance = 0;
+    let realSpotBalance = 0;
+    let realFuturesBalance = 0;
+    let backtestSpotBalance = 0;
+    let backtestFuturesBalance = 0;
     
     // 获取实盘现金余额
     if (positionHistory && positionHistory.positions) {
-      realCashBalance = positionHistory.positions.spot_usdt_balance + positionHistory.positions.futures_usdt_balance;
+      realSpotBalance = positionHistory.positions.spot_usdt_balance;
+      realFuturesBalance = positionHistory.positions.futures_usdt_balance;
+      realCashBalance = realSpotBalance + realFuturesBalance;
     }
     
     // 获取回测现金余额 - 从回测结果中找到对应时间点的快照
@@ -214,7 +220,9 @@ export function PriceComparisonTable({
       );
       
       if (matchingSnapshot) {
-        backtestCashBalance = matchingSnapshot.spot_usdt_balance + matchingSnapshot.futures_usdt_balance;
+        backtestSpotBalance = matchingSnapshot.spot_usdt_balance;
+        backtestFuturesBalance = matchingSnapshot.futures_usdt_balance;
+        backtestCashBalance = backtestSpotBalance + backtestFuturesBalance;
       }
     }
     
@@ -283,6 +291,12 @@ export function PriceComparisonTable({
       totalImpactPercent: 0,
       totalHoldingAmountDiff: 0,
       totalCashBalanceDiff: accountLevelCashBalanceDiff, // 使用账户级别的现金余额差异
+      totalRealHoldingValue: 0, // 实盘持仓价值总计
+      totalBacktestHoldingAmount: 0, // 回测持仓金额总计
+      realSpotBalance: realSpotBalance, // 实盘现货余额
+      realFuturesBalance: realFuturesBalance, // 实盘期货余额
+      backtestSpotBalance: backtestSpotBalance, // 回测现货余额
+      backtestFuturesBalance: backtestFuturesBalance, // 回测期货余额
       holdingAmountImpactPercent: 0,
       cashBalanceImpactPercent: 0,
       byPositionType: {
@@ -314,6 +328,28 @@ export function PriceComparisonTable({
       summary.totalExecutionDiff += difference.executionDiff;
       summary.totalImpact += difference.totalImpact;
       summary.totalHoldingAmountDiff += difference.holdingAmountDiff;
+      
+      // 计算并累加实盘持仓价值和回测持仓金额
+      const symbol = position.symbol;
+      let realHoldingValue = 0;
+      let backtestHoldingAmount = position.isSoldOut ? 0 : (position.amount || 0);
+      
+      if (positionHistory && positionHistory.positions) {
+        const positionSymbol = symbol.replace('USDT', '').toUpperCase();
+        
+        if (positionSymbol === 'BTC' && positionHistory.positions.btc) {
+          realHoldingValue = positionHistory.positions.btc.value;
+        } else {
+          const shortPosition = positionHistory.positions.shorts?.find(
+            short => short.symbol.replace('USDT', '').toUpperCase() === positionSymbol
+          );
+          realHoldingValue = shortPosition ? shortPosition.value : 0;
+        }
+      }
+      
+      summary.totalRealHoldingValue += realHoldingValue;
+      summary.totalBacktestHoldingAmount += backtestHoldingAmount;
+      
       // summary.totalCashBalanceDiff 已经在上面设置为账户级别的值
 
       // 按持仓类型统计
@@ -599,6 +635,10 @@ export function PriceComparisonTable({
                         <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                           实盘持仓价值 - 回测持仓金额
                         </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-2 space-y-1">
+                          <div>实盘持仓价值: ${enhancedSummary.totalRealHoldingValue.toFixed(2)}</div>
+                          <div>回测持仓金额: ${enhancedSummary.totalBacktestHoldingAmount.toFixed(2)}</div>
+                        </div>
                       </CardContent>
                     </Card>
 
@@ -612,6 +652,14 @@ export function PriceComparisonTable({
                         </div>
                         <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                           实盘余额 - 回测余额
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-2 space-y-1">
+                          <div className="font-medium">实盘余额: ${(enhancedSummary.realSpotBalance + enhancedSummary.realFuturesBalance).toFixed(2)}</div>
+                          <div className="ml-2">现货余额: ${enhancedSummary.realSpotBalance.toFixed(2)}</div>
+                          <div className="ml-2">期货余额: ${enhancedSummary.realFuturesBalance.toFixed(2)}</div>
+                          <div className="font-medium mt-2">回测余额: ${(enhancedSummary.backtestSpotBalance + enhancedSummary.backtestFuturesBalance).toFixed(2)}</div>
+                          <div className="ml-2">现货余额: ${enhancedSummary.backtestSpotBalance.toFixed(2)}</div>
+                          <div className="ml-2">期货余额: ${enhancedSummary.backtestFuturesBalance.toFixed(2)}</div>
                         </div>
                       </CardContent>
                     </Card>

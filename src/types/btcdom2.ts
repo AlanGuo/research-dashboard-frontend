@@ -695,6 +695,12 @@ export interface EnhancedComprehensiveDifferenceSummary {
   // 新增：金额差异统计
   totalHoldingAmountDiff: number;   // 总持仓金额差异
   totalCashBalanceDiff: number;     // 总现金余额差异
+  totalRealHoldingValue: number;    // 实盘持仓价值总计
+  totalBacktestHoldingAmount: number; // 回测持仓金额总计
+  realSpotBalance: number;          // 实盘现货余额
+  realFuturesBalance: number;       // 实盘期货余额
+  backtestSpotBalance: number;      // 回测现货余额
+  backtestFuturesBalance: number;   // 回测期货余额
   holdingAmountImpactPercent: number; // 持仓金额差异影响百分比
   cashBalanceImpactPercent: number; // 现金余额差异影响百分比
   
