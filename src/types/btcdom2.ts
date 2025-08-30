@@ -669,6 +669,11 @@ export interface EnhancedComprehensiveDifference {
   holdingPriceDiff?: number;    // 持仓价格差异
   holdingPriceDiffPercent?: number; // 持仓价格差异百分比
   
+  // 浮动盈亏对比
+  backtestPnl: number;          // 回测浮动盈亏
+  realUnrealizedPnl: number;    // 实盘浮动盈亏
+  pnlDiff: number;              // 浮动盈亏差异（实盘-回测）
+  
   // 计算说明
   calculationType: 'market_value' | 'execution' | 'both' | 'none' | 'simplified';
   calculationNote: string;
@@ -695,8 +700,7 @@ export interface EnhancedComprehensiveDifferenceSummary {
   // 新增：金额差异统计
   totalHoldingAmountDiff: number;   // 总持仓金额差异
   totalCashBalanceDiff: number;     // 总现金余额差异
-  totalRealHoldingValue: number;    // 实盘持仓价值总计
-  totalBacktestHoldingAmount: number; // 回测持仓金额总计
+  totalPnlDiff: number;             // 总浮动盈亏差异
   realSpotBalance: number;          // 实盘现货余额
   realFuturesBalance: number;       // 实盘期货余额
   backtestSpotBalance: number;      // 回测现货余额

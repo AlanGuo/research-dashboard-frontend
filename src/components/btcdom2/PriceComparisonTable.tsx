@@ -85,6 +85,11 @@ export function PriceComparisonTable({
       holdingPriceDiff: undefined,
       holdingPriceDiffPercent: undefined,
       
+      // 浮动盈亏信息
+      backtestPnl: position.isSoldOut ? 0 : (position.pnl || 0),
+      realUnrealizedPnl: 0,
+      pnlDiff: 0,
+      
       calculationType: 'simplified',
       calculationNote: '',
       hasValidData: false
@@ -92,7 +97,7 @@ export function PriceComparisonTable({
 
     // 1. 获取实盘持仓数量和价值
     const symbol = position.symbol;
-    let realHoldingValue = 0; // 实盘持仓价值
+    let realHoldingValue = 0; // 实盘持仓金额
     
     if (positionHistory && positionHistory.positions) {
       const positionSymbol = symbol.replace('USDT', '').toUpperCase();
@@ -101,6 +106,7 @@ export function PriceComparisonTable({
         result.realHoldingQuantity = positionHistory.positions.btc.quantity;
         realHoldingValue = positionHistory.positions.btc.value;
         result.realMarketPrice = positionHistory.positions.btc.avg_price;
+        result.realUnrealizedPnl = positionHistory.positions.btc.unrealized_pnl;
       } else {
         // 在做空列表中查找
         const shortPosition = positionHistory.positions.shorts.find(
@@ -109,6 +115,7 @@ export function PriceComparisonTable({
         result.realHoldingQuantity = shortPosition ? shortPosition.quantity : 0;
         realHoldingValue = shortPosition ? shortPosition.value : 0;
         result.realMarketPrice = shortPosition ? shortPosition.avg_price : undefined;
+        result.realUnrealizedPnl = shortPosition ? shortPosition.unrealized_pnl : 0;
       }
     }
 
@@ -133,14 +140,17 @@ export function PriceComparisonTable({
     const backtestHoldingAmount = position.isSoldOut ? 0 : (position.amount || 0);
     result.holdingAmountDiff = realHoldingValue - backtestHoldingAmount;
     
-    // 4. 简化计算：总影响 = 持仓金额差异 + (现金余额差异，仅第一个币种)
-    result.marketValueDiff = result.holdingAmountDiff;
+    // 3.1 计算浮动盈亏差异（实盘 - 回测）
+    result.pnlDiff = result.realUnrealizedPnl - result.backtestPnl;
+    
+    // 4. 简化计算：总影响 = 浮动盈亏差异 + (现金余额差异，仅第一个币种)
+    result.marketValueDiff = result.pnlDiff;
     result.executionDiff = result.cashBalanceDiff;
-    result.totalImpact = result.holdingAmountDiff + result.cashBalanceDiff;
+    result.totalImpact = result.pnlDiff + result.cashBalanceDiff;
     
     // 5. 设置计算说明
     const cashNote = shouldIncludeCashDiff ? ` + 现金余额差异：$${result.cashBalanceDiff.toFixed(2)}` : '';
-    result.calculationNote = `持仓金额差异：$${result.holdingAmountDiff.toFixed(2)}${cashNote}`;
+    result.calculationNote = `浮动盈亏差异：$${result.pnlDiff.toFixed(2)}${cashNote}`;
     result.hasValidData = true;
     
     return result;
@@ -268,6 +278,9 @@ export function PriceComparisonTable({
           realMarketPrice: undefined,
           holdingPriceDiff: undefined,
           holdingPriceDiffPercent: undefined,
+          backtestPnl: position.isSoldOut ? 0 : (position.pnl || 0),
+          realUnrealizedPnl: 0,
+          pnlDiff: 0,
           calculationType: 'none',
           calculationNote: `计算错误: ${error instanceof Error ? error.message : '未知错误'}`,
           hasValidData: false
@@ -291,8 +304,7 @@ export function PriceComparisonTable({
       totalImpactPercent: 0,
       totalHoldingAmountDiff: 0,
       totalCashBalanceDiff: accountLevelCashBalanceDiff, // 使用账户级别的现金余额差异
-      totalRealHoldingValue: 0, // 实盘持仓价值总计
-      totalBacktestHoldingAmount: 0, // 回测持仓金额总计
+      totalPnlDiff: 0, // 总浮动盈亏差异
       realSpotBalance: realSpotBalance, // 实盘现货余额
       realFuturesBalance: realFuturesBalance, // 实盘期货余额
       backtestSpotBalance: backtestSpotBalance, // 回测现货余额
@@ -328,27 +340,7 @@ export function PriceComparisonTable({
       summary.totalExecutionDiff += difference.executionDiff;
       summary.totalImpact += difference.totalImpact;
       summary.totalHoldingAmountDiff += difference.holdingAmountDiff;
-      
-      // 计算并累加实盘持仓价值和回测持仓金额
-      const symbol = position.symbol;
-      let realHoldingValue = 0;
-      let backtestHoldingAmount = position.isSoldOut ? 0 : (position.amount || 0);
-      
-      if (positionHistory && positionHistory.positions) {
-        const positionSymbol = symbol.replace('USDT', '').toUpperCase();
-        
-        if (positionSymbol === 'BTC' && positionHistory.positions.btc) {
-          realHoldingValue = positionHistory.positions.btc.value;
-        } else {
-          const shortPosition = positionHistory.positions.shorts?.find(
-            short => short.symbol.replace('USDT', '').toUpperCase() === positionSymbol
-          );
-          realHoldingValue = shortPosition ? shortPosition.value : 0;
-        }
-      }
-      
-      summary.totalRealHoldingValue += realHoldingValue;
-      summary.totalBacktestHoldingAmount += backtestHoldingAmount;
+      summary.totalPnlDiff += difference.pnlDiff;
       
       // summary.totalCashBalanceDiff 已经在上面设置为账户级别的值
 
@@ -391,6 +383,9 @@ export function PriceComparisonTable({
       }
     });
 
+    // 重新计算总影响：浮动盈亏差异 + 现金余额差异
+    summary.totalImpact = summary.totalPnlDiff + summary.totalCashBalanceDiff;
+    
     // 计算总影响百分比
     const baseAmount = previousBalance || initialCapital;
     summary.totalImpactPercent = (summary.totalImpact / baseAmount) * 100;
@@ -548,7 +543,7 @@ export function PriceComparisonTable({
                       <TableHead className="w-20">标的</TableHead>
                       <TableHead className="w-24">状态</TableHead>
                       <TableHead className="text-center" colSpan={4}>持仓对比</TableHead>
-                      <TableHead className="text-center" colSpan={1}>金额差异分析</TableHead>
+                      <TableHead className="text-center" colSpan={2}>金额差异分析</TableHead>
                     </TableRow>
                     <TableRow>
                       <TableHead></TableHead>
@@ -558,6 +553,7 @@ export function PriceComparisonTable({
                       <TableHead className="text-right">持仓数量差异</TableHead>
                       <TableHead className="text-right">持仓价格差异</TableHead>
                       <TableHead className="text-right">持仓金额差异</TableHead>
+                      <TableHead className="text-right">浮动盈亏差异</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -612,6 +608,10 @@ export function PriceComparisonTable({
                             {formatPnlAmount(difference.holdingAmountDiff)}
                             <div className="text-xs opacity-75">持仓金额</div>
                           </TableCell>
+                          <TableCell className={`text-right font-mono text-sm ${getPnlColor(difference.pnlDiff)}`}>
+                            {formatPnlAmount(difference.pnlDiff)}
+                            <div className="text-xs opacity-75">浮动盈亏</div>
+                          </TableCell>
                         </TableRow>
                       );
                     })}
@@ -626,18 +626,14 @@ export function PriceComparisonTable({
                   <div className="grid grid-cols-3 gap-4 mt-6">
                     <Card className="border-blue-200 dark:border-blue-800">
                       <CardHeader className="pb-2">
-                        <CardTitle className="text-sm text-blue-800 dark:text-blue-200">持仓金额差异</CardTitle>
+                        <CardTitle className="text-sm text-blue-800 dark:text-blue-200">浮动盈亏差异</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <div className={`text-2xl font-bold ${getPnlColor(enhancedSummary.totalHoldingAmountDiff)}`}>
-                          {formatPnlAmount(enhancedSummary.totalHoldingAmountDiff)}
+                        <div className={`text-2xl font-bold ${getPnlColor(enhancedSummary.totalPnlDiff)}`}>
+                          {formatPnlAmount(enhancedSummary.totalPnlDiff)}
                         </div>
                         <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                          实盘持仓价值 - 回测持仓金额
-                        </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-2 space-y-1">
-                          <div>实盘持仓价值: ${enhancedSummary.totalRealHoldingValue.toFixed(2)}</div>
-                          <div>回测持仓金额: ${enhancedSummary.totalBacktestHoldingAmount.toFixed(2)}</div>
+                          实盘浮动盈亏 - 回测浮动盈亏
                         </div>
                       </CardContent>
                     </Card>
@@ -684,12 +680,13 @@ export function PriceComparisonTable({
               <div className="mt-4 p-3 bg-purple-50 dark:bg-purple-900/10 rounded-lg border border-purple-200 dark:border-purple-800">
                 <h4 className="text-sm font-medium text-purple-800 dark:text-purple-200 mb-2">金额差异计算说明</h4>
                 <div className="text-xs text-purple-700 dark:text-purple-300 space-y-1">
-                  <p>• <strong>持仓金额差异</strong>：实盘持仓价值 - 回测持仓金额（使用btcdom2_position_history中的value字段）</p>
+                  <p>• <strong>持仓金额差异</strong>：实盘持仓金额 - 回测持仓金额（使用btcdom2_position_history中的value字段）</p>
+                  <p>• <strong>浮动盈亏差异</strong>：实盘浮动盈亏 - 回测浮动盈亏（使用btcdom2_position_history中的unrealized_pnl字段）</p>
                   <p>• <strong>现金余额差异</strong>：(实盘现货余额 + 实盘期货余额) - (回测现货余额 + 回测期货余额)</p>
-                  <p>• <strong>总影响</strong>：持仓金额差异 + 现金余额差异</p>
+                  <p>• <strong>总影响</strong>：浮动盈亏差异 + 现金余额差异</p>
                   <p>• <strong>数据来源</strong>：</p>
                   <p>&nbsp;&nbsp;- 实盘数据：来自btcdom2_position_history表</p>
-                  <p>&nbsp;&nbsp;- 回测数据：来自策略快照（待后端添加现金余额字段）</p>
+                  <p>&nbsp;&nbsp;- 回测数据：来自策略快照</p>
                 </div>
               </div>
             </div>
