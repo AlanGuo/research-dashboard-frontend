@@ -118,7 +118,7 @@ export interface PositionInfo {
   symbol: string;             // 原始交易对symbol（用于数据查找）
   displaySymbol?: string;     // 显示用的交易对symbol（期货或现货）
   side: 'LONG' | 'SHORT';     // 多头或空头
-  amount: number;             // 持仓金额 (USDT)
+  value: number;             // 持仓金额 (USDT)
   quantity: number;           // 持仓数量
   entryPrice: number;         // 持仓均价（加权平均成本价）
   currentPrice: number;       // 当前价格

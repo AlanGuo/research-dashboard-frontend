@@ -684,7 +684,7 @@ class BTCDOM2StrategyEngine {
       const validBtcQuantity = isNaN(btcQuantity) || btcQuantity <= 0 ? 0 : btcQuantity;
       const validBtcPnl = isNaN(btcPnl) ? 0 : btcPnl;
       const validBtcTradingFee = isNaN(btcTradingFee) ? 0 : btcTradingFee;
-      const prevAmount = previousSnapshot?.btcPosition?.amount ?? validBtcAmount;
+      const prevAmount = previousSnapshot?.btcPosition?.value ?? validBtcAmount;
       const previousBtcPrice = previousSnapshot?.btcPosition?.currentPrice;
 
       // 计算加权平均成本价和交易类型
@@ -753,7 +753,7 @@ class BTCDOM2StrategyEngine {
           soldPositions.push({
             symbol: 'BTCUSDT',
             side: 'LONG',
-            amount: soldAmount,
+            value: soldAmount,
             quantity: soldQuantity,
             entryPrice: prevEntryPrice,
             currentPrice: btcPrice,
@@ -790,7 +790,7 @@ class BTCDOM2StrategyEngine {
       btcPosition = {
         symbol: 'BTCUSDT',
         side: 'LONG',
-        amount: validBtcAmount,
+        value: validBtcAmount,
         quantity: validBtcQuantity,
         entryPrice: newEntryPrice, // 使用加权平均成本价
         currentPrice: btcPrice,
@@ -885,7 +885,7 @@ class BTCDOM2StrategyEngine {
           totalTradingFee += sellFee;
 
           const priceChangePercent = (currentPrice - prevPosition.currentPrice) / prevPosition.currentPrice;
-          const finalPnl = -prevPosition.amount * priceChangePercent;
+          const finalPnl = -prevPosition.value * priceChangePercent;
 
           // 计算卖出持仓的资金费率
           let soldFundingFee = 0;
@@ -911,18 +911,18 @@ class BTCDOM2StrategyEngine {
             quantity: prevPosition.quantity,
             entryPrice: prevPosition.currentPrice,
             exitPrice: currentPrice,
-            amount: prevPosition.amount,
+            value: prevPosition.value,
             priceChangePercent: (priceChangePercent * 100).toFixed(2) + '%',
             finalPnl: finalPnl,
             pnlPercent: ((-priceChangePercent) * 100).toFixed(2) + '%',
             sellFee: sellFee,
             sellReason: sellReason,
-            calculation: `-${prevPosition.amount} * ${priceChangePercent.toFixed(6)} = ${finalPnl}`
+            calculation: `-${prevPosition.value} * ${priceChangePercent.toFixed(6)} = ${finalPnl}`
           });
 
           soldPositions.push({
             ...prevPosition,
-            amount: prevPosition.amount ?? 0,
+            value: prevPosition.value ?? 0,
             quantity: prevPosition.quantity ?? 0,
             currentPrice,
             periodTradingPrice: currentPrice,
@@ -1004,7 +1004,7 @@ class BTCDOM2StrategyEngine {
                 symbol: symbol,
                 displaySymbol: candidate.futureSymbol || symbol,
                 side: 'SHORT',
-                amount: soldAmount,
+                value: soldAmount,
                 quantity: soldQuantity,
                 entryPrice: prevPosition.entryPrice,
                 currentPrice: price,
@@ -1080,7 +1080,7 @@ class BTCDOM2StrategyEngine {
             symbol: symbol,
             displaySymbol: candidate.futureSymbol || symbol,
             side: 'SHORT',
-            amount: targetPosition.targetAllocation,
+            value: targetPosition.targetAllocation,
             quantity: targetQuantity,
             entryPrice: newEntryPrice,
             currentPrice: price,
@@ -1120,7 +1120,7 @@ class BTCDOM2StrategyEngine {
           symbol: symbol,
           displaySymbol: candidate.futureSymbol || symbol,
           side: 'SHORT',
-          amount: targetAllocation,
+          value: targetAllocation,
           quantity: targetQuantity,
           entryPrice: price,
           currentPrice: price,
@@ -1188,7 +1188,7 @@ class BTCDOM2StrategyEngine {
       previousAccountBalance = previousSnapshot.account_usdt_balance;
     } else {
       // 初始状态：总资金减去用于购买BTC的资金
-      const btcInvestment = btcPosition?.amount || 0;
+      const btcInvestment = btcPosition?.value || 0;
       previousAccountBalance = this.params.initialCapital - btcInvestment;
     }
     
@@ -1217,7 +1217,7 @@ class BTCDOM2StrategyEngine {
       totalShortPositions: shortPositions.length,
       shortPositionsDetails: shortPositions.map(pos => ({
         symbol: pos.symbol,
-        amount: pos.amount,
+        amount: pos.value,
         quantity: pos.quantity,
         entryPrice: pos.entryPrice,
         currentPrice: pos.currentPrice,
@@ -1631,7 +1631,7 @@ function generateChartData(snapshots: StrategySnapshot[], params: BTCDOM2Strateg
     if (snapshot.shortPositions && snapshot.shortPositions.length > 0) {
       // 做空部分实际市值 = 初始金额 + 盈亏
       shortValue = snapshot.shortPositions.reduce((sum, pos) => {
-        return sum + pos.amount + pos.pnl;
+        return sum + pos.value + pos.pnl;
       }, 0);
     }
 
