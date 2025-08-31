@@ -644,6 +644,16 @@ class BTCDOM2StrategyEngine {
     if (btcActive) {
       const btcAmount = totalValue * this.params.btcRatio;
       const btcQuantity = btcAmount / btcPrice;
+      
+      // 调试日志：BTC目标计算
+      console.log(`[BTC目标计算] 时间: ${timestamp}`, {
+        totalValue: totalValue,
+        btcRatio: this.params.btcRatio,
+        btcPrice: btcPrice,
+        targetBtcAmount: btcAmount,
+        targetBtcQuantity: btcQuantity,
+        previousBtcQuantity: previousSnapshot?.btcPosition?.quantity || 0
+      });
 
       // 计算BTC盈亏（基于价格变化和持仓数量）
       let btcPnl = 0;
@@ -724,20 +734,20 @@ class BTCDOM2StrategyEngine {
           const soldTradingFee = this.calculateTradingFee(soldQuantity * btcPrice, true); // 减仓手续费
           
           // 已实现盈亏日志
-          // console.log(`[已实现盈亏] BTC减仓 时间: ${timestamp}`, {
-          //   symbol: 'BTCUSDT',
-          //   side: 'LONG',
-          //   action: 'BTC减仓',
-          //   soldQuantity: soldQuantity,
-          //   prevEntryPrice: prevEntryPrice,
-          //   currentPrice: btcPrice,
-          //   soldAmount: soldAmount,
-          //   priceChange: btcPrice - prevEntryPrice,
-          //   soldPnl: soldPnl,
-          //   pnlPercent: ((soldPnl / soldAmount) * 100).toFixed(2) + '%',
-          //   soldTradingFee: soldTradingFee,
-          //   calculation: `${soldQuantity} * (${btcPrice} - ${prevEntryPrice}) = ${soldPnl}`
-          // });
+          console.log(`[已实现盈亏] BTC减仓 时间: ${timestamp}`, {
+            symbol: 'BTCUSDT',
+            side: 'LONG',
+            action: 'BTC减仓',
+            soldQuantity: soldQuantity,
+            prevEntryPrice: prevEntryPrice,
+            currentPrice: btcPrice,
+            soldAmount: soldAmount,
+            priceChange: btcPrice - prevEntryPrice,
+            soldPnl: soldPnl,
+            pnlPercent: ((soldPnl / soldAmount) * 100).toFixed(2) + '%',
+            soldTradingFee: soldTradingFee,
+            calculation: `${soldQuantity} * (${btcPrice} - ${prevEntryPrice}) = ${soldPnl}`
+          });
           
           // 将减仓部分添加到soldPositions
           soldPositions.push({
@@ -894,21 +904,21 @@ class BTCDOM2StrategyEngine {
           totalFundingFee += soldFundingFee;
 
           // 已实现盈亏日志
-          // console.log(`[已实现盈亏] ALT平仓 时间: ${timestamp}`, {
-          //   symbol: symbol,
-          //   side: 'SHORT',
-          //   action: 'ALT平仓',
-          //   quantity: prevPosition.quantity,
-          //   entryPrice: prevPosition.currentPrice,
-          //   exitPrice: currentPrice,
-          //   amount: prevPosition.amount,
-          //   priceChangePercent: (priceChangePercent * 100).toFixed(2) + '%',
-          //   finalPnl: finalPnl,
-          //   pnlPercent: ((-priceChangePercent) * 100).toFixed(2) + '%',
-          //   sellFee: sellFee,
-          //   sellReason: sellReason,
-          //   calculation: `-${prevPosition.amount} * ${priceChangePercent.toFixed(6)} = ${finalPnl}`
-          // });
+          console.log(`[已实现盈亏] ALT平仓 时间: ${timestamp}`, {
+            symbol: symbol,
+            side: 'SHORT',
+            action: 'ALT平仓',
+            quantity: prevPosition.quantity,
+            entryPrice: prevPosition.currentPrice,
+            exitPrice: currentPrice,
+            amount: prevPosition.amount,
+            priceChangePercent: (priceChangePercent * 100).toFixed(2) + '%',
+            finalPnl: finalPnl,
+            pnlPercent: ((-priceChangePercent) * 100).toFixed(2) + '%',
+            sellFee: sellFee,
+            sellReason: sellReason,
+            calculation: `-${prevPosition.amount} * ${priceChangePercent.toFixed(6)} = ${finalPnl}`
+          });
 
           soldPositions.push({
             ...prevPosition,
@@ -956,22 +966,39 @@ class BTCDOM2StrategyEngine {
               const soldPnl = -soldAmount * ((price - prevPosition.entryPrice) / prevPosition.entryPrice);
               const soldTradingFee = this.calculateTradingFee(soldQuantity * price, false);
 
-              // 已实现盈亏日志
-              // console.log(`[已实现盈亏] ALT减仓 时间: ${timestamp}`, {
+              // shortPnl计算价格日志 - ALT减仓
+              // console.log(`[shortPnl计算] ${symbol} ALT减仓 时间: ${timestamp}`, {
               //   symbol: symbol,
               //   side: 'SHORT',
               //   action: 'ALT减仓',
               //   soldQuantity: soldQuantity,
-              //   prevEntryPrice: prevPosition.entryPrice,
-              //   currentPrice: price,
               //   soldAmount: soldAmount,
+              //   entryPrice: prevPosition.entryPrice,
+              //   currentPrice: price,
               //   priceChange: price - prevPosition.entryPrice,
-              //   priceChangePercent: ((price - prevPosition.entryPrice) / prevPosition.entryPrice * 100).toFixed(2) + '%',
+              //   priceChangePercent: ((price - prevPosition.entryPrice) / prevPosition.entryPrice * 100).toFixed(4) + '%',
               //   soldPnl: soldPnl,
-              //   pnlPercent: ((-((price - prevPosition.entryPrice) / prevPosition.entryPrice)) * 100).toFixed(2) + '%',
-              //   soldTradingFee: soldTradingFee,
-              //   calculation: `-${soldAmount} * ((${price} - ${prevPosition.entryPrice}) / ${prevPosition.entryPrice}) = ${soldPnl}`
+              //   pnlPercent: ((-((price - prevPosition.entryPrice) / prevPosition.entryPrice)) * 100).toFixed(4) + '%',
+              //   calculation: `做空减仓盈亏 = -${soldAmount} * ((${price} - ${prevPosition.entryPrice}) / ${prevPosition.entryPrice}) = ${soldPnl.toFixed(6)}`,
+              //   explanation: '做空减仓：价格上涨亏损，价格下跌盈利'
               // });
+
+              // 已实现盈亏日志
+              console.log(`[已实现盈亏] ALT减仓 时间: ${timestamp}`, {
+                symbol: symbol,
+                side: 'SHORT',
+                action: 'ALT减仓',
+                soldQuantity: soldQuantity,
+                prevEntryPrice: prevPosition.entryPrice,
+                currentPrice: price,
+                soldAmount: soldAmount,
+                priceChange: price - prevPosition.entryPrice,
+                priceChangePercent: ((price - prevPosition.entryPrice) / prevPosition.entryPrice * 100).toFixed(2) + '%',
+                soldPnl: soldPnl,
+                pnlPercent: ((-((price - prevPosition.entryPrice) / prevPosition.entryPrice)) * 100).toFixed(2) + '%',
+                soldTradingFee: soldTradingFee,
+                calculation: `-${soldAmount} * ((${price} - ${prevPosition.entryPrice}) / ${prevPosition.entryPrice}) = ${soldPnl}`
+              });
 
               soldPositions.push({
                 symbol: symbol,
@@ -1007,12 +1034,6 @@ class BTCDOM2StrategyEngine {
             }
           }
 
-          // 计算持仓的盈亏和费用
-          const validPrevAmount = prevPosition.amount ?? 0;
-          const validPrevPrice = prevPosition.currentPrice ?? price;
-          const priceChangePercent = validPrevPrice > 0 ? (price - validPrevPrice) / validPrevPrice : 0;
-          const pnl = validPrevAmount > 0 ? -validPrevAmount * priceChangePercent : 0;
-
           // 计算资金费率
           let fundingFee = 0;
           const prevRankingItem = previousData?.rankings?.find(r => r.symbol === symbol);
@@ -1028,7 +1049,7 @@ class BTCDOM2StrategyEngine {
             }
           }
 
-          // 计算加权平均成本价
+          // 计算加权平均成本价和交易类型
           let newEntryPrice: number;
           let periodTradingType: 'buy' | 'sell' | 'hold';
           let shortQuantityChange: { type: 'new' | 'increase' | 'decrease' | 'same' | 'sold'; previousQuantity?: number; changePercent?: number };
@@ -1046,6 +1067,14 @@ class BTCDOM2StrategyEngine {
             periodTradingType = 'buy';
             shortQuantityChange = { type: 'decrease', previousQuantity: prevQuantity, changePercent: prevQuantity > 0 ? (quantityDiff / prevQuantity) * 100 : 0 };
           }
+
+          // 修复：在仓位调整后计算剩余持仓的PnL
+          // 对于做空：盈亏 = 剩余数量 * (加权平均入场价 - 当前价)
+          const pnl = targetQuantity > 0 ? targetQuantity * (newEntryPrice - price) : 0;
+          
+          // 计算百分比盈亏 
+          const validPrevPrice = prevPosition.currentPrice ?? price;
+          const priceChangePercent = validPrevPrice > 0 ? (price - validPrevPrice) / validPrevPrice : 0;
 
           shortPositions.push({
             symbol: symbol,
@@ -1163,7 +1192,17 @@ class BTCDOM2StrategyEngine {
       previousAccountBalance = this.params.initialCapital - btcInvestment;
     }
     
-    // 现金账户只包含已实现盈亏（已平仓持仓的盈亏），不包含未平仓持仓的浮动盈亏
+    // 调试日志：现金余额计算详情
+    console.log(`[现金余额计算] 时间: ${timestamp}`, {
+      previousAccountBalance: previousAccountBalance,
+      soldValueChange: soldValueChange,
+      totalTradingFee: totalTradingFee,
+      totalFundingFee: totalFundingFee,
+      beforeFees: previousAccountBalance + soldValueChange,
+      afterFees: previousAccountBalance + soldValueChange - Math.abs(totalTradingFee) - Math.abs(totalFundingFee)
+    });
+    
+    // 现金账户 = 上期余额 + 已实现盈亏（ALT做空采用保证金制度，平仓只影响盈亏）
     account_usdt_balance = previousAccountBalance + soldValueChange;
 
     // 最终统一扣除费用
@@ -1172,6 +1211,35 @@ class BTCDOM2StrategyEngine {
     // 新的 totalValue 计算方法：现金 + BTC市值 + 空单浮动盈亏
     const btcValue = btcPosition ? btcPosition.quantity * btcPosition.currentPrice : 0;
     const shortPnl = shortPositions.reduce((sum, pos) => sum + pos.pnl, 0);
+    
+    // shortPnl汇总计算日志
+    console.log(`[shortPnl汇总] 时间: ${timestamp}`, {
+      totalShortPositions: shortPositions.length,
+      shortPositionsDetails: shortPositions.map(pos => ({
+        symbol: pos.symbol,
+        amount: pos.amount,
+        quantity: pos.quantity,
+        entryPrice: pos.entryPrice,
+        currentPrice: pos.currentPrice,
+        pnl: pos.pnl,
+        pnlPercent: (pos.pnlPercent * 100).toFixed(4) + '%',
+        calculation: `${pos.symbol}: ${pos.pnl.toFixed(6)}`
+      })),
+      totalShortPnl: shortPnl,
+      calculation: shortPositions.map(pos => `${pos.symbol}(${pos.pnl.toFixed(6)})`).join(' + ') + ` = ${shortPnl.toFixed(6)}`
+    });
+    
+    // 调试日志：总价值组成部分
+    console.log(`[总价值计算] 时间: ${timestamp}`, {
+      account_usdt_balance: account_usdt_balance,
+      btcValue: btcValue,
+      btcQuantity: btcPosition?.quantity || 0,
+      btcPrice: btcPrice,
+      shortPnl: shortPnl,
+      shortPositionsCount: shortPositions.length,
+      calculatedTotal: account_usdt_balance + btcValue + shortPnl
+    });
+    
     totalValue = account_usdt_balance + btcValue + shortPnl;
     console.log('时间:', timestamp, ', 总价值:', totalValue.toFixed(2), ', BTC价格:', btcPrice, ', 现金余额:', account_usdt_balance.toFixed(2), ', BTC市值:', (btcPosition ? (btcPosition.quantity * btcPosition.currentPrice).toFixed(2) : '0.00'), ', 已实现盈亏:', soldValueChange.toFixed(2), ', 交易手续费:', totalTradingFee.toFixed(2), ', 资金费率:', totalFundingFee.toFixed(2));
     const totalPnl = totalValue - this.params.initialCapital;
