@@ -110,15 +110,6 @@ export const DateRangeControl = memo(function DateRangeControl({
   const lastStartDateExternalValueRef = useRef<string>(startDate);
   const lastEndDateExternalValueRef = useRef<string>(endDate);
 
-  devConsole.log('🔄 DateRangeControl render:', {
-    propsStartDate: startDate,
-    propsEndDate: endDate,
-    displayStartDate: displayStartDate,
-    displayEndDate: displayEndDate,
-    lastStartExternal: lastStartDateExternalValueRef.current,
-    lastEndExternal: lastEndDateExternalValueRef.current
-  });
-
   // 开始日期处理函数
   const handleStartDateChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const dateTimeValue = event.target.value;

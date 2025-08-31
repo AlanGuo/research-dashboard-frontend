@@ -113,6 +113,8 @@ export function PriceComparisonTable({
           short => short.symbol.replace('USDT', '').toUpperCase() === positionSymbol
         );
         result.realHoldingQuantity = shortPosition ? shortPosition.quantity : 0;
+        // 注意：shortPosition.value 是名义价值（做空的市值），不是实际占用的保证金
+        // 对于做空仓位，我们主要关注浮动盈亏差异(unrealized_pnl)而不是持仓金额差异
         realHoldingValue = shortPosition ? shortPosition.value : 0;
         result.realMarketPrice = shortPosition ? shortPosition.avg_price : undefined;
         result.realUnrealizedPnl = shortPosition ? shortPosition.unrealized_pnl : 0;
