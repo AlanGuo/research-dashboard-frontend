@@ -183,7 +183,6 @@ export function PriceComparisonTable({
           // 由于使用by-timestamp端点，data应该是单个对象
           const positionData = Array.isArray(data.data) ? data.data[0] : data.data;
           setPositionHistory(positionData);
-          console.log('获取到实盘持仓历史数据:', positionData);
         } else {
           console.warn('未找到对应时间的实盘持仓历史数据');
           setPositionHistory(null);
@@ -235,6 +234,11 @@ export function PriceComparisonTable({
         // 使用统一账户余额，如果不存在则回退到原来的计算方式
         backtestCashBalance = matchingSnapshot.account_usdt_balance;
       }
+    }
+    
+    // 当实盘余额为0时，使用回测余额作为实盘余额
+    if (realCashBalance === 0 && backtestCashBalance > 0) {
+      realCashBalance = backtestCashBalance;
     }
     
     const accountLevelCashBalanceDiff = realCashBalance - backtestCashBalance;
@@ -614,18 +618,54 @@ export function PriceComparisonTable({
               {enhancedSummary && (
                 <div>
                   {/* 主要汇总统计 */}
-                  <div className="grid grid-cols-3 gap-4 mt-6">
+                  <div className="grid grid-cols-4 gap-4 mt-6">
+                    {/* BTC持仓金额差异卡片 */}
+                    <Card className="border-green-200 dark:border-green-800">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm text-green-800 dark:text-green-200">BTC持仓金额差异</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {(() => {
+                          const btcComparison = enhancedComparisons.find(comp => 
+                            comp.symbol.replace('USDT', '').toUpperCase() === 'BTC'
+                          );
+                          const btcHoldingAmountDiff = btcComparison?.difference.holdingAmountDiff || 0;
+                          return (
+                            <>
+                              <div className={`text-2xl font-bold ${getPnlColor(btcHoldingAmountDiff)}`}>
+                                {formatPnlAmount(btcHoldingAmountDiff)}
+                              </div>
+                              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                实盘BTC价值 - 回测BTC价值
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </CardContent>
+                    </Card>
                     <Card className="border-blue-200 dark:border-blue-800">
                       <CardHeader className="pb-2">
                         <CardTitle className="text-sm text-blue-800 dark:text-blue-200">浮动盈亏差异</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <div className={`text-2xl font-bold ${getPnlColor(enhancedSummary.totalPnlDiff)}`}>
-                          {formatPnlAmount(enhancedSummary.totalPnlDiff)}
-                        </div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                          实盘浮动盈亏 - 回测浮动盈亏
-                        </div>
+                        {(() => {
+                          // 计算剔除BTC后的浮动盈亏差异
+                          const btcComparison = enhancedComparisons.find(comp => 
+                            comp.symbol.replace('USDT', '').toUpperCase() === 'BTC'
+                          );
+                          const btcPnlDiff = btcComparison?.difference.pnlDiff || 0;
+                          const altPnlDiff = enhancedSummary.totalPnlDiff - btcPnlDiff;
+                          return (
+                            <>
+                              <div className={`text-2xl font-bold ${getPnlColor(altPnlDiff)}`}>
+                                {formatPnlAmount(altPnlDiff)}
+                              </div>
+                              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                ALT币做空浮动盈亏差异
+                              </div>
+                            </>
+                          );
+                        })()}
                       </CardContent>
                     </Card>
 
@@ -642,7 +682,7 @@ export function PriceComparisonTable({
                         </div>
                         <div className="text-xs text-gray-500 dark:text-gray-400 mt-2 space-y-1">
                           <div className="font-medium">实盘余额: ${enhancedSummary.realCashBalance.toFixed(2)}</div>
-                          <div className="font-medium mt-2">回测余额: ${enhancedSummary.backtestCashBalance.toFixed(2)}</div>
+                          <div className="font-medium">回测余额: ${enhancedSummary.backtestCashBalance.toFixed(2)}</div>
                         </div>
                       </CardContent>
                     </Card>
@@ -652,12 +692,33 @@ export function PriceComparisonTable({
                         <CardTitle className="text-sm text-indigo-800 dark:text-indigo-200">总体影响</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <div className={`text-2xl font-bold ${getPnlColor(enhancedSummary.totalImpact)}`}>
-                          {formatPnlAmount(enhancedSummary.totalImpact)}
-                        </div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                          对收益率影响: {enhancedSummary.totalImpactPercent >= 0 ? '+' : ''}{enhancedSummary.totalImpactPercent.toFixed(3)}%
-                        </div>
+                        {(() => {
+                          // 计算新的总体影响：BTC持仓金额差异 + ALT币浮动盈亏差异 + 现金余额差异
+                          const btcComparison = enhancedComparisons.find(comp => 
+                            comp.symbol.replace('USDT', '').toUpperCase() === 'BTC'
+                          );
+                          const btcHoldingAmountDiff = btcComparison?.difference.holdingAmountDiff || 0;
+                          const btcPnlDiff = btcComparison?.difference.pnlDiff || 0;
+                          const altPnlDiff = enhancedSummary.totalPnlDiff - btcPnlDiff;
+                          const newTotalImpact = btcHoldingAmountDiff + altPnlDiff + enhancedSummary.totalCashBalanceDiff;
+                          const baseAmount = previousBalance || initialCapital;
+                          const newTotalImpactPercent = (newTotalImpact / baseAmount) * 100;
+                          return (
+                            <>
+                              <div className={`text-2xl font-bold ${getPnlColor(newTotalImpact)}`}>
+                                {formatPnlAmount(newTotalImpact)}
+                              </div>
+                              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                对收益率影响: {newTotalImpactPercent >= 0 ? '+' : ''}{newTotalImpactPercent.toFixed(2)}%
+                              </div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400 mt-2 space-y-1">
+                                <div>BTC持仓差异: {formatPnlAmount(btcHoldingAmountDiff)}</div>
+                                <div>ALT浮动盈亏: {formatPnlAmount(altPnlDiff)}</div>
+                                <div>现金余额差异: {formatPnlAmount(enhancedSummary.totalCashBalanceDiff)}</div>
+                              </div>
+                            </>
+                          );
+                        })()}
                     </CardContent>
                   </Card>
                 </div>
@@ -667,10 +728,13 @@ export function PriceComparisonTable({
               <div className="mt-4 p-3 bg-purple-50 dark:bg-purple-900/10 rounded-lg border border-purple-200 dark:border-purple-800">
                 <h4 className="text-sm font-medium text-purple-800 dark:text-purple-200 mb-2">金额差异计算说明</h4>
                 <div className="text-xs text-purple-700 dark:text-purple-300 space-y-1">
-                  <p>• <strong>持仓金额差异</strong>：实盘持仓金额 - 回测持仓金额（使用btcdom2_position_history中的value字段）</p>
-                  <p>• <strong>浮动盈亏差异</strong>：实盘浮动盈亏 - 回测浮动盈亏（使用btcdom2_position_history中的unrealized_pnl字段）</p>
-                  <p>• <strong>现金余额差异</strong>：(实盘现货余额 + 实盘期货余额) - (回测现货余额 + 回测期货余额)</p>
-                  <p>• <strong>总影响</strong>：浮动盈亏差异 + 现金余额差异</p>
+                  <p>• <strong>BTC持仓金额差异</strong>：实盘BTC持仓价值 - 回测BTC持仓价值（使用btcdom2_position_history中的value字段）</p>
+                  <p>• <strong>ALT币浮动盈亏差异</strong>：实盘ALT币做空浮动盈亏 - 回测ALT币做空浮动盈亏（使用btcdom2_position_history中的unrealized_pnl字段）</p>
+                  <p>• <strong>现金余额差异</strong>：实盘统一账户余额 - 回测统一账户余额</p>
+                  <p>• <strong>总体影响</strong>：BTC持仓金额差异 + ALT币浮动盈亏差异 + 现金余额差异</p>
+                  <p>• <strong>差异逻辑</strong>：</p>
+                  <p>&nbsp;&nbsp;- BTC现货仓位：比较持仓价值差异（不计算浮动盈亏）</p>
+                  <p>&nbsp;&nbsp;- ALT币做空仓位：比较浮动盈亏差异</p>
                   <p>• <strong>数据来源</strong>：</p>
                   <p>&nbsp;&nbsp;- 实盘数据：来自btcdom2_position_history表</p>
                   <p>&nbsp;&nbsp;- 回测数据：来自策略快照</p>
