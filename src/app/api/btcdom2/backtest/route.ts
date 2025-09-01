@@ -696,9 +696,6 @@ class BTCDOM2StrategyEngine {
           explanation: 'BTC现货初始买入支出，减少现金余额'
         });
       } else {
-        // 使用上一期的BTC数量和价格变化来计算盈亏
-        btcPnl = prevQuantity * (btcPrice - previousBtcPrice);
-        
         // 如果BTC仓位发生变化，计算交易手续费
         if (hasQuantityChange) {
           btcTradingFee = this.calculateTradingFee(Math.abs(quantityDiff) * btcPrice, true);
@@ -708,7 +705,6 @@ class BTCDOM2StrategyEngine {
       // 确保所有数值都是有效的
       const validBtcAmount = isNaN(btcAmount) || btcAmount <= 0 ? 0 : btcAmount;
       const validBtcQuantity = isNaN(btcQuantity) || btcQuantity <= 0 ? 0 : btcQuantity;
-      const validBtcPnl = isNaN(btcPnl) ? 0 : btcPnl;
       const validBtcTradingFee = isNaN(btcTradingFee) ? 0 : btcTradingFee;
       const prevAmount = prevBtcPosition?.value ?? validBtcAmount;
       
@@ -739,7 +735,7 @@ class BTCDOM2StrategyEngine {
           };
         } else if (quantityDiff > 0) {
           // 加仓，计算加权平均成本价
-          btcNewQuantity = validBtcQuantity;
+          btcNewQuantity = prevQuantity + quantityDiff;
           newEntryPrice = (prevQuantity * prevEntryPrice + quantityDiff * btcPrice) / btcNewQuantity;
           periodTradingType = 'buy';
           btcQuantityChange = {
@@ -773,6 +769,7 @@ class BTCDOM2StrategyEngine {
         } else {
           // 减仓，保持原均价（部分卖出不影响剩余持仓的成本价）
           newEntryPrice = prevEntryPrice;
+          btcNewQuantity = prevQuantity + quantityDiff; // quantityDiff为负数
           periodTradingType = 'sell';
           btcQuantityChange = {
             type: 'decrease',
@@ -840,6 +837,16 @@ class BTCDOM2StrategyEngine {
         btcTradingQuantity = btcNewQuantity;
         btcQuantityChange = { type: 'new', previousQuantity: 0, changePercent: 0 };
       }
+      
+      // 完成仓位调整后，重新计算btcPnl
+      if (prevBtcPosition) {
+        // 使用调整后的最新持仓数量和最新的entryPrice来计算盈亏
+        btcPnl = btcNewQuantity * (btcPrice - newEntryPrice);
+      } else {
+        // 第一次开仓，盈亏为0
+        btcPnl = 0;
+      }
+      const validBtcPnl = isNaN(btcPnl) ? 0 : btcPnl;
       
       btcPosition = {
         symbol: 'BTCUSDT',
