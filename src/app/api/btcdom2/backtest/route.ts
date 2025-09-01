@@ -1317,8 +1317,15 @@ class BTCDOM2StrategyEngine {
 function calculatePerformanceMetrics(
   snapshots: StrategySnapshot[],
   params: BTCDOM2StrategyParams,
-  granularityHours: number
+  granularityHours: number,
+  enableMetricsLogs: boolean = false
 ): BTCDOM2PerformanceMetrics {
+  if (enableMetricsLogs) {
+    console.log('\n=== 开始计算性能指标 ===');
+    console.log(`快照数量: ${snapshots.length}`);
+    console.log(`初始资金: $${params.initialCapital.toFixed(2)}`);
+  }
+  
   if (snapshots.length === 0) {
     return {
       totalReturn: 0, btcReturn: 0, altReturn: 0, annualizedReturn: 0, volatility: 0, sharpeRatio: 0,
@@ -1329,6 +1336,101 @@ function calculatePerformanceMetrics(
         totalPnlRate: 0, btcRealizedPnlRate: 0, btcUnrealizedPnlRate: 0, altRealizedPnlRate: 0, altUnrealizedPnlRate: 0, tradingFeeRate: 0, fundingFeeRate: 0
       }
     };
+  }
+
+  // 算法对比：逐期验证两种算法的一致性
+  if (enableMetricsLogs) {
+    console.log('\n=== 算法对比：逐期验证 ===');
+    
+    // 算法2的累计跟踪变量
+    let cumulativeRealizedBtcPnl = 0;
+    let cumulativeRealizedAltPnl = 0;
+    let cumulativeTradingFee = 0;
+    let cumulativeFundingFee = 0;
+    
+    for (let i = 0; i < snapshots.length; i++) {
+      const snapshot = snapshots[i];
+      
+      // 算法1：现金余额追踪方式（当前实现）
+      const algorithm1_totalValue = snapshot.totalValue;
+      
+      // 累计当期的已实现盈亏和费用（算法2需要）
+      if (snapshot.btcSoldPosition) {
+        cumulativeRealizedBtcPnl += snapshot.btcSoldPosition.pnl;
+      }
+      
+      // 累计ALT已实现盈亏
+      if (snapshot.soldPositions && snapshot.soldPositions.length > 0) {
+        const altRealizedPnl = snapshot.soldPositions.reduce((sum, pos) => sum + pos.pnl, 0);
+        cumulativeRealizedAltPnl += altRealizedPnl;
+      }
+      
+      // 累计费用
+      cumulativeTradingFee += snapshot.totalTradingFee || 0;
+      cumulativeFundingFee += snapshot.totalFundingFee || 0;
+      
+      // 计算当前期的浮动盈亏
+      let currentBtcUnrealizedPnl = 0;
+      let btcUnrealizedDetail = '';
+      if (snapshot.btcPosition) {
+        // BTC浮动盈亏：基于加权平均成本价计算未实现盈亏
+        // 因为btcPosition.entryPrice已经是加权平均成本价
+        const quantity = snapshot.btcPosition.quantity;
+        const currentPrice = snapshot.btcPosition.currentPrice;
+        const entryPrice = snapshot.btcPosition.entryPrice;
+        currentBtcUnrealizedPnl = quantity * (currentPrice - entryPrice);
+        btcUnrealizedDetail = `[${quantity.toFixed(6)} × ($${currentPrice.toFixed(2)} - $${entryPrice.toFixed(2)})]`;
+      }
+      
+      let currentAltUnrealizedPnl = 0;
+      if (snapshot.shortPositions) {
+        currentAltUnrealizedPnl = snapshot.shortPositions.reduce((sum, pos) => sum + pos.pnl, 0);
+      }
+      
+      // 算法2：累计盈亏方式
+      const algorithm2_totalValue = params.initialCapital + 
+        cumulativeRealizedBtcPnl + currentBtcUnrealizedPnl +
+        cumulativeRealizedAltPnl + currentAltUnrealizedPnl +
+        cumulativeTradingFee + cumulativeFundingFee;
+      
+      // 对比结果
+      const difference = algorithm1_totalValue - algorithm2_totalValue;
+      const status = Math.abs(difference) < 0.01 ? '✓' : '✗';
+      
+      console.log(`${snapshot.timestamp} ${status}: 算法1 $${algorithm1_totalValue.toFixed(2)} vs 算法2 $${algorithm2_totalValue.toFixed(2)}, 差异 $${difference.toFixed(6)}`);
+      
+      // 如果差异较大，显示详细分解
+      if (Math.abs(difference) >= 0.01) {
+        console.log(`  算法1分解: 现金 $${snapshot.account_usdt_balance?.toFixed(2) || 0} + BTC市值 + ALT浮动`);
+        
+        // 构建BTC已实现盈亏的每期加总明细
+        const btcPeriodPnls = [];
+        for (let j = 0; j <= i; j++) {
+          const periodSnapshot = snapshots[j];
+          if (periodSnapshot.btcSoldPosition) {
+            btcPeriodPnls.push(`${periodSnapshot.timestamp}($${periodSnapshot.btcSoldPosition.pnl.toFixed(2)})`);
+          }
+        }
+        
+        const btcDetailStr = btcPeriodPnls.length > 0 ? 
+          ` [${btcPeriodPnls.join(' + ')}]` : '';
+        
+        // 构建ALT已实现盈亏的每期加总明细
+        const altPeriodPnls = [];
+        for (let j = 0; j <= i; j++) {
+          const periodSnapshot = snapshots[j];
+          if (periodSnapshot.soldPositions && periodSnapshot.soldPositions.length > 0) {
+            const periodPnl = periodSnapshot.soldPositions.reduce((sum, pos) => sum + pos.pnl, 0);
+            altPeriodPnls.push(`${periodSnapshot.timestamp}($${periodPnl.toFixed(2)})`);
+          }
+        }
+        
+        const altDetailStr = altPeriodPnls.length > 0 ? 
+          ` [${altPeriodPnls.join(' + ')}]` : '';
+        
+        console.log(`  算法2分解: 初始 $${params.initialCapital.toFixed(2)} + BTC已实现 $${cumulativeRealizedBtcPnl.toFixed(2)}${btcDetailStr} + BTC浮动 $${currentBtcUnrealizedPnl.toFixed(2)} ${btcUnrealizedDetail} + ALT已实现 $${cumulativeRealizedAltPnl.toFixed(2)}${altDetailStr} + ALT浮动 $${currentAltUnrealizedPnl.toFixed(2)} + 费用 $${(cumulativeTradingFee + cumulativeFundingFee).toFixed(2)}`);
+      }
+    }
   }
 
   // 计算期间收益率变化（不是累计收益率）
@@ -1409,6 +1511,7 @@ function calculatePerformanceMetrics(
   // 计算BTC和ALT分别收益率
   const firstSnapshot = snapshots[0];
   const finalSnapshot = snapshots[snapshots.length - 1];
+  
 
   // BTC收益率：基于BTC价格变化
   const btcReturn = firstSnapshot.btcPrice > 0 ?
@@ -1564,10 +1667,14 @@ function calculatePerformanceMetrics(
   let btcUnrealizedPnl = 0;
   
   if (params.longBtc) {
+    
     // 1. BTC已实现盈亏 - 累计所有历史BTC卖出的盈亏
+    let btcRealizedCount = 0;
     for (const snapshot of snapshots) {
       if (snapshot.btcSoldPosition) {
-        btcRealizedPnl += snapshot.btcSoldPosition.pnl;
+        const soldPnl = snapshot.btcSoldPosition.pnl;
+        btcRealizedPnl += soldPnl;
+        btcRealizedCount++;
       }
     }
     
@@ -1578,11 +1685,6 @@ function calculatePerformanceMetrics(
       const entryPrice = finalSnapshot.btcPosition.entryPrice;
       btcUnrealizedPnl = quantity * (currentPrice - entryPrice);
     }
-    
-    // 调试日志
-    if (params.enableSnapshotLogs) {
-      console.log(`[BTC盈亏分解] 已实现: ${btcRealizedPnl.toFixed(2)}, 浮动: ${btcUnrealizedPnl.toFixed(2)}, 合计: ${(btcRealizedPnl + btcUnrealizedPnl).toFixed(2)}`);
-    }
   }
 
   // ALT盈亏分解计算
@@ -1590,23 +1692,24 @@ function calculatePerformanceMetrics(
   let altUnrealizedPnl = 0;
   
   if (params.shortAlt) {
+    
     // 1. ALT已实现盈亏 - 累计所有历史ALT平仓的盈亏
+    let altSoldTransactions = 0;
     for (const snapshot of snapshots) {
       if (snapshot.soldPositions) {
         const altSoldPnl = snapshot.soldPositions
           .filter(pos => pos.side === 'SHORT')
           .reduce((sum, pos) => sum + pos.pnl, 0);
-        altRealizedPnl += altSoldPnl;
+        
+        if (altSoldPnl !== 0) {
+          altRealizedPnl += altSoldPnl;
+          altSoldTransactions++;
+        }
       }
     }
     
     // 2. ALT浮动盈亏 - 当前ALT做空持仓的未实现盈亏
     altUnrealizedPnl = finalSnapshot.shortPositions.reduce((sum, pos) => sum + pos.pnl, 0);
-    
-    // 调试日志
-    if (params.enableSnapshotLogs) {
-      console.log(`[ALT盈亏分解] 已实现: ${altRealizedPnl.toFixed(2)}, 浮动: ${altUnrealizedPnl.toFixed(2)}, 合计: ${(altRealizedPnl + altUnrealizedPnl).toFixed(2)}`);
-    }
   }
 
   // 手续费和资金费率金额
@@ -1733,9 +1836,12 @@ export async function POST(request: NextRequest) {
       temperatureThreshold: rawParams.temperatureThreshold !== undefined ? rawParams.temperatureThreshold : 60,
       temperatureTimeframe: rawParams.temperatureTimeframe !== undefined ? rawParams.temperatureTimeframe : '1D',
       temperatureData: rawParams.temperatureData || [],
-      // 日志开关参数
-      enableSnapshotLogs: rawParams.enableSnapshotLogs !== undefined ? rawParams.enableSnapshotLogs : false,
+      // 日志开关参数（优先使用请求参数，其次使用配置文件，最后使用默认值）
+      enableSnapshotLogs: rawParams.enableSnapshotLogs !== undefined ? rawParams.enableSnapshotLogs : (config.btcdom2?.enableSnapshotLogs ?? false),
+      enableMetricsLogs: rawParams.enableMetricsLogs !== undefined ? rawParams.enableMetricsLogs : (config.btcdom2?.enableMetricsLogs ?? false),
     };
+
+    console.log("enableMetricsLogs", params.enableMetricsLogs)
 
     // 检查是否为优化模式（跳过图表数据生成以提升性能）
     const optimizeOnly = rawParams.optimizeOnly === true;
@@ -1828,7 +1934,7 @@ export async function POST(request: NextRequest) {
 
     // 计算性能指标
     const performanceStartTime = performance.now();
-    const metrics = calculatePerformanceMetrics(snapshots, params, granularityHours);
+    const metrics = calculatePerformanceMetrics(snapshots, params, granularityHours, params.enableMetricsLogs);
 
     // 生成图表数据（优化模式下跳过以提升性能）
     const chartData = optimizeOnly ? [] : generateChartData(snapshots, params);

@@ -29,6 +29,7 @@ export interface BTCDOM2StrategyParams {
   
   // 调试和日志相关参数
   enableSnapshotLogs?: boolean; // 是否启用快照生成过程的详细日志（默认false）
+  enableMetricsLogs?: boolean;  // 是否启用性能指标计算的详细日志（默认false）
   
   // 温度计规则相关参数
   useTemperatureRule: boolean;  // 是否启用温度计规则
