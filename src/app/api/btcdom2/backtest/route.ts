@@ -630,6 +630,7 @@ class BTCDOM2StrategyEngine {
     let totalTradingFee = 0;
     let totalFundingFee = 0;
     let btcSaleRevenue = 0; // BTC现货卖出收入
+    let btcPurchaseExpense = 0; // BTC现货买入支出
     const accumulatedTradingFee = (previousSnapshot?.accumulatedTradingFee || 0);
     const accumulatedFundingFee = (previousSnapshot?.accumulatedFundingFee || 0);
     
@@ -668,6 +669,22 @@ class BTCDOM2StrategyEngine {
         btcTradingFee = this.calculateTradingFee(btcAmount, true); // BTC现货交易
         totalTradingFee += btcTradingFee;
         btcIsNewPosition = true;
+        
+        // 第一次开仓BTC买入支出（包含手续费）
+        btcPurchaseExpense = btcAmount + Math.abs(btcTradingFee);
+        
+        // BTC初始开仓现金流日志
+        console.log(`[BTC初始开仓现金流] 时间: ${timestamp}`, {
+          symbol: 'BTCUSDT',
+          side: 'LONG',
+          action: 'BTC现货初始开仓',
+          quantity: btcQuantity,
+          currentPrice: btcPrice,
+          btcAmount: btcAmount,
+          btcTradingFee: btcTradingFee,
+          btcPurchaseExpense: btcPurchaseExpense,
+          explanation: 'BTC现货初始买入支出，减少现金余额'
+        });
       }
 
       // 确保所有数值都是有效的
@@ -708,6 +725,26 @@ class BTCDOM2StrategyEngine {
             previousQuantity: prevQuantity,
             changePercent: prevQuantity > 0 ? (quantityDiff / prevQuantity) * 100 : 0
           };
+
+          // BTC现货加仓：需要扣除现金购买BTC
+          const addValue = quantityDiff * btcPrice; // 加仓投入金额
+          const addTradingFee = this.calculateTradingFee(addValue, true); // 加仓手续费
+          
+          // 记录BTC买入支出（包含手续费）
+          btcPurchaseExpense = addValue + Math.abs(addTradingFee);
+          
+          // BTC加仓现金流日志
+          console.log(`[BTC加仓现金流] 时间: ${timestamp}`, {
+            symbol: 'BTCUSDT',
+            side: 'LONG',
+            action: 'BTC现货加仓',
+            addQuantity: quantityDiff,
+            currentPrice: btcPrice,
+            addValue: addValue,
+            addTradingFee: addTradingFee,
+            btcPurchaseExpense: btcPurchaseExpense,
+            explanation: 'BTC现货买入支出，减少现金余额'
+          });
         } else {
           // 减仓，保持原均价（部分卖出不影响剩余持仓的成本价）
           newEntryPrice = prevEntryPrice;
@@ -1070,7 +1107,6 @@ class BTCDOM2StrategyEngine {
     const altSoldRevenue = soldPositions
       .filter(pos => pos.side === 'SHORT')
       .reduce((sum, pos) => sum + pos.pnl, 0); // 对于做空，pnl就是现金余额的变化
-    console.log("altSoldRevenue", altSoldRevenue, "soldPositions", soldPositions)
     // ALT仓位变化汇总日志
     const altPositionChanges: any[] = [];
 
@@ -1129,25 +1165,26 @@ class BTCDOM2StrategyEngine {
     if (previousSnapshot?.account_usdt_balance !== undefined) {
       previousAccountBalance = previousSnapshot.account_usdt_balance;
     } else {
-      // 初始状态：总资金减去用于购买BTC的资金
-      const btcInvestment = btcPosition?.value || 0;
-      previousAccountBalance = this.params.initialCapital - btcInvestment;
+      // 初始状态：全部资金都是现金余额，BTC购买费用通过btcPurchaseExpense扣除
+      previousAccountBalance = this.params.initialCapital;
     }
     
     // 调试日志：现金余额计算详情
     console.log(`[现金余额计算] 时间: ${timestamp}`, {
       previousAccountBalance: previousAccountBalance,
       btcSaleRevenue: btcSaleRevenue,
+      btcPurchaseExpense: btcPurchaseExpense,
       altSoldRevenue: altSoldRevenue,
       totalTradingFee: totalTradingFee,
       totalFundingFee: totalFundingFee,
-      explanation: '现金余额 = 上期余额 + BTC卖出收入 + ALT卖出收入 - 手续费'
+      explanation: '现金余额 = 上期余额 + BTC卖出收入 - BTC买入支出 + ALT卖出收入 - 手续费'
     });
     
     // 正确的现金余额计算逻辑：
     // 1. BTC卖出：增加现金收入 (+btcSaleRevenue)
-    // 2. ALT卖出：现金余额变化 (+altSoldRevenue)
-    account_usdt_balance = previousAccountBalance + btcSaleRevenue + altSoldRevenue;
+    // 2. BTC买入：减少现金支出 (-btcPurchaseExpense)
+    // 3. ALT卖出：现金余额变化 (+altSoldRevenue)
+    account_usdt_balance = previousAccountBalance + btcSaleRevenue - btcPurchaseExpense + altSoldRevenue;
 
     // 最终统一扣除费用
     account_usdt_balance = account_usdt_balance - Math.abs(totalTradingFee) - Math.abs(totalFundingFee);

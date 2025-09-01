@@ -139,7 +139,7 @@ export function PriceComparisonTable({
 
     // 3. 计算持仓金额差异
     // 对于已平仓的币种，回测持仓金额应该是0
-    const backtestHoldingAmount = position.isSoldOut ? 0 : (position.amount || 0);
+    const backtestHoldingAmount = position.isSoldOut ? 0 : (position.value || 0);
     result.holdingAmountDiff = realHoldingValue - backtestHoldingAmount;
     
     // 3.1 计算浮动盈亏差异（实盘 - 回测）

@@ -753,7 +753,7 @@ class BTCDOM2StrategyEngine {
 
             // 计算卖出时的最终盈亏
             const priceChangePercent = (currentPrice - prevPosition.currentPrice) / prevPosition.currentPrice;
-            const finalPnl = -prevPosition.value * priceChangePercent;
+            const finalPnl = prevPosition.quantity * (prevPosition.entryPrice - currentPrice); // 做空盈亏：数量 × (入场价 - 出场价)
 
             // 确保 amount 和 quantity 有有效的数值，避免 null 值
             const validAmount = prevPosition.value ?? 0;
@@ -850,11 +850,12 @@ class BTCDOM2StrategyEngine {
 
             // 做空盈亏：价格下跌时盈利，价格上涨时亏损
             const priceChangePercent = validPrevPrice > 0 ? (price - validPrevPrice) / validPrevPrice : 0;
-            pnl = validPrevAmount > 0 ? -validPrevAmount * priceChangePercent : 0;
-            pnlPercent = -priceChangePercent;
+            const validPrevQuantity = previousShortPosition.quantity ?? 0;
+            const validPrevEntryPrice = previousShortPosition.entryPrice ?? price;
+            pnl = validPrevQuantity > 0 ? validPrevQuantity * (validPrevEntryPrice - price) : 0;
+            pnlPercent = validPrevAmount > 0 ? pnl / validPrevAmount : 0;
 
             // 如果仓位发生变化，计算交易手续费
-            const validPrevQuantity = previousShortPosition.quantity ?? 0;
             const quantityDiff = Math.abs(quantity - validPrevQuantity);
             if (quantityDiff > 0.0001) {
               tradingFee = this.calculateTradingFee(quantityDiff * price, false); // ALT期货交易
@@ -964,6 +965,9 @@ class BTCDOM2StrategyEngine {
       const btcValueChange = btcPnl;
       const shortValueChange = shortPositions.reduce((sum, pos) => sum + pos.pnl, 0);
       const soldValueChange = soldPositions.reduce((sum, pos) => sum + pos.pnl, 0);
+      shortPositions.forEach(pos => {
+        console.log("pnl", pos.pnl, pos);
+      });
       console.log("时间", new Date(timestamp).toISOString(), "previousValue:", previousValue, " BTC价格", btcPrice, " btcValueChange:", btcValueChange, " shortValueChange:", shortValueChange, " soldValueChange:", soldValueChange, " totalTradingFee:", totalTradingFee, " totalFundingFee:", totalFundingFee);
       totalValue = previousValue + btcValueChange + shortValueChange + soldValueChange + totalTradingFee + totalFundingFee;
 
@@ -987,7 +991,7 @@ class BTCDOM2StrategyEngine {
 
           // 计算卖出时的最终盈亏
           const priceChangePercent = (currentPrice - prevPosition.currentPrice) / prevPosition.currentPrice;
-          const finalPnl = -prevPosition.value * priceChangePercent;
+          const finalPnl = prevPosition.quantity * (prevPosition.entryPrice - currentPrice); // 做空盈亏：数量 × (入场价 - 出场价)
 
           // 确保 amount 和 quantity 有有效的数值，避免 null 值
           const validAmount = prevPosition.value ?? 0;
