@@ -219,26 +219,50 @@ class BTCPositionCalculator {
     
     console.log(`  当期现金余额: $${account_usdt_balance.toFixed(2)}`);
     
-    // 计算总价值：现金 + BTC市值
-    const btcValue = btcPosition ? btcPosition.quantity * btcPosition.currentPrice : 0;
-    const totalValue = account_usdt_balance + btcValue;
+    // 计算BTC市值
+    const btcMarketValue = btcPosition ? btcPosition.quantity * btcPosition.currentPrice : 0;
     
-    console.log(`\n总价值计算:`);
+    // 计算累计BTC已实现盈亏（按算法二方式）
+    const cumulativeBtcPnl = (previousSnapshot?.cumulativeBtcPnl || 0) + btcRealizedPnl;
+    
+    // ===== 核心对比：两种算法 =====
+    
+    // 算法1：route.ts方式（现金余额追踪）
+    const algorithm1_totalValue = account_usdt_balance + btcMarketValue;
+    
+    // 算法2：累计盈亏方式
+    // 对于BTC现货：totalValue = initialCapital + totalBtcPnl - accumulatedFees
+    // 其中 totalBtcPnl = cumulativeRealizedPnl + unrealizedPnl
+    const currentAccumulatedFee = (previousSnapshot?.accumulatedTradingFee || 0) + Math.abs(totalTradingFee);
+    const algorithm2_totalValue = this.params.initialCapital + cumulativeBtcPnl + btcUnrealizedPnl - currentAccumulatedFee;
+    
+    console.log(`\n=== 两种算法对比 ===`);
+    console.log(`算法1 (route.ts方式):`);
     console.log(`  现金余额: $${account_usdt_balance.toFixed(2)}`);
-    console.log(`  BTC市值: $${btcValue.toFixed(2)}`);
-    console.log(`  总价值: $${totalValue.toFixed(2)}`);
+    console.log(`  BTC市值: $${btcMarketValue.toFixed(2)}`);
+    console.log(`  总价值: $${algorithm1_totalValue.toFixed(2)}`);
     
-    // 计算总盈亏
+    console.log(`算法2 (累计盈亏方式):`);
+    console.log(`  初始资本: $${this.params.initialCapital.toFixed(2)}`);
+    console.log(`  累计BTC已实现盈亏: $${cumulativeBtcPnl.toFixed(2)}`);
+    console.log(`  BTC浮动盈亏: $${btcUnrealizedPnl.toFixed(2)}`);
+    console.log(`  累计手续费: -$${currentAccumulatedFee.toFixed(2)}`);
+    console.log(`  总价值: $${algorithm2_totalValue.toFixed(2)}`);
+    
+    console.log(`差异: $${(algorithm1_totalValue - algorithm2_totalValue).toFixed(6)}`);
+    
+    // 计算总盈亏（使用算法1结果）
+    const totalValue = algorithm1_totalValue;
     const totalPnl = totalValue - this.params.initialCapital;
     const totalPnlPercent = totalPnl / this.params.initialCapital;
     
-    console.log(`  总盈亏: $${totalPnl.toFixed(2)} (${(totalPnlPercent * 100).toFixed(2)}%)`);
+    console.log(`\n总盈亏: $${totalPnl.toFixed(2)} (${(totalPnlPercent * 100).toFixed(2)}%)`);
     
     // 验证：总盈亏应该等于总BTC盈亏减去累计手续费
     const accumulatedTradingFee = (previousSnapshot?.accumulatedTradingFee || 0) + Math.abs(totalTradingFee);
     const expectedPnl = totalBtcPnl - accumulatedTradingFee;
     
-    console.log(`\n验证计算:`);
+    console.log(`\n原始验证:`);
     console.log(`  当期BTC已实现盈亏: $${btcRealizedPnl.toFixed(2)}`);
     console.log(`  累计BTC已实现盈亏: $${(btcPosition?.realizedPnl || 0).toFixed(2)}`);
     console.log(`  BTC浮动盈亏: $${btcUnrealizedPnl.toFixed(2)}`);
@@ -256,16 +280,22 @@ class BTCPositionCalculator {
       btcPosition,
       account_usdt_balance,
       totalValue,
+      algorithm1_totalValue,
+      algorithm2_totalValue,
       totalPnl,
       totalPnlPercent,
       accumulatedTradingFee,
       btcRealizedPnl: btcPosition?.realizedPnl || 0, // 使用累计已实现盈亏
       btcUnrealizedPnl,
       totalBtcPnl,
+      cumulativeBtcPnl, // 新增：累计BTC已实现盈亏
+      btcMarketValue, // 新增：BTC市值
       verification: {
         expectedPnl: expectedPnl,
         actualPnl: totalPnl,
-        difference: totalPnl - expectedPnl
+        difference: totalPnl - expectedPnl,
+        // 新增：两种算法对比
+        algorithm1_vs_algorithm2_difference: algorithm1_totalValue - algorithm2_totalValue
       }
     };
     
@@ -299,11 +329,18 @@ class BTCPositionCalculator {
     console.log(`最终BTC浮动盈亏: $${finalSnapshot.btcUnrealizedPnl.toFixed(2)}`);
     console.log(`最终总BTC盈亏: $${finalSnapshot.totalBtcPnl.toFixed(2)}`);
     
-    // 逐期验证
-    console.log('\n逐期验证结果:');
+    // 逐期两种算法对比
+    console.log('\n=== 逐期两种算法对比 ===');
+    this.snapshots.forEach(snapshot => {
+      const algDiff = snapshot.verification.algorithm1_vs_algorithm2_difference;
+      const status = Math.abs(algDiff) < 0.01 ? '✓' : '✗';
+      console.log(`第${snapshot.period}期 ${status}: 算法1 vs 算法2 差异 $${algDiff.toFixed(6)}`);
+    });
+    
+    console.log('\n逐期原始验证结果:');
     this.snapshots.forEach(snapshot => {
       const status = Math.abs(snapshot.verification.difference) < 0.01 ? '✓' : '✗';
-      console.log(`第${snapshot.period}期 ${status}: 差异 $${snapshot.verification.difference.toFixed(6)}`);
+      console.log(`第${snapshot.period}期 ${status}: 盈亏计算差异 $${snapshot.verification.difference.toFixed(6)}`);
     });
     
     return this.snapshots;
