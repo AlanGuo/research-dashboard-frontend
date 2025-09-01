@@ -27,6 +27,9 @@ export interface BTCDOM2StrategyParams {
   granularityHours?: number;  // 回测粒度（小时），默认8小时
   optimizeOnly?: boolean;     // 是否为优化模式（跳过图表数据生成以提升性能）
   
+  // 调试和日志相关参数
+  enableSnapshotLogs?: boolean; // 是否启用快照生成过程的详细日志（默认false）
+  
   // 温度计规则相关参数
   useTemperatureRule: boolean;  // 是否启用温度计规则
   temperatureSymbol: string;    // 温度计监控的Symbol (默认OTHERS)

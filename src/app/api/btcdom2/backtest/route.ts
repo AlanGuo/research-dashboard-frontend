@@ -235,6 +235,17 @@ class BTCDOM2StrategyEngine {
     this.params = params;
   }
 
+  // 私有日志方法 - 根据开关控制日志输出
+  private log(message: string, data?: unknown): void {
+    if (this.params.enableSnapshotLogs) {
+      if (data !== undefined) {
+        console.log(message, data);
+      } else {
+        console.log(message);
+      }
+    }
+  }
+
   // 检查当前时间是否在温度计超阈值期间内
   private isInTemperatureHighPeriod(timestamp: string): boolean {
     if (!this.params.useTemperatureRule || !this.params.temperatureData) {
@@ -603,8 +614,6 @@ class BTCDOM2StrategyEngine {
       temperatureRuleReason = `温度计高于${this.params.temperatureThreshold}，禁止持有空头仓位`;
     }
 
-
-
     // 检查是否有可执行的策略
     const hasShortCandidates = selectedCandidates.length > 0;
     // 温度计高于阈值时，不能做空ALT
@@ -675,7 +684,7 @@ class BTCDOM2StrategyEngine {
         btcPurchaseExpense = btcAmount + Math.abs(btcTradingFee);
         
         // BTC初始开仓现金流日志
-        console.log(`[BTC初始开仓现金流] 时间: ${timestamp}`, {
+        this.log(`[BTC初始开仓现金流] 时间: ${timestamp}`, {
           symbol: 'BTCUSDT',
           side: 'LONG',
           action: 'BTC现货初始开仓',
@@ -735,7 +744,7 @@ class BTCDOM2StrategyEngine {
           btcPurchaseExpense = addValue + Math.abs(addTradingFee);
           
           // BTC加仓现金流日志
-          console.log(`[BTC加仓现金流] 时间: ${timestamp}`, {
+          this.log(`[BTC加仓现金流] 时间: ${timestamp}`, {
             symbol: 'BTCUSDT',
             side: 'LONG',
             action: 'BTC现货加仓',
@@ -796,7 +805,7 @@ class BTCDOM2StrategyEngine {
           });
           
           // BTC减仓现金流日志
-          console.log(`[BTC减仓现金流] 时间: ${timestamp}`, {
+          this.log(`[BTC减仓现金流] 时间: ${timestamp}`, {
             symbol: 'BTCUSDT',
             side: 'LONG',
             action: 'BTC现货减仓',
@@ -1195,7 +1204,7 @@ class BTCDOM2StrategyEngine {
 
     // 当期ALT仓位变化汇总日志
     if (altPositionChanges.length > 0) {
-      console.log(`[ALT仓位变化汇总] 时间: ${timestamp}`, {
+      this.log(`[ALT仓位变化汇总] 时间: ${timestamp}`, {
         totalChanges: altPositionChanges.length,
         altSoldRevenue: altSoldRevenue,
         positionChanges: altPositionChanges
@@ -1212,7 +1221,7 @@ class BTCDOM2StrategyEngine {
     }
     
     // 调试日志：现金余额计算详情
-    console.log(`[现金余额计算] 时间: ${timestamp}`, {
+    this.log(`[现金余额计算] 时间: ${timestamp}`, {
       previousAccountBalance: previousAccountBalance,
       btcSaleRevenue: btcSaleRevenue,
       btcPurchaseExpense: btcPurchaseExpense,
@@ -1236,7 +1245,7 @@ class BTCDOM2StrategyEngine {
     const shortPnl = shortPositions.reduce((sum, pos) => sum + pos.pnl, 0);
     
     // shortPnl汇总计算日志
-    console.log(`[short浮动盈亏汇总] 时间: ${timestamp}`, {
+    this.log(`[short浮动盈亏汇总] 时间: ${timestamp}`, {
       totalShortPositions: shortPositions.length,
       shortPositionsDetails: shortPositions.map(pos => ({
         symbol: pos.symbol,
@@ -1253,7 +1262,7 @@ class BTCDOM2StrategyEngine {
     });
     
     // 调试日志：总价值组成部分
-    console.log(`[总价值计算] 时间: ${timestamp}`, {
+    this.log(`[总价值计算] 时间: ${timestamp}`, {
       account_usdt_balance: account_usdt_balance,
       btcValue: btcValue,
       btcQuantity: btcPosition?.quantity || 0,
@@ -1575,7 +1584,9 @@ function calculatePerformanceMetrics(
     }
     
     // 调试日志
-    console.log(`[BTC盈亏分解] 已实现: ${btcRealizedPnl.toFixed(2)}, 浮动: ${btcUnrealizedPnl.toFixed(2)}, 合计: ${(btcRealizedPnl + btcUnrealizedPnl).toFixed(2)}`);
+    if (params.enableSnapshotLogs) {
+      console.log(`[BTC盈亏分解] 已实现: ${btcRealizedPnl.toFixed(2)}, 浮动: ${btcUnrealizedPnl.toFixed(2)}, 合计: ${(btcRealizedPnl + btcUnrealizedPnl).toFixed(2)}`);
+    }
   }
 
   // ALT盈亏分解计算
@@ -1597,7 +1608,9 @@ function calculatePerformanceMetrics(
     altUnrealizedPnl = finalSnapshot.shortPositions.reduce((sum, pos) => sum + pos.pnl, 0);
     
     // 调试日志
-    console.log(`[ALT盈亏分解] 已实现: ${altRealizedPnl.toFixed(2)}, 浮动: ${altUnrealizedPnl.toFixed(2)}, 合计: ${(altRealizedPnl + altUnrealizedPnl).toFixed(2)}`);
+    if (params.enableSnapshotLogs) {
+      console.log(`[ALT盈亏分解] 已实现: ${altRealizedPnl.toFixed(2)}, 浮动: ${altUnrealizedPnl.toFixed(2)}, 合计: ${(altRealizedPnl + altUnrealizedPnl).toFixed(2)}`);
+    }
   }
 
   // 手续费和资金费率金额
@@ -1617,21 +1630,23 @@ function calculatePerformanceMetrics(
   const calculatedTotal = btcRealizedPnl + btcUnrealizedPnl + altRealizedPnl + altUnrealizedPnl + tradingFeeAmount + fundingFeeAmount;
   const difference = totalPnlAmount - calculatedTotal;
   
-  console.log(`[盈亏分解验证] 时间: ${new Date().toISOString()}`);
-  console.log(`  - BTC已实现: ${btcRealizedPnl.toFixed(2)} (${(btcRealizedPnlRate * 100).toFixed(2)}%)`);
-  console.log(`  - BTC浮动: ${btcUnrealizedPnl.toFixed(2)} (${(btcUnrealizedPnlRate * 100).toFixed(2)}%)`);
-  console.log(`  - ALT已实现: ${altRealizedPnl.toFixed(2)} (${(altRealizedPnlRate * 100).toFixed(2)}%)`);
-  console.log(`  - ALT浮动: ${altUnrealizedPnl.toFixed(2)} (${(altUnrealizedPnlRate * 100).toFixed(2)}%)`);
-  console.log(`  - 交易手续费: ${tradingFeeAmount.toFixed(2)} (${(tradingFeeRate * 100).toFixed(2)}%)`);
-  console.log(`  - 资金费率: ${fundingFeeAmount.toFixed(2)} (${(fundingFeeRate * 100).toFixed(2)}%)`);
-  console.log(`  - 计算总和: ${calculatedTotal.toFixed(2)}`);
-  console.log(`  - 实际总盈亏: ${totalPnlAmount.toFixed(2)}`);
-  console.log(`  - 差额: ${difference.toFixed(2)} (${Math.abs(totalPnlAmount) > 0 ? (Math.abs(difference) / Math.abs(totalPnlAmount) * 100).toFixed(4) : 'N/A'}%)`);
-  
-  if (Math.abs(difference) > 1) {
-    console.warn(`⚠️ 盈亏分解验证失败：差额超过$1，可能存在计算错误`);
-  } else {
-    console.log(`✅ 盈亏分解验证通过：差额在合理范围内`);
+  if (params.enableSnapshotLogs) {
+    console.log(`[盈亏分解验证] 时间: ${new Date().toISOString()}`);
+    console.log(`  - BTC已实现: ${btcRealizedPnl.toFixed(2)} (${(btcRealizedPnlRate * 100).toFixed(2)}%)`);
+    console.log(`  - BTC浮动: ${btcUnrealizedPnl.toFixed(2)} (${(btcUnrealizedPnlRate * 100).toFixed(2)}%)`);
+    console.log(`  - ALT已实现: ${altRealizedPnl.toFixed(2)} (${(altRealizedPnlRate * 100).toFixed(2)}%)`);
+    console.log(`  - ALT浮动: ${altUnrealizedPnl.toFixed(2)} (${(altUnrealizedPnlRate * 100).toFixed(2)}%)`);
+    console.log(`  - 交易手续费: ${tradingFeeAmount.toFixed(2)} (${(tradingFeeRate * 100).toFixed(2)}%)`);
+    console.log(`  - 资金费率: ${fundingFeeAmount.toFixed(2)} (${(fundingFeeRate * 100).toFixed(2)}%)`);
+    console.log(`  - 计算总和: ${calculatedTotal.toFixed(2)}`);
+    console.log(`  - 实际总盈亏: ${totalPnlAmount.toFixed(2)}`);
+    console.log(`  - 差额: ${difference.toFixed(2)} (${Math.abs(totalPnlAmount) > 0 ? (Math.abs(difference) / Math.abs(totalPnlAmount) * 100).toFixed(4) : 'N/A'}%)`);
+    
+    if (Math.abs(difference) > 1) {
+      console.warn(`⚠️ 盈亏分解验证失败：差额超过$1，可能存在计算错误`);
+    } else {
+      console.log(`✅ 盈亏分解验证通过：差额在合理范围内`);
+    }
   }
 
   return {
