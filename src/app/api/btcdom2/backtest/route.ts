@@ -654,28 +654,31 @@ class BTCDOM2StrategyEngine {
 
     // === BTC持仓处理（始终活跃，不受温度计影响） ===
     if (btcActive) {
+      // 定义数量差异阈值常量
+      const QUANTITY_DIFF_THRESHOLD = 0.001;
+      
+      // 提取上一期BTC持仓信息
+      const prevBtcPosition = previousSnapshot?.btcPosition;
+      const prevQuantity = prevBtcPosition?.quantity ?? 0;
+      const prevEntryPrice = prevBtcPosition?.entryPrice ?? btcPrice;
+      const previousBtcPrice = prevBtcPosition?.currentPrice ?? btcPrice;
+      
       const btcAmount = totalValue * this.params.btcRatio;
       const btcQuantity = btcAmount / btcPrice;
+      
+      // 统一计算数量差异
+      const quantityDiff = Math.round((btcQuantity - prevQuantity) * 1000) / 1000; // 保留3位小数
+      const hasQuantityChange = Math.abs(quantityDiff) > QUANTITY_DIFF_THRESHOLD;
 
       // 计算BTC盈亏（基于价格变化和持仓数量）
       let btcPnl = 0;
       let btcTradingFee = 0;
       let btcIsNewPosition = false;
 
-      if (previousSnapshot?.btcPosition) {
-        // 使用上一期的BTC数量和价格变化来计算盈亏
-        const previousBtcQuantity = previousSnapshot.btcPosition.quantity ?? 0;
-        const previousBtcPrice = previousSnapshot.btcPosition.currentPrice ?? btcPrice;
-        btcPnl = previousBtcQuantity * (btcPrice - previousBtcPrice);
-
-        // 如果BTC仓位发生变化，计算交易手续费
-        const quantityDiff = Math.abs(btcQuantity - previousBtcQuantity);
-        if (quantityDiff > 0.0001) { // 避免浮点数精度问题
-          btcTradingFee = this.calculateTradingFee(quantityDiff * btcPrice, true); // BTC现货交易
-        }
-      } else {
+      // 统一计算交易手续费
+      if (!prevBtcPosition) {
         // 第一次开仓，计算手续费
-        btcTradingFee = this.calculateTradingFee(btcAmount, true); // BTC现货交易
+        btcTradingFee = this.calculateTradingFee(btcAmount, true);
         btcIsNewPosition = true;
         // 第一次开仓BTC买入支出（不包含手续费， 手续费统一算）
         btcPurchaseExpense = btcAmount;
@@ -692,17 +695,27 @@ class BTCDOM2StrategyEngine {
           btcPurchaseExpense: btcPurchaseExpense,
           explanation: 'BTC现货初始买入支出，减少现金余额'
         });
+      } else {
+        // 使用上一期的BTC数量和价格变化来计算盈亏
+        btcPnl = prevQuantity * (btcPrice - previousBtcPrice);
+        
+        // 如果BTC仓位发生变化，计算交易手续费
+        if (hasQuantityChange) {
+          btcTradingFee = this.calculateTradingFee(Math.abs(quantityDiff) * btcPrice, true);
+        }
       }
-
+      
       // 确保所有数值都是有效的
       const validBtcAmount = isNaN(btcAmount) || btcAmount <= 0 ? 0 : btcAmount;
       const validBtcQuantity = isNaN(btcQuantity) || btcQuantity <= 0 ? 0 : btcQuantity;
       const validBtcPnl = isNaN(btcPnl) ? 0 : btcPnl;
       const validBtcTradingFee = isNaN(btcTradingFee) ? 0 : btcTradingFee;
-      const prevAmount = previousSnapshot?.btcPosition?.value ?? validBtcAmount;
-      const previousBtcPrice = previousSnapshot?.btcPosition?.currentPrice;
-
-      totalTradingFee += validBtcTradingFee;
+      const prevAmount = prevBtcPosition?.value ?? validBtcAmount;
+      
+      // 只在实际有交易发生时累加手续费
+      if (!prevBtcPosition || hasQuantityChange) {
+        totalTradingFee += validBtcTradingFee;
+      }
 
       // 计算加权平均成本价和交易类型
       let newEntryPrice: number;
@@ -711,13 +724,10 @@ class BTCDOM2StrategyEngine {
       let btcNewQuantity: number = validBtcQuantity;
       let btcQuantityChange: { type: 'new' | 'increase' | 'decrease' | 'same' | 'sold'; previousQuantity?: number; changePercent?: number };
       
-      if (previousSnapshot?.btcPosition) {
-        const prevQuantity = previousSnapshot.btcPosition.quantity ?? 0;
-        const prevEntryPrice = previousSnapshot.btcPosition.entryPrice ?? btcPrice;
-        const quantityDiff = btcNewQuantity - prevQuantity;
+      if (prevBtcPosition) {
         btcTradingQuantity = quantityDiff;
-        // console.log(`BTC数量检查: 上期=${prevQuantity}, 目标=${validBtcQuantity}, 差异=${quantityDiff}, 阈值检查=${Math.abs(quantityDiff) < 0.0001}`);
-        if (Math.abs(quantityDiff) < 0.0001) {
+        // console.log(`BTC数量检查: 上期=${prevQuantity}, 目标=${validBtcQuantity}, 差异=${quantityDiff}, 阈值检查=${!hasQuantityChange}`);
+        if (!hasQuantityChange) {
           // 数量基本没变，保持原均价
           btcNewQuantity = prevQuantity;
           newEntryPrice = prevEntryPrice;
