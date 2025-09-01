@@ -897,17 +897,18 @@ class BTCDOM2StrategyEngine {
         
         if (previousFundingRateHistory.length > 0 && prevPosition.quantity > 0) {
           let positionFundingFee = 0;
-          for (const funding of previousFundingRateHistory) {
-            const effectiveMarkPrice = (funding.markPrice && isFinite(funding.markPrice) && funding.markPrice > 0)
-              ? funding.markPrice
+          
+          // 只使用最新的一条资金费率记录（刚刚过去的整点）
+          const latestFunding = previousFundingRateHistory[previousFundingRateHistory.length - 1];
+          if (latestFunding && !isNaN(latestFunding.fundingRate) && isFinite(latestFunding.fundingRate)) {
+            const effectiveMarkPrice = (latestFunding.markPrice && isFinite(latestFunding.markPrice) && latestFunding.markPrice > 0)
+              ? latestFunding.markPrice
               : prevPosition.currentPrice;
             const positionValue = prevPosition.quantity * effectiveMarkPrice;
-            positionFundingFee += positionValue * funding.fundingRate;
+            positionFundingFee = positionValue * latestFunding.fundingRate;
           }
-          totalFundingFee += positionFundingFee;
           
-          // 为该持仓记录资金费用，供后续使用
-          (prevPosition as typeof prevPosition & { calculatedFundingFee?: number }).calculatedFundingFee = positionFundingFee;
+          totalFundingFee += positionFundingFee;
         }
       }
     }

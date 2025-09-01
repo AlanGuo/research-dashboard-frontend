@@ -1,5 +1,5 @@
 {
   "btcdom2": {
-    "enableSnapshotLogs": true
+    "enableSnapshotLogs": false
   }
 }
