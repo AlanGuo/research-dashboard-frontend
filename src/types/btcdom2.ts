@@ -164,7 +164,7 @@ export interface StrategySnapshot {
   btcPosition: PositionInfo | null;  // BTC现货持仓
   shortPositions: PositionInfo[];    // 做空持仓列表
   soldPositions?: PositionInfo[];    // 当期卖出的做空持仓列表
-  btcSoldPositions?: PositionInfo[]; // 当期卖出的BTC持仓列表
+  btcSoldPosition?: PositionInfo | null; // 当期卖出的BTC持仓记录
   totalValue: number;                // 总资产价值
   totalPnl: number;                  // 总盈亏
   totalPnlPercent: number;           // 总盈亏百分比

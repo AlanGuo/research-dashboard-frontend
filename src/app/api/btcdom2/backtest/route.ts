@@ -632,7 +632,7 @@ class BTCDOM2StrategyEngine {
     const previousValue = previousSnapshot?.totalValue || this.params.initialCapital;
 
     const soldPositions: PositionInfo[] = [];
-    const btcSoldPositions: PositionInfo[] = []; // BTC专用的卖出持仓记录
+    let btcSoldPosition: PositionInfo | null = null; // BTC专用的卖出持仓记录
     let btcPosition: PositionInfo | null = null;
     const shortPositions: PositionInfo[] = [];
     let account_usdt_balance = 0; // 统一账户余额
@@ -774,8 +774,8 @@ class BTCDOM2StrategyEngine {
           // 记录BTC卖出收入（不包含手续费，手续费后面统一处理）
           btcSaleRevenue = soldValue;
           
-          // 将BTC减仓记录添加到btcSoldPositions
-          btcSoldPositions.push({
+          // 记录BTC减仓信息
+          btcSoldPosition = {
             symbol: 'BTCUSDT',
             side: 'LONG',
             value: soldValue,
@@ -802,7 +802,7 @@ class BTCDOM2StrategyEngine {
               changePercent: prevQuantity > 0 ? (quantityDiff / prevQuantity) * 100 : 0
             },
             reason: 'BTC现货减仓已实现盈亏'
-          });
+          };
           
           // BTC减仓现金流日志
           this.log(`[BTC减仓现金流] 时间: ${timestamp}`, {
@@ -1294,7 +1294,7 @@ class BTCDOM2StrategyEngine {
       btcPosition,
       shortPositions,
       soldPositions,
-      btcSoldPositions,
+      btcSoldPosition,
       totalValue,
       totalPnl,
       totalPnlPercent,
@@ -1568,10 +1568,8 @@ function calculatePerformanceMetrics(
   if (params.longBtc) {
     // 1. BTC已实现盈亏 - 累计所有历史BTC卖出的盈亏
     for (const snapshot of snapshots) {
-      if (snapshot.btcSoldPositions) {
-        const btcSoldPnl = snapshot.btcSoldPositions
-          .reduce((sum, pos) => sum + pos.pnl, 0);
-        btcRealizedPnl += btcSoldPnl;
+      if (snapshot.btcSoldPosition) {
+        btcRealizedPnl += snapshot.btcSoldPosition.pnl;
       }
     }
     
@@ -1625,29 +1623,6 @@ function calculatePerformanceMetrics(
   const altUnrealizedPnlRate = altUnrealizedPnl / params.initialCapital;
   const tradingFeeRate = tradingFeeAmount / params.initialCapital;
   const fundingFeeRate = fundingFeeAmount / params.initialCapital;
-
-  // 盈亏分解验证
-  const calculatedTotal = btcRealizedPnl + btcUnrealizedPnl + altRealizedPnl + altUnrealizedPnl + tradingFeeAmount + fundingFeeAmount;
-  const difference = totalPnlAmount - calculatedTotal;
-  
-  if (params.enableSnapshotLogs) {
-    console.log(`[盈亏分解验证] 时间: ${new Date().toISOString()}`);
-    console.log(`  - BTC已实现: ${btcRealizedPnl.toFixed(2)} (${(btcRealizedPnlRate * 100).toFixed(2)}%)`);
-    console.log(`  - BTC浮动: ${btcUnrealizedPnl.toFixed(2)} (${(btcUnrealizedPnlRate * 100).toFixed(2)}%)`);
-    console.log(`  - ALT已实现: ${altRealizedPnl.toFixed(2)} (${(altRealizedPnlRate * 100).toFixed(2)}%)`);
-    console.log(`  - ALT浮动: ${altUnrealizedPnl.toFixed(2)} (${(altUnrealizedPnlRate * 100).toFixed(2)}%)`);
-    console.log(`  - 交易手续费: ${tradingFeeAmount.toFixed(2)} (${(tradingFeeRate * 100).toFixed(2)}%)`);
-    console.log(`  - 资金费率: ${fundingFeeAmount.toFixed(2)} (${(fundingFeeRate * 100).toFixed(2)}%)`);
-    console.log(`  - 计算总和: ${calculatedTotal.toFixed(2)}`);
-    console.log(`  - 实际总盈亏: ${totalPnlAmount.toFixed(2)}`);
-    console.log(`  - 差额: ${difference.toFixed(2)} (${Math.abs(totalPnlAmount) > 0 ? (Math.abs(difference) / Math.abs(totalPnlAmount) * 100).toFixed(4) : 'N/A'}%)`);
-    
-    if (Math.abs(difference) > 1) {
-      console.warn(`⚠️ 盈亏分解验证失败：差额超过$1，可能存在计算错误`);
-    } else {
-      console.log(`✅ 盈亏分解验证通过：差额在合理范围内`);
-    }
-  }
 
   return {
     totalReturn,
@@ -1761,6 +1736,8 @@ export async function POST(request: NextRequest) {
       temperatureThreshold: rawParams.temperatureThreshold !== undefined ? rawParams.temperatureThreshold : 60,
       temperatureTimeframe: rawParams.temperatureTimeframe !== undefined ? rawParams.temperatureTimeframe : '1D',
       temperatureData: rawParams.temperatureData || [],
+      // 日志开关参数 - 开发环境默认开启
+      enableSnapshotLogs: rawParams.enableSnapshotLogs !== undefined ? rawParams.enableSnapshotLogs : false,
     };
 
     // 检查是否为优化模式（跳过图表数据生成以提升性能）
