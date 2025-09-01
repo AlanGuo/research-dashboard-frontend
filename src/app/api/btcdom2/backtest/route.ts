@@ -708,16 +708,18 @@ class BTCDOM2StrategyEngine {
       let newEntryPrice: number;
       let periodTradingType: 'buy' | 'sell' | 'hold';
       let btcTradingQuantity: number;
+      let btcNewQuantity: number = validBtcQuantity;
       let btcQuantityChange: { type: 'new' | 'increase' | 'decrease' | 'same' | 'sold'; previousQuantity?: number; changePercent?: number };
       
       if (previousSnapshot?.btcPosition) {
         const prevQuantity = previousSnapshot.btcPosition.quantity ?? 0;
         const prevEntryPrice = previousSnapshot.btcPosition.entryPrice ?? btcPrice;
-        const quantityDiff = validBtcQuantity - prevQuantity;
+        const quantityDiff = btcNewQuantity - prevQuantity;
         btcTradingQuantity = quantityDiff;
-        
+        // console.log(`BTC数量检查: 上期=${prevQuantity}, 目标=${validBtcQuantity}, 差异=${quantityDiff}, 阈值检查=${Math.abs(quantityDiff) < 0.0001}`);
         if (Math.abs(quantityDiff) < 0.0001) {
           // 数量基本没变，保持原均价
+          btcNewQuantity = prevQuantity;
           newEntryPrice = prevEntryPrice;
           periodTradingType = 'hold';
           btcQuantityChange = {
@@ -727,14 +729,17 @@ class BTCDOM2StrategyEngine {
           };
         } else if (quantityDiff > 0) {
           // 加仓，计算加权平均成本价
-          newEntryPrice = (prevQuantity * prevEntryPrice + quantityDiff * btcPrice) / validBtcQuantity;
+          btcNewQuantity = validBtcQuantity;
+          newEntryPrice = (prevQuantity * prevEntryPrice + quantityDiff * btcPrice) / btcNewQuantity;
           periodTradingType = 'buy';
           btcQuantityChange = {
             type: 'increase',
             previousQuantity: prevQuantity,
             changePercent: prevQuantity > 0 ? (quantityDiff / prevQuantity) * 100 : 0
           };
-
+          if (this.params.enableSnapshotLogs) {
+            console.log(`BTC成本价计算: (${prevQuantity} * ${prevEntryPrice} + ${quantityDiff} * ${btcPrice}) / ${btcNewQuantity} = ${newEntryPrice}`);
+          }
           // BTC现货加仓：需要扣除现金购买BTC
           const addValue = quantityDiff * btcPrice; // 加仓投入金额
           const addTradingFee = validBtcTradingFee; // 加仓手续费
@@ -748,6 +753,7 @@ class BTCDOM2StrategyEngine {
             side: 'LONG',
             action: 'BTC现货加仓',
             addQuantity: quantityDiff,
+            newEntryPrice: newEntryPrice,
             currentPrice: btcPrice,
             addValue: addValue,
             addTradingFee: addTradingFee,
@@ -821,7 +827,7 @@ class BTCDOM2StrategyEngine {
         // 新开仓
         newEntryPrice = btcPrice;
         periodTradingType = 'buy';
-        btcTradingQuantity = validBtcQuantity;
+        btcTradingQuantity = btcNewQuantity;
         btcQuantityChange = { type: 'new', previousQuantity: 0, changePercent: 0 };
       }
       
@@ -829,7 +835,7 @@ class BTCDOM2StrategyEngine {
         symbol: 'BTCUSDT',
         side: 'LONG',
         value: validBtcAmount,
-        quantity: validBtcQuantity,
+        quantity: btcNewQuantity,
         entryPrice: newEntryPrice, // 使用加权平均成本价
         currentPrice: btcPrice,
         periodTradingPrice: btcPrice, // 当期交易价格
