@@ -63,7 +63,8 @@ export default function BTCDOM2Dashboard() {
       useTemperatureRule: defaultConfig.useTemperatureRule,
       temperatureSymbol: defaultConfig.temperatureSymbol,
       temperatureThreshold: defaultConfig.temperatureThreshold,
-      temperatureTimeframe: defaultConfig.temperatureTimeframe
+      temperatureTimeframe: defaultConfig.temperatureTimeframe,
+      enableSnapshotLogs: defaultConfig.enableSnapshotLogs
     };
   });
 

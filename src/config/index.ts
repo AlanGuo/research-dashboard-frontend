@@ -38,6 +38,7 @@ export interface Config {
     temperatureSymbol?: string;
     temperatureThreshold?: number;
     maxBacktestDurationDays?: number;
+    enableSnapshotLogs?: boolean;
     [key: string]: string | number | boolean | undefined;
   };
   [key: string]: string | number | boolean | Record<string, unknown> | undefined;

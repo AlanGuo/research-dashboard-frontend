@@ -83,6 +83,7 @@ export function getBTCDOM2Config(): BTCDOM2StrategyParams {
     temperatureSymbol: getConfigValue('btcdom2.temperatureSymbol', 'OTHERS'),
     temperatureThreshold: getConfigValue('btcdom2.temperatureThreshold', 65),
     temperatureTimeframe: getConfigValue('btcdom2.temperatureTimeframe', '1D'),
+    enableSnapshotLogs: getConfigValue('btcdom2.enableSnapshotLogs', false),
     ...(maxBacktestDurationDays && { maxBacktestDurationDays })
   };
   
