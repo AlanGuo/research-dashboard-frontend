@@ -1070,22 +1070,57 @@ class BTCDOM2StrategyEngine {
     const altSoldRevenue = soldPositions
       .filter(pos => pos.side === 'SHORT')
       .reduce((sum, pos) => sum + pos.pnl, 0); // 对于做空，pnl就是现金余额的变化
+    console.log("altSoldRevenue", altSoldRevenue, "soldPositions", soldPositions)
+    // ALT仓位变化汇总日志
+    const altPositionChanges: any[] = [];
 
-    // 当期ALT平仓汇总日志
-    if (soldPositions.length > 0) {
-      console.log(`[ALT平仓汇总] 时间: ${timestamp}`, {
-        soldPositionsCount: soldPositions.length,
-        altSoldRevenue: altSoldRevenue,
-        soldPositionsDetails: soldPositions.map(pos => ({
+    // 1. 收集平仓/减仓信息
+    soldPositions.filter(pos => pos.side === 'SHORT').forEach(pos => {
+      altPositionChanges.push({
+        action: pos.isSoldOut ? 'ALT完全平仓' : 'ALT减仓',
+        symbol: pos.symbol,
+        quantity: pos.quantity,
+        entryPrice: pos.entryPrice,
+        currentPrice: pos.currentPrice,
+        pnl: pos.pnl,
+        calculation: `quantity × (entryPrice - currentPrice) = ${pos.pnl}`,
+        reason: pos.reason
+      });
+    });
+    
+    // 2. 收集持仓调整信息（包含加仓和新开仓）
+    shortPositions.forEach(pos => {
+      if (pos.isNewPosition) {
+        altPositionChanges.push({
+          action: 'ALT新开仓',
           symbol: pos.symbol,
-          side: pos.side,
           quantity: pos.quantity,
+          entryPrice: pos.entryPrice,
+          currentPrice: pos.currentPrice,
+          pnl: 0,
+          calculation: 'quantity × (entryPrice - currentPrice) = 0',
+          reason: pos.reason
+        });
+      } else if (pos.quantityChange?.type === 'increase') {
+        altPositionChanges.push({
+          action: 'ALT加仓',
+          symbol: pos.symbol,
+          quantity: pos.tradingQuantity, // 加仓数量
           entryPrice: pos.entryPrice,
           currentPrice: pos.currentPrice,
           pnl: pos.pnl,
           calculation: `quantity × (entryPrice - currentPrice) = ${pos.pnl}`,
-          reason: pos.reason
-        }))
+          reason: 'ALT加仓调整'
+        });
+      }
+    });
+
+    // 当期ALT仓位变化汇总日志
+    if (altPositionChanges.length > 0) {
+      console.log(`[ALT仓位变化汇总] 时间: ${timestamp}`, {
+        totalChanges: altPositionChanges.length,
+        altSoldRevenue: altSoldRevenue,
+        positionChanges: altPositionChanges
       });
     }
 
@@ -1150,7 +1185,6 @@ class BTCDOM2StrategyEngine {
     });
     
     totalValue = account_usdt_balance + btcValue + shortPnl;
-    console.log('时间:', timestamp, ', 总价值:', totalValue.toFixed(2), ', BTC价格:', btcPrice, ', 现金余额:', account_usdt_balance.toFixed(2), ', BTC市值:', (btcPosition ? (btcPosition.quantity * btcPosition.currentPrice).toFixed(2) : '0.00'), ', BTC卖出收入:', btcSaleRevenue.toFixed(2), ', ALT卖出收入:', altSoldRevenue.toFixed(2), ', 交易手续费:', totalTradingFee.toFixed(2), ', 资金费率:', totalFundingFee.toFixed(2));
     const totalPnl = totalValue - this.params.initialCapital;
     const totalPnlPercent = totalPnl / this.params.initialCapital;
 
