@@ -11,6 +11,7 @@ import {
   VolumeBacktestDataPoint,
   RankingItem,
   ShortCandidate,
+  FundingRateHistoryItem,
   ShortSelectionResult,
   PositionAllocationStrategy
 } from '@/types/btcdom2';
@@ -382,6 +383,8 @@ class BTCDOM2StrategyEngine {
     rankings: RankingItem[],
     btcPriceChange: number
   ): Promise<ShortSelectionResult> {
+    let stepStartTime: number;
+
     // 生成缓存键
     const cacheKey = getCandidateSelectionCacheKey(rankings, btcPriceChange, this.params);
 
@@ -394,8 +397,10 @@ class BTCDOM2StrategyEngine {
     CACHE_STATS.candidateSelectionMisses++;
 
     // 定期清理缓存
+    stepStartTime = performance.now();
     cleanupCaches();
     // 使用优化的批量统计计算
+    stepStartTime = performance.now();
     const stats = computeBatchStats(rankings);
 
     // 提前终止：如果没有候选标的，直接返回
@@ -411,11 +416,14 @@ class BTCDOM2StrategyEngine {
     // 计算波动率spread
     stats.volatility.spread = Math.max((stats.volatility.max - stats.volatility.min) / 4, 0.01);
 
+    let selectedCount = 0;
+
     // 预计算理想波动率
     const idealVolatility = stats.volatility.avg;
     const volatilitySpread = stats.volatility.spread;
 
     // 预排序优化：按价格变化预筛选，避免处理明显不符合条件的项
+    stepStartTime = performance.now();
     const preFilteredItems = stats.filteredRankings.filter(item => {
       const priceChange = isNaN(item.priceChange24h) ? 0 : item.priceChange24h;
       return priceChange < btcPriceChange;
@@ -455,6 +463,7 @@ class BTCDOM2StrategyEngine {
     ARRAY_POOL.tempCandidates.length = 0;
 
     // 直接处理候选者评分 - 对于小量数据，直接处理比并行处理更高效
+    stepStartTime = performance.now();
     const allCandidates: ShortCandidate[] = [];
 
     for (const item of preFilteredItems) {
@@ -524,17 +533,20 @@ class BTCDOM2StrategyEngine {
 
     // 限制候选者数量以提高效率
     const maxCandidates = this.params.maxShortPositions * 2;
+    selectedCount = Math.min(allCandidates.length, maxCandidates);
 
     // 将结果添加到数组池
     ARRAY_POOL.tempCandidates.push(...allCandidates.slice(0, maxCandidates));
 
     // 在temp数组中排序，避免额外的过滤操作
+    stepStartTime = performance.now();
     ARRAY_POOL.tempCandidates.sort((a, b) => b.totalScore - a.totalScore);
 
     // 创建最终结果，只复制需要的数量
     const eligibleCandidates = [...ARRAY_POOL.tempCandidates];
 
     // 添加被拒绝的候选者（价格不符合条件的）
+    stepStartTime = performance.now();
     const rejectedCandidates: ShortCandidate[] = [];
     for (const item of stats.filteredRankings) {
       const priceChange = isNaN(item.priceChange24h) ? 0 : item.priceChange24h;
@@ -560,8 +572,8 @@ class BTCDOM2StrategyEngine {
         });
       }
     }
-
     // 只对符合条件的候选者排序
+    stepStartTime = performance.now();
     eligibleCandidates.sort((a, b) => b.totalScore - a.totalScore);
 
     const finalSelectedCandidates = eligibleCandidates.slice(0, this.params.maxShortPositions);
@@ -603,51 +615,42 @@ class BTCDOM2StrategyEngine {
       temperatureRuleReason = `温度计高于${this.params.temperatureThreshold}，禁止持有空头仓位`;
     }
 
-
-
-    // 检查是否有可执行的策略
+    // 检查是否有可执行的策略（longBtc和shortAlt始终为true）
     const hasShortCandidates = selectedCandidates.length > 0;
     // 温度计高于阈值时，不能做空ALT
     const canShortAlt = !isInTemperatureHigh; // 始终做空ALT，除非温度计高温
-    
-    // 分离BTC和ALT的活跃状态：
-    // - BTC做多：始终活跃（不受温度计影响）
-    // - ALT做空：受温度计和候选标的影响
-    const btcActive = this.params.longBtc; // BTC做多始终活跃
-    const altActive = canShortAlt && hasShortCandidates && this.params.shortAlt; // ALT做空受温度计控制
-    
-    // 策略总体活跃状态：ALT活跃算策略活跃
-    const isActive = altActive;
+    // 重新定义isActive：只有当能够做空ALT且有符合条件的做空标的时才算活跃
+    // 不持有空单的状态定义为空仓状态
+    const isActive = canShortAlt && hasShortCandidates;
 
     // 计算当前总价值（如果是第一个快照，则使用初始本金）
     const previousValue = previousSnapshot?.totalValue || this.params.initialCapital;
 
     const soldPositions: PositionInfo[] = [];
     let btcPosition: PositionInfo | null = null;
-    const shortPositions: PositionInfo[] = [];
-    let account_usdt_balance = 0; // 统一账户余额
+    let shortPositions: PositionInfo[] = [];
+    let account_usdt_balance = 0;
     let totalValue = previousValue;
     let totalTradingFee = 0;
     let totalFundingFee = 0;
-    let btcSaleRevenue = 0; // BTC现货卖出收入
     const accumulatedTradingFee = (previousSnapshot?.accumulatedTradingFee || 0);
     const accumulatedFundingFee = (previousSnapshot?.accumulatedFundingFee || 0);
-    
-    // 如果因为温度计规则导致不能做空，记录原因
     let inactiveReason = '';
+
+    // 如果因为温度计规则导致不能做空，记录原因
     if (isInTemperatureHigh && this.params.shortAlt) {
       inactiveReason = temperatureRuleReason;
-    } else if (!altActive && this.params.shortAlt) {
-      inactiveReason = '无符合做空条件的ALT标的，ALT空仓状态';
     }
 
-    // === BTC持仓处理（始终活跃，不受温度计影响） ===
-    if (btcActive) {
+    if (isActive) {
+      // 初始化BTC盈亏
+      let btcPnl = 0;
+
+      // BTC持仓部分
       const btcAmount = totalValue * this.params.btcRatio;
       const btcQuantity = btcAmount / btcPrice;
 
       // 计算BTC盈亏（基于价格变化和持仓数量）
-      let btcPnl = 0;
       let btcTradingFee = 0;
       let btcIsNewPosition = false;
 
@@ -681,70 +684,29 @@ class BTCDOM2StrategyEngine {
       // 计算加权平均成本价和交易类型
       let newEntryPrice: number;
       let periodTradingType: 'buy' | 'sell' | 'hold';
-      let btcTradingQuantity: number;
-      let btcQuantityChange: { type: 'new' | 'increase' | 'decrease' | 'same' | 'sold'; previousQuantity?: number; changePercent?: number };
       
       if (previousSnapshot?.btcPosition) {
         const prevQuantity = previousSnapshot.btcPosition.quantity ?? 0;
         const prevEntryPrice = previousSnapshot.btcPosition.entryPrice ?? btcPrice;
         const quantityDiff = validBtcQuantity - prevQuantity;
-        btcTradingQuantity = quantityDiff;
         
         if (Math.abs(quantityDiff) < 0.0001) {
           // 数量基本没变，保持原均价
           newEntryPrice = prevEntryPrice;
           periodTradingType = 'hold';
-          btcQuantityChange = {
-            type: 'same',
-            previousQuantity: prevQuantity,
-            changePercent: 0
-          };
         } else if (quantityDiff > 0) {
           // 加仓，计算加权平均成本价
           newEntryPrice = (prevQuantity * prevEntryPrice + quantityDiff * btcPrice) / validBtcQuantity;
           periodTradingType = 'buy';
-          btcQuantityChange = {
-            type: 'increase',
-            previousQuantity: prevQuantity,
-            changePercent: prevQuantity > 0 ? (quantityDiff / prevQuantity) * 100 : 0
-          };
         } else {
           // 减仓，保持原均价（部分卖出不影响剩余持仓的成本价）
           newEntryPrice = prevEntryPrice;
           periodTradingType = 'sell';
-          btcQuantityChange = {
-            type: 'decrease',
-            previousQuantity: prevQuantity,
-            changePercent: prevQuantity > 0 ? (quantityDiff / prevQuantity) * 100 : 0
-          };
-
-          // BTC现货减仓：不添加到soldPositions，直接处理现金流
-          const soldQuantity = Math.abs(quantityDiff); // 卖出的数量（正数）
-          const soldValue = soldQuantity * btcPrice; // 实际卖出收入
-          const soldTradingFee = this.calculateTradingFee(soldValue, true); // 减仓手续费
-          
-          // 记录BTC卖出收入（不包含手续费，手续费后面统一处理）
-          btcSaleRevenue = soldValue;
-          
-          // BTC减仓现金流日志
-          console.log(`[BTC减仓现金流] 时间: ${timestamp}`, {
-            symbol: 'BTCUSDT',
-            side: 'LONG',
-            action: 'BTC现货减仓',
-            soldQuantity: soldQuantity,
-            currentPrice: btcPrice,
-            soldValue: soldValue,
-            soldTradingFee: soldTradingFee,
-            btcSaleRevenue: btcSaleRevenue,
-            explanation: 'BTC现货卖出收入'
-          });
         }
       } else {
         // 新开仓
         newEntryPrice = btcPrice;
         periodTradingType = 'buy';
-        btcTradingQuantity = validBtcQuantity;
-        btcQuantityChange = { type: 'new', previousQuantity: 0, changePercent: 0 };
       }
 
       btcPosition = {
@@ -756,7 +718,6 @@ class BTCDOM2StrategyEngine {
         currentPrice: btcPrice,
         periodTradingPrice: btcPrice, // 当期交易价格
         periodTradingType: periodTradingType, // 当期交易类型
-        tradingQuantity: btcTradingQuantity, // 当期实际交易数量
         pnl: validBtcPnl, // 第一期为0，后续期基于价格变化计算
         pnlPercent: prevAmount > 0 ? validBtcPnl / prevAmount : 0,
         tradingFee: validBtcTradingFee,
@@ -767,390 +728,372 @@ class BTCDOM2StrategyEngine {
           previousPrice: previousBtcPrice,
           changePercent: previousBtcPrice > 0 ? (btcPrice - previousBtcPrice) / previousBtcPrice : 0
         } : undefined,
-        quantityChange: btcQuantityChange, // 数量变化信息
         reason: 'BTC基础持仓'
+      };
+
+      // 处理卖出的持仓（上期有但本期没有的持仓）
+      if (previousSnapshot?.shortPositions) {
+        for (const prevPosition of previousSnapshot.shortPositions) {
+          const stillHeld = selectedCandidates.find(c => c.symbol === prevPosition.symbol);
+          // 温度计高于阈值时强制卖出所有空头仓位，或者正常的卖出逻辑
+          const shouldSell = !stillHeld || isInTemperatureHigh;
+          if (shouldSell) {
+            // 这个持仓在本期被卖出了
+            // 优先从removedSymbols中获取数据，如果没有则从rankings中查找
+            let rankingItem = removedSymbols?.find(r => r.symbol === prevPosition.symbol);
+            if (!rankingItem) {
+              rankingItem = rankings.find(r => r.symbol === prevPosition.symbol);
+            }
+
+            const currentPrice = rankingItem?.futurePriceAtTime || rankingItem?.priceAtTime || prevPosition.currentPrice;
+            const priceChange24h = rankingItem?.priceChange24h || 0;
+            const sellAmount = prevPosition.quantity * currentPrice;
+            const sellFee = this.calculateTradingFee(sellAmount, false); // ALT期货交易
+            totalTradingFee += sellFee;
+
+            // 计算卖出时的最终盈亏
+            const priceChangePercent = (currentPrice - prevPosition.currentPrice) / prevPosition.currentPrice;
+            const finalPnl = -prevPosition.value * priceChangePercent;
+
+            // 确保 amount 和 quantity 有有效的数值，避免 null 值
+            const validAmount = prevPosition.value ?? 0;
+            const validQuantity = prevPosition.quantity ?? 0;
+            const validPnl = isNaN(finalPnl) ? 0 : finalPnl;
+            const validTradingFee = isNaN(sellFee) ? 0 : sellFee;
+
+            // 计算卖出持仓的资金费率（如果有）
+            // 卖出时结算的是上一期的资金费率，从previousData.rankings获取
+            let soldFundingFee = 0;
+            const soldRankingItem = previousData?.rankings?.find(r => r.symbol === prevPosition.symbol);
+            const soldFundingRateHistory = soldRankingItem?.fundingRateHistory || [];
+
+            if (soldFundingRateHistory.length > 0 && validQuantity > 0) {
+              for (const funding of soldFundingRateHistory) {
+                // 对于做空头寸：资金费率为负数时支付，为正数时收取
+                // 如果markPrice为null、0、NaN或Infinity，使用当前价格作为替代
+                const effectiveMarkPrice = (funding.markPrice && isFinite(funding.markPrice) && funding.markPrice > 0)
+                  ? funding.markPrice
+                  : currentPrice;
+                const positionValue = validQuantity * effectiveMarkPrice;
+                const fundingAmount = positionValue * funding.fundingRate;
+                soldFundingFee += fundingAmount;
+              }
+            }
+            totalFundingFee += soldFundingFee;
+
+            soldPositions.push({
+              ...prevPosition,
+              value: validAmount,
+              quantity: validQuantity,
+              currentPrice,
+              periodTradingPrice: currentPrice, // 当期卖出价格
+              periodTradingType: 'buy' as const, // 对于做空，平仓是买入操作
+              pnl: validPnl,
+              pnlPercent: -priceChangePercent,
+              tradingFee: validTradingFee,
+              fundingFee: soldFundingFee,
+              priceChange24h: priceChange24h, // 使用从removedSymbols或rankings获取的24H价格变化
+              isSoldOut: true,
+              isNewPosition: false, // 卖出的持仓不是新增持仓
+              priceChange: {
+                type: currentPrice > prevPosition.currentPrice ? 'increase' : currentPrice < prevPosition.currentPrice ? 'decrease' : 'same',
+                previousPrice: prevPosition.currentPrice,
+                changePercent: priceChangePercent
+              },
+              quantityChange: { type: 'sold' },
+              fundingRateHistory: soldFundingRateHistory,
+              reason: isInTemperatureHigh ? `温度计规则强制卖出（${this.params.temperatureSymbol}>${this.params.temperatureThreshold})` : '持仓卖出'
+            });
+          }
+        }
       }
-    }
 
-    // === 统一ALT持仓管理 ===
-    // 创建目标持仓映射：基于策略状态决定目标持仓
-    const targetPositions = new Map<string, {
-      candidate: ShortCandidate;
-      targetAllocation: number;
-      targetQuantity: number;
-      price: number;
-    }>();
+      // 做空持仓部分 - 只在选择做空ALT且有候选标的时创建
+      if (canShortAlt && hasShortCandidates) {
+        const shortAmount = totalValue * (1 - this.params.btcRatio);
 
-    if (altActive) {
-      const shortAmount = totalValue * (1 - this.params.btcRatio);
-      // 根据分配策略计算仓位分配
-      const allocations = this.calculatePositionAllocations(selectedCandidates, shortAmount);
+        // 根据分配策略计算仓位分配
+        const allocations = this.calculatePositionAllocations(selectedCandidates, shortAmount);
 
-      // 构建目标持仓映射
-      selectedCandidates.forEach((candidate, index) => {
+        shortPositions = selectedCandidates.map((candidate, index) => {
         const allocation = allocations[index];
-        
+
         // 价格优先级：期货价格 > 现货价格
         let price = 1; // 默认价格
+
+        // 1. 优先使用期货价格（futurePriceAtTime）- 最精确
         if (candidate.futurePriceAtTime && candidate.futurePriceAtTime > 0) {
           price = candidate.futurePriceAtTime;
-        } else if (candidate.priceAtTime && candidate.priceAtTime > 0) {
+        }
+        // 2. 其次使用当前时刻现货价格（priceAtTime）- 精确的瞬时价格
+        else if (candidate.priceAtTime && candidate.priceAtTime > 0) {
           price = candidate.priceAtTime;
         }
 
-        const targetQuantity = allocation > 0 && price > 0 ? allocation / price : 0;
-        
-        targetPositions.set(candidate.symbol, {
-          candidate,
-          targetAllocation: allocation,
-          targetQuantity,
-          price
-        });
-      });
-    }
-    // 如果策略不活跃（温度计高温或无候选标的），目标持仓为空
+        // 确保数量计算的健壮性
+        const quantity = allocation > 0 && price > 0 ? allocation / price : 0;
 
-    // === 统一处理所有ALT持仓变化 ===
-    const processedSymbols = new Set<string>();
+        let pnl = 0;
+        let pnlPercent = 0;
+        let tradingFee = 0;
+        let fundingFee = 0;
+        let isNewPosition = false;
+        let previousFundingRateHistory: FundingRateHistoryItem[] = [];
 
-    // 第一步：处理已存在的持仓
-    if (previousSnapshot?.shortPositions) {
-      for (const prevPosition of previousSnapshot.shortPositions) {
-        const symbol = prevPosition.symbol;
-        processedSymbols.add(symbol);
-        
-        const targetPosition = targetPositions.get(symbol);
-        
-        if (!targetPosition) {
-          // 完全平仓：不在目标持仓中
-          let sellReason: string;
-          if (isInTemperatureHigh) {
-            sellReason = `温度计规则强制卖出（${this.params.temperatureSymbol}>${this.params.temperatureThreshold})`;
-          } else if (!selectedCandidates.find(c => c.symbol === symbol)) {
-            sellReason = '持仓卖出';
+        if (previousSnapshot?.shortPositions) {
+          // 从第二期开始，基于价格变化计算盈亏
+          const previousShortPosition = previousSnapshot.shortPositions.find(pos => pos.symbol === candidate.symbol);
+          if (previousShortPosition) {
+            // 确保之前的持仓数据有效
+            const validPrevAmount = previousShortPosition.value ?? 0;
+            const validPrevPrice = previousShortPosition.currentPrice ?? price;
+
+            // 做空盈亏：价格下跌时盈利，价格上涨时亏损
+            const priceChangePercent = validPrevPrice > 0 ? (price - validPrevPrice) / validPrevPrice : 0;
+            pnl = validPrevAmount > 0 ? -validPrevAmount * priceChangePercent : 0;
+            pnlPercent = -priceChangePercent;
+
+            // 如果仓位发生变化，计算交易手续费
+            const validPrevQuantity = previousShortPosition.quantity ?? 0;
+            const quantityDiff = Math.abs(quantity - validPrevQuantity);
+            if (quantityDiff > 0.0001) {
+              tradingFee = this.calculateTradingFee(quantityDiff * price, false); // ALT期货交易
+              totalTradingFee += tradingFee;
+            }
           } else {
-            sellReason = '策略调整：不再做空ALT';
+            // 新增持仓
+            tradingFee = this.calculateTradingFee(allocation, false); // ALT期货交易
+            totalTradingFee += tradingFee;
+            isNewPosition = true;
           }
+        } else {
+          // 第一期，所有持仓都是新增的
+          tradingFee = this.calculateTradingFee(allocation, false); // ALT期货交易
+          totalTradingFee += tradingFee;
+          isNewPosition = true;
+        }
 
-          // 获取当前价格
-          let rankingItem = removedSymbols?.find(r => r.symbol === symbol);
+        // 计算资金费率盈亏 - 只对非新开仓的持仓计算
+        // 新开仓的持仓从下一期开始收取资金费率
+        // 对于持仓的position，使用上一期data元素的rankings中的资金费率历史
+        if (!isNewPosition && quantity > 0) {
+          // 从上一期data元素的rankings中获取资金费率历史
+          const prevRankingItem = previousData?.rankings?.find(r => r.symbol === candidate.symbol);
+          previousFundingRateHistory = prevRankingItem?.fundingRateHistory || [];
+
+          if (previousFundingRateHistory.length > 0) {
+            for (const funding of previousFundingRateHistory) {
+              // 对于做空头寸：
+              // 资金费率为负数时，空头支付资金费（亏损）
+              // 资金费率为正数时，空头收取资金费（盈利）
+              // 所以公式是：资金费率盈亏 = 头寸价值 × 资金费率
+              // 如果markPrice为null、0、NaN或Infinity，使用当前价格作为替代
+              const effectiveMarkPrice = (funding.markPrice && isFinite(funding.markPrice) && funding.markPrice > 0)
+                ? funding.markPrice
+                : price;
+              const positionValue = quantity * effectiveMarkPrice;
+              fundingFee += positionValue * funding.fundingRate;
+            }
+          }
+        }
+
+        // 获取之前的持仓信息用于价格变化计算
+        const previousShortPosition = previousSnapshot?.shortPositions?.find(pos => pos.symbol === candidate.symbol);
+        const previousPrice = previousShortPosition?.currentPrice;
+
+        // 计算做空品种的加权平均成本价和交易类型
+        let shortEntryPrice: number;
+        let shortPeriodTradingType: 'buy' | 'sell' | 'hold';
+        
+        if (previousShortPosition) {
+          const prevQuantity = previousShortPosition.quantity ?? 0;
+          const prevEntryPrice = previousShortPosition.entryPrice ?? price;
+          const quantityDiff = quantity - prevQuantity;
+          
+          if (Math.abs(quantityDiff) < 0.0001) {
+            // 数量基本没变，保持原均价
+            shortEntryPrice = prevEntryPrice;
+            shortPeriodTradingType = 'hold';
+          } else if (quantityDiff > 0) {
+            // 加仓（对于做空，增加数量仍然是"sell"操作）
+            shortEntryPrice = (prevQuantity * prevEntryPrice + quantityDiff * price) / quantity;
+            shortPeriodTradingType = 'sell';
+          } else {
+            // 减仓（对于做空，减少数量是"buy"回补操作）
+            shortEntryPrice = prevEntryPrice;
+            shortPeriodTradingType = 'buy';
+          }
+        } else {
+          // 新开仓（对于做空，开仓是"sell"操作）
+          shortEntryPrice = price;
+          shortPeriodTradingType = 'sell';
+        }
+
+          return {
+            symbol: candidate.symbol,
+            displaySymbol: candidate.futureSymbol || candidate.symbol,
+            side: 'SHORT',
+            value: allocation,
+            quantity,
+            entryPrice: shortEntryPrice, // 使用加权平均成本价
+            currentPrice: price,
+            periodTradingPrice: price, // 当期交易价格
+            periodTradingType: shortPeriodTradingType, // 当期交易类型
+            pnl: isNaN(pnl) ? 0 : pnl,
+            pnlPercent: isNaN(pnlPercent) ? 0 : pnlPercent,
+            tradingFee: isNaN(tradingFee) ? 0 : tradingFee,
+            fundingFee: isNaN(fundingFee) ? 0 : fundingFee,
+            priceChange24h: candidate.priceChange24h, // 添加24H价格变化
+            isNewPosition,
+            priceChange: previousPrice ? {
+              type: price > previousPrice ? 'increase' : price < previousPrice ? 'decrease' : 'same',
+              previousPrice: previousPrice,
+              changePercent: previousPrice > 0 ? (price - previousPrice) / previousPrice : 0
+            } : undefined,
+            fundingRateHistory: isNewPosition ? [] : previousFundingRateHistory,
+            marketShare: candidate.marketShare,
+            reason: candidate.reason
+          };
+        });
+      }
+
+      // 计算总资金费率（累加持仓的资金费，soldPositions的资金费已经在前面累加过了）
+      totalFundingFee += shortPositions.reduce((sum, pos) => sum + (pos.fundingFee || 0), 0);
+
+      // 更新总价值（考虑手续费和资金费率）
+      const btcValueChange = btcPnl;
+      const shortValueChange = shortPositions.reduce((sum, pos) => sum + pos.pnl, 0);
+      const soldValueChange = soldPositions.reduce((sum, pos) => sum + pos.pnl, 0);
+      console.log("时间", new Date(timestamp).toISOString(), "previousValue:", previousValue, " BTC价格", btcPrice, " btcValueChange:", btcValueChange, " shortValueChange:", shortValueChange, " soldValueChange:", soldValueChange, " totalTradingFee:", totalTradingFee, " totalFundingFee:", totalFundingFee);
+      totalValue = previousValue + btcValueChange + shortValueChange + soldValueChange + totalTradingFee + totalFundingFee;
+
+    } else {
+      // 策略不活跃：无符合条件的标的或策略未启用，持有现金
+
+      // 如果之前有做空持仓，现在全部卖出
+      if (previousSnapshot?.shortPositions && previousSnapshot.shortPositions.length > 0) {
+        for (const prevPosition of previousSnapshot.shortPositions) {
+          // 优先从removedSymbols中获取数据，如果没有则从rankings中查找
+          let rankingItem = removedSymbols?.find(r => r.symbol === prevPosition.symbol);
           if (!rankingItem) {
-            rankingItem = rankings.find(r => r.symbol === symbol);
+            rankingItem = rankings.find(r => r.symbol === prevPosition.symbol);
           }
 
           const currentPrice = rankingItem?.futurePriceAtTime || rankingItem?.priceAtTime || prevPosition.currentPrice;
           const priceChange24h = rankingItem?.priceChange24h || 0;
           const sellAmount = prevPosition.quantity * currentPrice;
-          const sellFee = this.calculateTradingFee(sellAmount, false);
+          const sellFee = this.calculateTradingFee(sellAmount, false); // ALT期货交易
           totalTradingFee += sellFee;
 
+          // 计算卖出时的最终盈亏
           const priceChangePercent = (currentPrice - prevPosition.currentPrice) / prevPosition.currentPrice;
-          const finalPnl = prevPosition.quantity * (prevPosition.entryPrice - currentPrice); // 做空盈亏：数量 × (入场价 - 出场价)
+          const finalPnl = -prevPosition.value * priceChangePercent;
 
-          // 计算卖出持仓的资金费率
+          // 确保 amount 和 quantity 有有效的数值，避免 null 值
+          const validAmount = prevPosition.value ?? 0;
+          const validQuantity = prevPosition.quantity ?? 0;
+          const validPnl = isNaN(finalPnl) ? 0 : finalPnl;
+          const validTradingFee = isNaN(sellFee) ? 0 : sellFee;
+
+          // 计算卖出持仓的资金费率（如果有）
+          // 卖出时结算的是上一期的资金费率，从previousData.rankings获取
           let soldFundingFee = 0;
-          const soldRankingItem = previousData?.rankings?.find(r => r.symbol === symbol);
+          const soldRankingItem = previousData?.rankings?.find(r => r.symbol === prevPosition.symbol);
           const soldFundingRateHistory = soldRankingItem?.fundingRateHistory || [];
 
-          if (soldFundingRateHistory.length > 0 && prevPosition.quantity > 0) {
+          if (soldFundingRateHistory.length > 0 && validQuantity > 0) {
             for (const funding of soldFundingRateHistory) {
+              // 对于做空头寸：资金费率为负数时支付，为正数时收取
+              // 如果markPrice为null、0、NaN或Infinity，使用当前价格作为替代
               const effectiveMarkPrice = (funding.markPrice && isFinite(funding.markPrice) && funding.markPrice > 0)
                 ? funding.markPrice
                 : currentPrice;
-              const positionValue = prevPosition.quantity * effectiveMarkPrice;
-              soldFundingFee += positionValue * funding.fundingRate;
+              const positionValue = validQuantity * effectiveMarkPrice;
+              const fundingAmount = positionValue * funding.fundingRate;
+              soldFundingFee += fundingAmount;
             }
           }
           totalFundingFee += soldFundingFee;
 
           soldPositions.push({
             ...prevPosition,
-            value: sellAmount, // 使用实际平仓费用
-            quantity: prevPosition.quantity ?? 0,
+            value: validAmount,
+            quantity: validQuantity,
             currentPrice,
-            periodTradingPrice: currentPrice,
-            periodTradingType: 'buy' as const,
-            tradingQuantity: -(prevPosition.quantity ?? 0),
-            pnl: isNaN(finalPnl) ? 0 : finalPnl,
-            pnlPercent: (prevPosition.quantity * prevPosition.entryPrice) > 0 ? finalPnl / (prevPosition.quantity * prevPosition.entryPrice) : 0,
-            tradingFee: isNaN(sellFee) ? 0 : sellFee,
+            pnl: validPnl,
+            pnlPercent: -priceChangePercent,
+            tradingFee: validTradingFee,
             fundingFee: soldFundingFee,
-            priceChange24h: priceChange24h,
+            priceChange24h: priceChange24h, // 使用从removedSymbols或rankings获取的24H价格变化
             isSoldOut: true,
-            isNewPosition: false,
+            isNewPosition: false, // 卖出的持仓不是新增持仓
             priceChange: {
               type: currentPrice > prevPosition.currentPrice ? 'increase' : currentPrice < prevPosition.currentPrice ? 'decrease' : 'same',
               previousPrice: prevPosition.currentPrice,
               changePercent: priceChangePercent
             },
-            quantityChange: {
-              type: 'sold',
-              previousQuantity: prevPosition.quantity ?? 0
-            },
+            quantityChange: { type: 'sold' },
             fundingRateHistory: soldFundingRateHistory,
-            reason: sellReason
-          });
-
-        } else {
-          // 持仓调整：在目标持仓中，需要对比数量变化
-          const { candidate, targetQuantity, price } = targetPosition;
-          const prevQuantity = prevPosition.quantity ?? 0;
-          const quantityDiff = targetQuantity - prevQuantity;
-
-          if (Math.abs(quantityDiff) > 0.0001) {
-            // 计算交易手续费
-            const tradingFee = this.calculateTradingFee(Math.abs(quantityDiff) * price, false);
-            totalTradingFee += tradingFee;
-
-            if (quantityDiff < 0) {
-              // 减仓：将减仓部分添加到soldPositions
-              const soldQuantity = Math.abs(quantityDiff);
-              const soldCost = soldQuantity * prevPosition.entryPrice; // 原始做空成本
-              const soldValue = soldQuantity * price; // 平仓买入花费
-              const soldPnl = soldQuantity * (prevPosition.entryPrice - price); // 做空盈亏：成本 - 平仓费用
-              const soldTradingFee = this.calculateTradingFee(soldValue, false);
-
-              soldPositions.push({
-                symbol: symbol,
-                displaySymbol: candidate.futureSymbol || symbol,
-                side: 'SHORT',
-                value: soldValue,
-                quantity: soldQuantity,
-                entryPrice: prevPosition.entryPrice,
-                currentPrice: price,
-                periodTradingPrice: price,
-                periodTradingType: 'buy' as const,
-                tradingQuantity: -soldQuantity,
-                pnl: isNaN(soldPnl) ? 0 : soldPnl,
-                pnlPercent: soldCost > 0 ? soldPnl / soldCost : 0,
-                tradingFee: isNaN(soldTradingFee) ? 0 : soldTradingFee,
-                priceChange24h: candidate.priceChange24h,
-                isSoldOut: false,
-                isNewPosition: false,
-                priceChange: {
-                  type: price > prevPosition.entryPrice ? 'increase' : price < prevPosition.entryPrice ? 'decrease' : 'same',
-                  previousPrice: prevPosition.entryPrice,
-                  changePercent: prevPosition.entryPrice > 0 ? (price - prevPosition.entryPrice) / prevPosition.entryPrice : 0
-                },
-                quantityChange: { 
-                  type: 'decrease', 
-                  previousQuantity: prevQuantity, 
-                  changePercent: prevQuantity > 0 ? (quantityDiff / prevQuantity) * 100 : 0 
-                },
-                fundingRateHistory: previousData?.rankings?.find(r => r.symbol === symbol)?.fundingRateHistory || [],
-                marketShare: candidate.marketShare,
-                reason: 'ALT做空减仓已实现盈亏'
-              });
-            }
-          }
-
-          // 计算资金费率
-          let fundingFee = 0;
-          const prevRankingItem = previousData?.rankings?.find(r => r.symbol === symbol);
-          const previousFundingRateHistory = prevRankingItem?.fundingRateHistory || [];
-
-          if (previousFundingRateHistory.length > 0 && targetQuantity > 0) {
-            for (const funding of previousFundingRateHistory) {
-              const effectiveMarkPrice = (funding.markPrice && isFinite(funding.markPrice) && funding.markPrice > 0)
-                ? funding.markPrice
-                : price;
-              const positionValue = targetQuantity * effectiveMarkPrice;
-              fundingFee += positionValue * funding.fundingRate;
-            }
-          }
-
-          // 计算加权平均成本价和交易类型
-          let newEntryPrice: number;
-          let periodTradingType: 'buy' | 'sell' | 'hold';
-          let shortQuantityChange: { type: 'new' | 'increase' | 'decrease' | 'same' | 'sold'; previousQuantity?: number; changePercent?: number };
-
-          if (Math.abs(quantityDiff) < 0.0001) {
-            newEntryPrice = prevPosition.entryPrice ?? price;
-            periodTradingType = 'hold';
-            shortQuantityChange = { type: 'same', previousQuantity: prevQuantity, changePercent: 0 };
-          } else if (quantityDiff > 0) {
-            newEntryPrice = (prevQuantity * (prevPosition.entryPrice ?? price) + quantityDiff * price) / targetQuantity;
-            periodTradingType = 'sell';
-            shortQuantityChange = { type: 'increase', previousQuantity: prevQuantity, changePercent: prevQuantity > 0 ? (quantityDiff / prevQuantity) * 100 : 0 };
-          } else {
-            newEntryPrice = prevPosition.entryPrice ?? price;
-            periodTradingType = 'buy';
-            shortQuantityChange = { type: 'decrease', previousQuantity: prevQuantity, changePercent: prevQuantity > 0 ? (quantityDiff / prevQuantity) * 100 : 0 };
-          }
-
-          // 修复：在仓位调整后计算剩余持仓的PnL
-          // 对于做空：盈亏 = 剩余数量 * (加权平均入场价 - 当前价)
-          const pnl = targetQuantity > 0 ? targetQuantity * (newEntryPrice - price) : 0;
-          
-          // 计算百分比盈亏 
-          const validPrevPrice = prevPosition.currentPrice ?? price;
-          const priceChangePercent = validPrevPrice > 0 ? (price - validPrevPrice) / validPrevPrice : 0;
-
-          shortPositions.push({
-            symbol: symbol,
-            displaySymbol: candidate.futureSymbol || symbol,
-            side: 'SHORT',
-            value: targetPosition.targetAllocation,
-            quantity: targetQuantity,
-            entryPrice: newEntryPrice,
-            currentPrice: price,
-            periodTradingPrice: price,
-            periodTradingType: periodTradingType,
-            tradingQuantity: quantityDiff,
-            pnl: isNaN(pnl) ? 0 : pnl,
-            pnlPercent: isNaN(-priceChangePercent) ? 0 : -priceChangePercent,
-            tradingFee: Math.abs(quantityDiff) > 0.0001 ? this.calculateTradingFee(Math.abs(quantityDiff) * price, false) : 0,
-            fundingFee: isNaN(fundingFee) ? 0 : fundingFee,
-            priceChange24h: candidate.priceChange24h,
-            isNewPosition: false,
-            priceChange: {
-              type: price > validPrevPrice ? 'increase' : price < validPrevPrice ? 'decrease' : 'same',
-              previousPrice: validPrevPrice,
-              changePercent: validPrevPrice > 0 ? (price - validPrevPrice) / validPrevPrice : 0
-            },
-            quantityChange: shortQuantityChange,
-            fundingRateHistory: previousFundingRateHistory,
-            marketShare: candidate.marketShare,
-            reason: candidate.reason
+            reason: canShortAlt ? '无符合条件标的，卖出持仓' : '策略调整：不再做空ALT'
           });
         }
       }
-    }
 
-    // 第二步：处理新开仓（目标持仓中未被处理的）
-    for (const [symbol, targetPosition] of targetPositions) {
-      if (!processedSymbols.has(symbol)) {
-        const { candidate, targetAllocation, targetQuantity, price } = targetPosition;
-        
-        // 新开仓
-        const tradingFee = this.calculateTradingFee(targetAllocation, false);
-        totalTradingFee += tradingFee;
+      
+      // 如果选择做多BTC但没有符合条件的做空标的，继续持有BTC
+      const btcAmount = totalValue * this.params.btcRatio;
+      const btcQuantity = btcAmount / btcPrice;
 
-        shortPositions.push({
-          symbol: symbol,
-          displaySymbol: candidate.futureSymbol || symbol,
-          side: 'SHORT',
-          value: targetAllocation,
-          quantity: targetQuantity,
-          entryPrice: price,
-          currentPrice: price,
-          periodTradingPrice: price,
-          periodTradingType: 'sell',
-          tradingQuantity: targetQuantity,
-          pnl: 0, // 新开仓无盈亏
-          pnlPercent: 0,
-          tradingFee: isNaN(tradingFee) ? 0 : tradingFee,
-          fundingFee: 0, // 新开仓无资金费率
-          priceChange24h: candidate.priceChange24h,
-          isNewPosition: true,
-          priceChange: undefined,
-          quantityChange: { type: 'new', previousQuantity: 0, changePercent: 0 },
-          fundingRateHistory: [],
-          marketShare: candidate.marketShare,
-          reason: candidate.reason
-        });
+      const previousBtcPosition = previousSnapshot!.btcPosition!;
+      const validPrevBtcQuantity = previousBtcPosition.quantity ?? 0;
+      const validPrevBtcPrice = previousBtcPosition.currentPrice ?? btcPrice;
+      const btcPnl = validPrevBtcQuantity * (btcPrice - validPrevBtcPrice);
+
+      // 如果仓位发生变化，计算交易手续费
+      let btcTradingFee = 0;
+      const quantityDiff = Math.abs(btcQuantity - validPrevBtcQuantity);
+      if (quantityDiff > 0.0001) {
+        btcTradingFee = this.calculateTradingFee(quantityDiff * btcPrice, true); // BTC现货交易
+        totalTradingFee += btcTradingFee;
       }
-    }
 
-    // 计算总资金费率
-    totalFundingFee += shortPositions.reduce((sum, pos) => sum + (pos.fundingFee || 0), 0);
+      const validPrevBtcAmount = previousBtcPosition.value ?? btcAmount;
 
-    // 设置ALT不活跃时的原因
-    if (!altActive) {
+      btcPosition = {
+        symbol: 'BTCUSDT',
+        side: 'LONG',
+        value: btcAmount,
+        quantity: btcQuantity,
+        entryPrice: previousBtcPosition.entryPrice,
+        currentPrice: btcPrice,
+        pnl: isNaN(btcPnl) ? 0 : btcPnl,
+        pnlPercent: validPrevBtcAmount > 0 ? btcPnl / validPrevBtcAmount : 0,
+        tradingFee: isNaN(btcTradingFee) ? 0 : btcTradingFee,
+        priceChange24h: btcPriceChange24h, // 添加24H价格变化
+        isNewPosition: false,
+        priceChange: {
+          type: btcPrice > validPrevBtcPrice ? 'increase' : btcPrice < validPrevBtcPrice ? 'decrease' : 'same',
+          previousPrice: validPrevBtcPrice,
+          changePercent: validPrevBtcPrice > 0 ? (btcPrice - validPrevBtcPrice) / validPrevBtcPrice : 0
+        },
+        reason: 'BTC基础持仓'
+      };
+
+      // 设置空仓原因（空仓定义为不持有空单的状态）
       if (!canShortAlt) {
-        inactiveReason = temperatureRuleReason; // 温度计高温导致的ALT空仓
+        inactiveReason = temperatureRuleReason; // 温度计高温导致的空仓
       } else if (!hasShortCandidates) {
-        inactiveReason = '无符合做空条件的ALT标的，ALT空仓状态';
+        inactiveReason = '无符合做空条件的ALT标的，空仓状态';
       } else {
-        inactiveReason = '未知原因导致的ALT空仓状态';
+        inactiveReason = '未知原因导致的空仓状态';
       }
+
+      const soldValueChange = soldPositions.reduce((sum, pos) => sum + pos.pnl, 0);
+      const btcValueChange = btcPosition ? btcPosition.pnl : 0;
+      totalValue = previousValue + btcValueChange + soldValueChange + totalTradingFee + totalFundingFee;
+      account_usdt_balance = totalValue - (btcPosition ? btcPosition.value : 0);
     }
 
-    // 计算ALT卖出所产生的现金余额变化
-    const altSoldRevenue = soldPositions
-      .filter(pos => pos.side === 'SHORT')
-      .reduce((sum, pos) => sum + pos.pnl, 0); // 对于做空，pnl就是现金余额的变化
-
-    // 当期ALT平仓汇总日志
-    if (soldPositions.length > 0) {
-      console.log(`[ALT平仓汇总] 时间: ${timestamp}`, {
-        soldPositionsCount: soldPositions.length,
-        altSoldRevenue: altSoldRevenue,
-        soldPositionsDetails: soldPositions.map(pos => ({
-          symbol: pos.symbol,
-          side: pos.side,
-          quantity: pos.quantity,
-          entryPrice: pos.entryPrice,
-          currentPrice: pos.currentPrice,
-          pnl: pos.pnl,
-          calculation: `quantity × (entryPrice - currentPrice) = ${pos.pnl}`,
-          reason: pos.reason
-        }))
-      });
-    }
-
-    // 计算现金余额变化
-    let previousAccountBalance;
-    if (previousSnapshot?.account_usdt_balance !== undefined) {
-      previousAccountBalance = previousSnapshot.account_usdt_balance;
-    } else {
-      // 初始状态：总资金减去用于购买BTC的资金
-      const btcInvestment = btcPosition?.value || 0;
-      previousAccountBalance = this.params.initialCapital - btcInvestment;
-    }
-    
-    // 调试日志：现金余额计算详情
-    console.log(`[现金余额计算] 时间: ${timestamp}`, {
-      previousAccountBalance: previousAccountBalance,
-      btcSaleRevenue: btcSaleRevenue,
-      altSoldRevenue: altSoldRevenue,
-      totalTradingFee: totalTradingFee,
-      totalFundingFee: totalFundingFee,
-      explanation: '现金余额 = 上期余额 + BTC卖出收入 + ALT卖出收入 - 手续费'
-    });
-    
-    // 正确的现金余额计算逻辑：
-    // 1. BTC卖出：增加现金收入 (+btcSaleRevenue)
-    // 2. ALT卖出：现金余额变化 (+altSoldRevenue)
-    account_usdt_balance = previousAccountBalance + btcSaleRevenue + altSoldRevenue;
-
-    // 最终统一扣除费用
-    account_usdt_balance = account_usdt_balance - Math.abs(totalTradingFee) - Math.abs(totalFundingFee);
-  
-    // 新的 totalValue 计算方法：现金 + BTC市值 + 空单浮动盈亏
-    const btcValue = btcPosition ? btcPosition.quantity * btcPosition.currentPrice : 0;
-    const shortPnl = shortPositions.reduce((sum, pos) => sum + pos.pnl, 0);
-    
-    // shortPnl汇总计算日志
-    console.log(`[short浮动盈亏汇总] 时间: ${timestamp}`, {
-      totalShortPositions: shortPositions.length,
-      shortPositionsDetails: shortPositions.map(pos => ({
-        symbol: pos.symbol,
-        amount: pos.value,
-        quantity: pos.quantity,
-        entryPrice: pos.entryPrice,
-        currentPrice: pos.currentPrice,
-        pnl: pos.pnl,
-        pnlPercent: (pos.pnlPercent * 100).toFixed(4) + '%',
-        calculation: `quantity × (entryPrice - currentPrice) = ${pos.pnl.toFixed(6)}`
-      })),
-      totalShortPnl: shortPnl,
-      calculation: shortPositions.map(pos => `${pos.symbol}(${pos.pnl.toFixed(6)})`).join(' + ') + ` = ${shortPnl.toFixed(6)}`
-    });
-    
-    // 调试日志：总价值组成部分
-    console.log(`[总价值计算] 时间: ${timestamp}`, {
-      account_usdt_balance: account_usdt_balance,
-      btcValue: btcValue,
-      btcQuantity: btcPosition?.quantity || 0,
-      btcPrice: btcPrice,
-      shortPnl: shortPnl,
-      shortPositionsCount: shortPositions.length,
-      calculatedTotal: account_usdt_balance + btcValue + shortPnl
-    });
-    
-    totalValue = account_usdt_balance + btcValue + shortPnl;
-    console.log('时间:', timestamp, ', 总价值:', totalValue.toFixed(2), ', BTC价格:', btcPrice, ', 现金余额:', account_usdt_balance.toFixed(2), ', BTC市值:', (btcPosition ? (btcPosition.quantity * btcPosition.currentPrice).toFixed(2) : '0.00'), ', BTC卖出收入:', btcSaleRevenue.toFixed(2), ', ALT卖出收入:', altSoldRevenue.toFixed(2), ', 交易手续费:', totalTradingFee.toFixed(2), ', 资金费率:', totalFundingFee.toFixed(2));
     const totalPnl = totalValue - this.params.initialCapital;
     const totalPnlPercent = totalPnl / this.params.initialCapital;
 
@@ -1482,6 +1425,22 @@ function calculatePerformanceMetrics(
   const altPnlRate = altPnlAmount / params.initialCapital;
   const tradingFeeRate = tradingFeeAmount / params.initialCapital;
   const fundingFeeRate = fundingFeeAmount / params.initialCapital;
+
+  // 验证盈亏分解是否正确
+  const calculatedTotal = btcPnlAmount + altPnlAmount + tradingFeeAmount + fundingFeeAmount;
+  const difference = Math.abs(totalPnlAmount - calculatedTotal);
+
+  if (difference > 0.01) { // 如果差额大于1分钱，输出调试信息
+    console.warn(`盈亏分解验证失败:`, {
+      totalPnlAmount: totalPnlAmount.toFixed(2),
+      btcPnlAmount: btcPnlAmount.toFixed(2),
+      altPnlAmount: altPnlAmount.toFixed(2),
+      tradingFeeAmount: tradingFeeAmount.toFixed(2),
+      fundingFeeAmount: fundingFeeAmount.toFixed(2),
+      calculatedTotal: calculatedTotal.toFixed(2),
+      difference: difference.toFixed(2)
+    });
+  }
 
   return {
     totalReturn,

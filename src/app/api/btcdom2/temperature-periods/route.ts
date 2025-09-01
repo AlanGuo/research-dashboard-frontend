@@ -74,44 +74,6 @@ async function fetchTemperatureDataSingle(
   return await response.json();
 }
 
-// 插值生成8H数据点（基于1D数据）
-function interpolate8HData(dailyData: TemperatureDataPoint[]): TemperatureDataPoint[] {
-  const result: TemperatureDataPoint[] = [];
-  
-  for (let i = 0; i < dailyData.length; i++) {
-    const currentPoint = dailyData[i];
-    const currentTime = new Date(currentPoint.timestamp);
-    
-    // 为每一天生成3个8小时数据点：00:00, 08:00, 16:00
-    for (let j = 0; j < 3; j++) {
-      const timeOffset = j * 8; // 0, 8, 16 小时
-      const interpolatedTime = new Date(currentTime);
-      interpolatedTime.setUTCHours(timeOffset, 0, 0, 0);
-      
-      // 简单插值：在当前值基础上添加小幅随机波动
-      // 实际应用中可以使用更复杂的插值算法
-      let interpolatedValue = currentPoint.value;
-      
-      if (j === 1) {
-        // 08:00 时刻：略微上调
-        interpolatedValue += (Math.random() - 0.5) * 2;
-      } else if (j === 2) {
-        // 16:00 时刻：略微下调
-        interpolatedValue += (Math.random() - 0.5) * 2;
-      }
-      
-      // 确保值在合理范围内
-      interpolatedValue = Math.max(0, Math.min(100, interpolatedValue));
-      
-      result.push({
-        timestamp: interpolatedTime.toISOString(),
-        value: interpolatedValue
-      });
-    }
-  }
-  
-  return result.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-}
 
 // 智能获取温度计数据（支持8H分段获取）
 async function fetchTemperatureData(
@@ -143,47 +105,29 @@ async function fetchTemperatureData(
   try {
     // 情况1：请求时间完全在8H数据可用期之前
     if (endTime <= h8StartTime) {
-      console.log('[8H温度计] 请求时间在8H数据可用期之前，使用1D数据插值');
-      const dailyResult = await fetchTemperatureDataSingle(symbol, '1D', startDate, endDate);
-      if (dailyResult.success && dailyResult.data?.data) {
-        allData = interpolate8HData(dailyResult.data.data);
-      } else {
-        return dailyResult;
-      }
+      console.log('[8H温度计] 请求时间在8H数据可用期之前，8H数据不可用');
+      return {
+        success: false,
+        message: `8H数据仅从 ${H8_DATA_START} 开始可用，请求的时间范围过早`
+      };
     }
     // 情况2：请求时间完全在8H数据可用期之内
     else if (startTime >= h8StartTime) {
       console.log('[8H温度计] 请求时间在8H数据可用期内，直接使用8H数据');
       return fetchTemperatureDataSingle(symbol, '8H', startDate, endDate);
     }
-    // 情况3：请求时间跨越8H数据可用期（需要分段获取）
+    // 情况3：请求时间跨越8H数据可用期（只返回8H数据可用期内的数据）
     else {
-      console.log('[8H温度计] 请求时间跨越8H数据可用期，分段获取数据');
+      console.log('[8H温度计] 请求时间跨越8H数据可用期，只返回8H数据可用期内的真实数据');
       
-      // 第一段：使用1D数据插值（从startDate到8H数据开始）
-      const beforeH8EndDate = new Date(h8StartTime - 24 * 60 * 60 * 1000).toISOString(); // 8H数据开始的前一天
-      const dailyResult = await fetchTemperatureDataSingle(symbol, '1D', startDate, beforeH8EndDate);
-      
-      if (dailyResult.success && dailyResult.data?.data) {
-        const interpolatedData = interpolate8HData(dailyResult.data.data);
-        allData.push(...interpolatedData);
-      }
-      
-      // 第二段：使用真实8H数据（从8H数据开始到endDate）
+      // 只获取真实8H数据（从8H数据开始到endDate）
       const h8Result = await fetchTemperatureDataSingle(symbol, '8H', H8_DATA_START, endDate);
       
       if (h8Result.success && h8Result.data?.data) {
-        allData.push(...h8Result.data.data);
+        allData = h8Result.data.data;
+      } else {
+        return h8Result;
       }
-      
-      // 去重和排序
-      const dataMap = new Map<string, TemperatureDataPoint>();
-      allData.forEach(point => {
-        dataMap.set(point.timestamp, point);
-      });
-      allData = Array.from(dataMap.values()).sort((a, b) => 
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-      );
     }
     
     return {
@@ -200,28 +144,6 @@ async function fetchTemperatureData(
   }
 }
 
-// 合并数据并去重
-function mergeTemperatureData(
-  existingData: TemperatureDataPoint[],
-  newData: TemperatureDataPoint[]
-): TemperatureDataPoint[] {
-  // 创建时间戳到数据点的映射，用于去重
-  const dataMap = new Map<string, TemperatureDataPoint>();
-  
-  // 先添加现有数据
-  existingData.forEach(point => {
-    dataMap.set(point.timestamp, point);
-  });
-  
-  // 添加新数据，会自动覆盖重复的时间戳
-  newData.forEach(point => {
-    dataMap.set(point.timestamp, point);
-  });
-  
-  // 转换回数组并按时间排序
-  return Array.from(dataMap.values())
-    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-}
 
 // 过滤指定时间范围内的数据
 function filterDataByDateRange(
@@ -260,54 +182,32 @@ export async function GET(request: NextRequest) {
     } else {
       console.log(`[温度计缓存] 缓存命中: ${cacheKey}, 数据点数: ${cachedData.data.length}`);
       
-      // 检查是否需要增量更新
+      // 获取缓存的时间范围
+      const cachedFirstTimestamp = cachedData.data.length > 0 
+        ? cachedData.data[0].timestamp 
+        : endDate;
       const cachedLastTimestamp = cachedData.data.length > 0 
         ? cachedData.data[cachedData.data.length - 1].timestamp 
         : startDate;
       
+      const cachedFirstTime = new Date(cachedFirstTimestamp).getTime();
       const cachedLastTime = new Date(cachedLastTimestamp).getTime();
+      const requestedStartTime = new Date(startDate).getTime();
       const requestedEndTime = new Date(endDate).getTime();
       
-      // 如果请求的结束时间晚于缓存中的最新时间，需要增量更新
-      if (requestedEndTime > cachedLastTime) {
-        console.log(`[温度计缓存] 需要增量更新，从 ${cachedLastTimestamp} 到 ${endDate}`);
+      // 检查是否需要扩展缓存
+      const needsBackwardExpansion = requestedStartTime < cachedFirstTime;
+      const needsForwardExpansion = requestedEndTime > cachedLastTime;
+      
+      if (needsBackwardExpansion || needsForwardExpansion) {
+        console.log(`[温度计缓存] 需要扩展缓存 - 向前: ${needsBackwardExpansion}, 向后: ${needsForwardExpansion}`);
+        console.log(`[温度计缓存] 请求范围: ${startDate} ~ ${endDate}`);
+        console.log(`[温度计缓存] 缓存范围: ${cachedFirstTimestamp} ~ ${cachedLastTimestamp}`);
         
-        try {
-          // 增量获取新数据（根据时间间隔计算增量起始时间）
-          let incrementalInterval: number;
-          if (timeframe === '8H' || timeframe === '8h') {
-            incrementalInterval = 8 * 60 * 60 * 1000; // 8小时
-          } else {
-            incrementalInterval = 24 * 60 * 60 * 1000; // 1天
-          }
-          const incrementalStartDate = new Date(cachedLastTime + incrementalInterval).toISOString();
-          const incrementalData = await fetchTemperatureData(symbol, timeframe, incrementalStartDate, endDate);
-          
-          if (incrementalData.success && incrementalData.data?.data) {
-            console.log(`[温度计缓存] 增量获取到 ${incrementalData.data.data.length} 个新数据点`);
-            
-            // 合并数据
-            const mergedData = mergeTemperatureData(cachedData.data, incrementalData.data.data);
-            
-            // 更新缓存
-            temperatureCache.set(cacheKey, {
-              symbol,
-              timeframe,
-              data: mergedData,
-              lastUpdated: new Date().toISOString()
-            });
-            
-            finalData = mergedData;
-          } else {
-            console.log(`[温度计缓存] 增量更新失败，使用缓存数据`);
-            finalData = cachedData.data;
-          }
-        } catch (error) {
-          console.warn(`[温度计缓存] 增量更新出错，使用缓存数据:`, error instanceof Error ? error.message : String(error));
-          finalData = cachedData.data;
-        }
+        // 直接重新获取完整数据，避免复杂的增量逻辑
+        needsFullFetch = true;
       } else {
-        console.log(`[温度计缓存] 缓存数据已足够，无需更新`);
+        console.log(`[温度计缓存] 缓存数据已覆盖请求范围，无需更新`);
         finalData = cachedData.data;
       }
     }
