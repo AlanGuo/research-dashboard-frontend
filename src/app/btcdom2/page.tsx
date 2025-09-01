@@ -986,30 +986,58 @@ export default function BTCDOM2Dashboard() {
                           </div>
                         </div>
 
-                        {/* 只在选择做多BTC时显示BTC收益率 */}
+                        {/* BTC已实现盈亏 */}
                         <div className="flex justify-between items-center py-1">
                           <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
                             <Bitcoin className="w-3 h-3" />
-                            BTC做多
+                            BTC已实现
                           </span>
-                          <span className={`text-sm font-semibold ${getValueColorClass(pnlBreakdown.btcPnlAmount)}`}>
+                          <span className={`text-sm font-semibold ${getValueColorClass(pnlBreakdown.btcRealizedPnl)}`}>
                             {formatAmountWithPercent(
-                              pnlBreakdown.btcPnlAmount,
-                              pnlBreakdown.btcPnlRate * 100
+                              pnlBreakdown.btcRealizedPnl,
+                              pnlBreakdown.btcRealizedPnlRate * 100
                             )}
                           </span>
                         </div>
 
-                        {/* 只在选择做空ALT时显示ALT收益率 */}
+                        {/* BTC浮动盈亏 */}
+                        <div className="flex justify-between items-center py-1">
+                          <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                            <Bitcoin className="w-3 h-3 opacity-60" />
+                            BTC浮动
+                          </span>
+                          <span className={`text-sm font-semibold ${getValueColorClass(pnlBreakdown.btcUnrealizedPnl)}`}>
+                            {formatAmountWithPercent(
+                              pnlBreakdown.btcUnrealizedPnl,
+                              pnlBreakdown.btcUnrealizedPnlRate * 100
+                            )}
+                          </span>
+                        </div>
+
+                        {/* ALT已实现盈亏 */}
                         <div className="flex justify-between items-center py-1">
                           <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
                             <ArrowDown className="w-3 h-3" />
-                            ALT做空
+                            ALT已实现
                           </span>
-                          <span className={`text-sm font-semibold ${getValueColorClass(pnlBreakdown.altPnlAmount)}`}>
+                          <span className={`text-sm font-semibold ${getValueColorClass(pnlBreakdown.altRealizedPnl)}`}>
                             {formatAmountWithPercent(
-                              pnlBreakdown.altPnlAmount,
-                              pnlBreakdown.altPnlRate * 100
+                              pnlBreakdown.altRealizedPnl,
+                              pnlBreakdown.altRealizedPnlRate * 100
+                            )}
+                          </span>
+                        </div>
+
+                        {/* ALT浮动盈亏 */}
+                        <div className="flex justify-between items-center py-1">
+                          <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                            <ArrowDown className="w-3 h-3 opacity-60" />
+                            ALT浮动
+                          </span>
+                          <span className={`text-sm font-semibold ${getValueColorClass(pnlBreakdown.altUnrealizedPnl)}`}>
+                            {formatAmountWithPercent(
+                              pnlBreakdown.altUnrealizedPnl,
+                              pnlBreakdown.altUnrealizedPnlRate * 100
                             )}
                           </span>
                         </div>
@@ -1062,9 +1090,9 @@ export default function BTCDOM2Dashboard() {
                         {process.env.NODE_ENV === 'development' && (
                           <div className="mt-4 p-2 bg-green-50 dark:bg-green-900/20 rounded text-xs text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800">
                             <div className="font-medium mb-1">盈亏分解验证：</div>
-                            <div>BTC: ${pnlBreakdown.btcPnlAmount.toFixed(2)} + ALT: ${pnlBreakdown.altPnlAmount.toFixed(2)} + 手续费: ${pnlBreakdown.tradingFeeAmount.toFixed(2)} + 资金费: ${pnlBreakdown.fundingFeeAmount.toFixed(2)}</div>
-                            <div>= ${(pnlBreakdown.btcPnlAmount + pnlBreakdown.altPnlAmount + pnlBreakdown.tradingFeeAmount + pnlBreakdown.fundingFeeAmount).toFixed(2)}</div>
-                            <div>总盈亏: ${pnlBreakdown.totalPnlAmount.toFixed(2)} (差额: ${(pnlBreakdown.totalPnlAmount - (pnlBreakdown.btcPnlAmount + pnlBreakdown.altPnlAmount + pnlBreakdown.tradingFeeAmount + pnlBreakdown.fundingFeeAmount)).toFixed(2)})</div>
+                            <div>BTC已实现: ${pnlBreakdown.btcRealizedPnl.toFixed(2)} + BTC浮动: ${pnlBreakdown.btcUnrealizedPnl.toFixed(2)} + ALT已实现: ${pnlBreakdown.altRealizedPnl.toFixed(2)} + ALT浮动: ${pnlBreakdown.altUnrealizedPnl.toFixed(2)} + 手续费: ${pnlBreakdown.tradingFeeAmount.toFixed(2)} + 资金费: ${pnlBreakdown.fundingFeeAmount.toFixed(2)}</div>
+                            <div>= ${(pnlBreakdown.btcRealizedPnl + pnlBreakdown.btcUnrealizedPnl + pnlBreakdown.altRealizedPnl + pnlBreakdown.altUnrealizedPnl + pnlBreakdown.tradingFeeAmount + pnlBreakdown.fundingFeeAmount).toFixed(2)}</div>
+                            <div>总盈亏: ${pnlBreakdown.totalPnlAmount.toFixed(2)} (差额: ${(pnlBreakdown.totalPnlAmount - (pnlBreakdown.btcRealizedPnl + pnlBreakdown.btcUnrealizedPnl + pnlBreakdown.altRealizedPnl + pnlBreakdown.altUnrealizedPnl + pnlBreakdown.tradingFeeAmount + pnlBreakdown.fundingFeeAmount)).toFixed(2)})</div>
 
                             {/* 添加最大回撤vs总盈亏的对比信息 */}
                             <div className="mt-2 pt-2 border-t border-green-200 dark:border-green-700">

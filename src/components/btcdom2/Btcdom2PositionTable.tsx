@@ -340,7 +340,7 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
   const totalInvestedAmount = allPositions.reduce((sum, pos) => {
     // 只计算当前持仓的金额，不包括已卖出的持仓
     if (pos.type !== 'SOLD') {
-      return sum + Math.abs(pos.amount);
+      return sum + Math.abs(pos.value);
     }
     return sum;
   }, 0);
@@ -516,10 +516,10 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                   </TableCell>
                   <TableCell className="text-right font-medium">
                     <div className="flex flex-col">
-                      <span>{formatAmount(position.amount)}</span>
+                      <span>{formatAmount(position.value)}</span>
                       {position.type !== 'SOLD' && totalInvestedAmount > 0 && (
                         <span className="text-xs text-gray-500 dark:text-gray-400">
-                          ({((Math.abs(position.amount ?? 0) / Math.max(totalInvestedAmount, 1)) * 100).toFixed(2)}%)
+                          ({((Math.abs(position.value ?? 0) / Math.max(totalInvestedAmount, 1)) * 100).toFixed(2)}%)
                         </span>
                       )}
                     </div>

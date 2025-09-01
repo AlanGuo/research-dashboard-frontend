@@ -623,6 +623,7 @@ class BTCDOM2StrategyEngine {
     const previousValue = previousSnapshot?.totalValue || this.params.initialCapital;
 
     const soldPositions: PositionInfo[] = [];
+    const btcSoldPositions: PositionInfo[] = []; // BTC专用的卖出持仓记录
     let btcPosition: PositionInfo | null = null;
     const shortPositions: PositionInfo[] = [];
     let account_usdt_balance = 0; // 统一账户余额
@@ -755,13 +756,44 @@ class BTCDOM2StrategyEngine {
             changePercent: prevQuantity > 0 ? (quantityDiff / prevQuantity) * 100 : 0
           };
 
-          // BTC现货减仓：不添加到soldPositions，直接处理现金流
+          // BTC现货减仓：记录到btcSoldPositions
           const soldQuantity = Math.abs(quantityDiff); // 卖出的数量（正数）
           const soldValue = soldQuantity * btcPrice; // 实际卖出收入
           const soldTradingFee = this.calculateTradingFee(soldValue, true); // 减仓手续费
+          const soldPnl = soldQuantity * (btcPrice - prevEntryPrice); // BTC减仓盈亏：卖出数量 × (卖出价 - 成本价)
           
           // 记录BTC卖出收入（不包含手续费，手续费后面统一处理）
           btcSaleRevenue = soldValue;
+          
+          // 将BTC减仓记录添加到btcSoldPositions
+          btcSoldPositions.push({
+            symbol: 'BTCUSDT',
+            side: 'LONG',
+            value: soldValue,
+            quantity: soldQuantity,
+            entryPrice: prevEntryPrice,
+            currentPrice: btcPrice,
+            periodTradingPrice: btcPrice,
+            periodTradingType: 'sell',
+            tradingQuantity: -soldQuantity, // 减仓为负数
+            pnl: soldPnl,
+            pnlPercent: prevEntryPrice > 0 ? soldPnl / (soldQuantity * prevEntryPrice) : 0,
+            tradingFee: soldTradingFee,
+            priceChange24h: btcPriceChange24h,
+            isSoldOut: false, // 部分减仓
+            isNewPosition: false,
+            priceChange: {
+              type: btcPrice > prevEntryPrice ? 'increase' : btcPrice < prevEntryPrice ? 'decrease' : 'same',
+              previousPrice: prevEntryPrice,
+              changePercent: prevEntryPrice > 0 ? (btcPrice - prevEntryPrice) / prevEntryPrice : 0
+            },
+            quantityChange: {
+              type: 'sold',
+              previousQuantity: prevQuantity,
+              changePercent: prevQuantity > 0 ? (quantityDiff / prevQuantity) * 100 : 0
+            },
+            reason: 'BTC现货减仓已实现盈亏'
+          });
           
           // BTC减仓现金流日志
           console.log(`[BTC减仓现金流] 时间: ${timestamp}`, {
@@ -772,8 +804,9 @@ class BTCDOM2StrategyEngine {
             currentPrice: btcPrice,
             soldValue: soldValue,
             soldTradingFee: soldTradingFee,
+            soldPnl: soldPnl,
             btcSaleRevenue: btcSaleRevenue,
-            explanation: 'BTC现货卖出收入'
+            explanation: 'BTC现货卖出收入及已实现盈亏'
           });
         }
       } else {
@@ -1108,7 +1141,16 @@ class BTCDOM2StrategyEngine {
       .filter(pos => pos.side === 'SHORT')
       .reduce((sum, pos) => sum + pos.pnl, 0); // 对于做空，pnl就是现金余额的变化
     // ALT仓位变化汇总日志
-    const altPositionChanges: any[] = [];
+    const altPositionChanges: Array<{
+      action: string;
+      symbol: string;
+      quantity: number;
+      entryPrice: number;
+      currentPrice: number;
+      pnl: number;
+      calculation: string;
+      reason: string;
+    }> = [];
 
     // 1. 收集平仓/减仓信息
     soldPositions.filter(pos => pos.side === 'SHORT').forEach(pos => {
@@ -1141,7 +1183,7 @@ class BTCDOM2StrategyEngine {
         altPositionChanges.push({
           action: 'ALT加仓',
           symbol: pos.symbol,
-          quantity: pos.tradingQuantity, // 加仓数量
+          quantity: pos.tradingQuantity || 0, // 加仓数量
           entryPrice: pos.entryPrice,
           currentPrice: pos.currentPrice,
           pnl: pos.pnl,
@@ -1243,6 +1285,7 @@ class BTCDOM2StrategyEngine {
       btcPosition,
       shortPositions,
       soldPositions,
+      btcSoldPositions,
       totalValue,
       totalPnl,
       totalPnlPercent,
@@ -1275,8 +1318,8 @@ function calculatePerformanceMetrics(
       maxDrawdown: 0, winRate: 0, avgReturn: 0, bestPeriod: 0, worstPeriod: 0, calmarRatio: 0,
       bestFundingPeriod: 0, worstFundingPeriod: 0,
       pnlBreakdown: {
-        totalPnlAmount: 0, btcPnlAmount: 0, altPnlAmount: 0, tradingFeeAmount: 0, fundingFeeAmount: 0,
-        totalPnlRate: 0, btcPnlRate: 0, altPnlRate: 0, tradingFeeRate: 0, fundingFeeRate: 0
+        totalPnlAmount: 0, btcRealizedPnl: 0, btcUnrealizedPnl: 0, altRealizedPnl: 0, altUnrealizedPnl: 0, tradingFeeAmount: 0, fundingFeeAmount: 0,
+        totalPnlRate: 0, btcRealizedPnlRate: 0, btcUnrealizedPnlRate: 0, altRealizedPnlRate: 0, altUnrealizedPnlRate: 0, tradingFeeRate: 0, fundingFeeRate: 0
       }
     };
   }
@@ -1337,13 +1380,17 @@ function calculatePerformanceMetrics(
       },
       pnlBreakdown: {
         totalPnlAmount: firstSnapshot.totalPnl,
-        btcPnlAmount: 0,
-        altPnlAmount: 0,
+        btcRealizedPnl: 0,
+        btcUnrealizedPnl: 0,
+        altRealizedPnl: 0,
+        altUnrealizedPnl: 0,
         tradingFeeAmount: firstSnapshot.accumulatedTradingFee,
         fundingFeeAmount: firstSnapshot.accumulatedFundingFee || 0,
         totalPnlRate: firstSnapshot.totalPnl / params.initialCapital,
-        btcPnlRate: 0,
-        altPnlRate: 0,
+        btcRealizedPnlRate: 0,
+        btcUnrealizedPnlRate: 0,
+        altRealizedPnlRate: 0,
+        altUnrealizedPnlRate: 0,
         tradingFeeRate: firstSnapshot.accumulatedTradingFee / params.initialCapital,
         fundingFeeRate: (firstSnapshot.accumulatedFundingFee || 0) / params.initialCapital
       }
@@ -1505,42 +1552,52 @@ function calculatePerformanceMetrics(
   // 计算盈亏金额分解
   const totalPnlAmount = finalSnapshot.totalPnl;
 
-  // BTC做多盈亏金额 - 累计所有期间的BTC盈亏变化
-  let btcPnlAmount = 0;
+  // BTC盈亏分解计算
+  let btcRealizedPnl = 0;
+  let btcUnrealizedPnl = 0;
+  
   if (params.longBtc) {
-    // 累计所有快照中BTC相关的盈亏变化
+    // 1. BTC已实现盈亏 - 累计所有历史BTC卖出的盈亏
     for (const snapshot of snapshots) {
-      if (snapshot.btcPosition) {
-        btcPnlAmount += snapshot.btcPosition.pnl;
-      }
-      // 如果有BTC相关的卖出记录，也要累计
-      if (snapshot.soldPositions) {
-        const btcSoldPnl = snapshot.soldPositions
-          .filter(pos => pos.symbol === 'BTCUSDT' && pos.side === 'LONG')
+      if (snapshot.btcSoldPositions) {
+        const btcSoldPnl = snapshot.btcSoldPositions
           .reduce((sum, pos) => sum + pos.pnl, 0);
-        btcPnlAmount += btcSoldPnl;
+        btcRealizedPnl += btcSoldPnl;
       }
     }
+    
+    // 2. BTC浮动盈亏 - 当前BTC持仓的未实现盈亏
+    if (finalSnapshot.btcPosition) {
+      const quantity = finalSnapshot.btcPosition.quantity;
+      const currentPrice = finalSnapshot.btcPosition.currentPrice;
+      const entryPrice = finalSnapshot.btcPosition.entryPrice;
+      btcUnrealizedPnl = quantity * (currentPrice - entryPrice);
+    }
+    
+    // 调试日志
+    console.log(`[BTC盈亏分解] 已实现: ${btcRealizedPnl.toFixed(2)}, 浮动: ${btcUnrealizedPnl.toFixed(2)}, 合计: ${(btcRealizedPnl + btcUnrealizedPnl).toFixed(2)}`);
   }
 
-  // ALT做空盈亏金额 - 累计所有期间的ALT做空盈亏变化
-  let altPnlAmount = 0;
+  // ALT盈亏分解计算
+  let altRealizedPnl = 0;
+  let altUnrealizedPnl = 0;
+  
   if (params.shortAlt) {
-    // 累计所有快照中ALT做空相关的盈亏变化
+    // 1. ALT已实现盈亏 - 累计所有历史ALT平仓的盈亏
     for (const snapshot of snapshots) {
-      // 当前做空持仓的盈亏变化
-      if (snapshot.shortPositions) {
-        const shortPnl = snapshot.shortPositions.reduce((sum, pos) => sum + pos.pnl, 0);
-        altPnlAmount += shortPnl;
-      }
-      // 卖出的做空持仓盈亏
       if (snapshot.soldPositions) {
-        const soldShortPnl = snapshot.soldPositions
+        const altSoldPnl = snapshot.soldPositions
           .filter(pos => pos.side === 'SHORT')
           .reduce((sum, pos) => sum + pos.pnl, 0);
-        altPnlAmount += soldShortPnl;
+        altRealizedPnl += altSoldPnl;
       }
     }
+    
+    // 2. ALT浮动盈亏 - 当前ALT做空持仓的未实现盈亏
+    altUnrealizedPnl = finalSnapshot.shortPositions.reduce((sum, pos) => sum + pos.pnl, 0);
+    
+    // 调试日志
+    console.log(`[ALT盈亏分解] 已实现: ${altRealizedPnl.toFixed(2)}, 浮动: ${altUnrealizedPnl.toFixed(2)}, 合计: ${(altRealizedPnl + altUnrealizedPnl).toFixed(2)}`);
   }
 
   // 手续费和资金费率金额
@@ -1549,10 +1606,33 @@ function calculatePerformanceMetrics(
 
   // 计算各项收益率（基于初始资本）
   const totalPnlRate = totalPnlAmount / params.initialCapital;
-  const btcPnlRate = btcPnlAmount / params.initialCapital;
-  const altPnlRate = altPnlAmount / params.initialCapital;
+  const btcRealizedPnlRate = btcRealizedPnl / params.initialCapital;
+  const btcUnrealizedPnlRate = btcUnrealizedPnl / params.initialCapital;
+  const altRealizedPnlRate = altRealizedPnl / params.initialCapital;
+  const altUnrealizedPnlRate = altUnrealizedPnl / params.initialCapital;
   const tradingFeeRate = tradingFeeAmount / params.initialCapital;
   const fundingFeeRate = fundingFeeAmount / params.initialCapital;
+
+  // 盈亏分解验证
+  const calculatedTotal = btcRealizedPnl + btcUnrealizedPnl + altRealizedPnl + altUnrealizedPnl + tradingFeeAmount + fundingFeeAmount;
+  const difference = totalPnlAmount - calculatedTotal;
+  
+  console.log(`[盈亏分解验证] 时间: ${new Date().toISOString()}`);
+  console.log(`  - BTC已实现: ${btcRealizedPnl.toFixed(2)} (${(btcRealizedPnlRate * 100).toFixed(2)}%)`);
+  console.log(`  - BTC浮动: ${btcUnrealizedPnl.toFixed(2)} (${(btcUnrealizedPnlRate * 100).toFixed(2)}%)`);
+  console.log(`  - ALT已实现: ${altRealizedPnl.toFixed(2)} (${(altRealizedPnlRate * 100).toFixed(2)}%)`);
+  console.log(`  - ALT浮动: ${altUnrealizedPnl.toFixed(2)} (${(altUnrealizedPnlRate * 100).toFixed(2)}%)`);
+  console.log(`  - 交易手续费: ${tradingFeeAmount.toFixed(2)} (${(tradingFeeRate * 100).toFixed(2)}%)`);
+  console.log(`  - 资金费率: ${fundingFeeAmount.toFixed(2)} (${(fundingFeeRate * 100).toFixed(2)}%)`);
+  console.log(`  - 计算总和: ${calculatedTotal.toFixed(2)}`);
+  console.log(`  - 实际总盈亏: ${totalPnlAmount.toFixed(2)}`);
+  console.log(`  - 差额: ${difference.toFixed(2)} (${Math.abs(totalPnlAmount) > 0 ? (Math.abs(difference) / Math.abs(totalPnlAmount) * 100).toFixed(4) : 'N/A'}%)`);
+  
+  if (Math.abs(difference) > 1) {
+    console.warn(`⚠️ 盈亏分解验证失败：差额超过$1，可能存在计算错误`);
+  } else {
+    console.log(`✅ 盈亏分解验证通过：差额在合理范围内`);
+  }
 
   return {
     totalReturn,
@@ -1576,13 +1656,17 @@ function calculatePerformanceMetrics(
     maxDrawdownInfo,
     pnlBreakdown: {
       totalPnlAmount,
-      btcPnlAmount,
-      altPnlAmount,
+      btcRealizedPnl,
+      btcUnrealizedPnl,
+      altRealizedPnl,
+      altUnrealizedPnl,
       tradingFeeAmount,
       fundingFeeAmount,
       totalPnlRate,
-      btcPnlRate,
-      altPnlRate,
+      btcRealizedPnlRate,
+      btcUnrealizedPnlRate,
+      altRealizedPnlRate,
+      altUnrealizedPnlRate,
       tradingFeeRate,
       fundingFeeRate
     }

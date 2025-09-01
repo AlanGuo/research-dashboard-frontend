@@ -160,7 +160,8 @@ export interface StrategySnapshot {
   // 持仓信息
   btcPosition: PositionInfo | null;  // BTC现货持仓
   shortPositions: PositionInfo[];    // 做空持仓列表
-  soldPositions?: PositionInfo[];    // 当期卖出的持仓列表
+  soldPositions?: PositionInfo[];    // 当期卖出的做空持仓列表
+  btcSoldPositions?: PositionInfo[]; // 当期卖出的BTC持仓列表
   totalValue: number;                // 总资产价值
   totalPnl: number;                  // 总盈亏
   totalPnlPercent: number;           // 总盈亏百分比
@@ -242,17 +243,21 @@ export interface BTCDOM2PerformanceMetrics {
   };
   // 盈亏金额分解
   pnlBreakdown: {
-    totalPnlAmount: number;      // 总盈亏金额
-    btcPnlAmount: number;        // BTC做多盈亏金额
-    altPnlAmount: number;        // ALT做空盈亏金额
-    tradingFeeAmount: number;    // 手续费金额（负数）
-    fundingFeeAmount: number;    // 资金费率金额
+    totalPnlAmount: number;         // 总盈亏金额
+    btcRealizedPnl: number;         // BTC已实现盈亏金额
+    btcUnrealizedPnl: number;       // BTC浮动盈亏金额
+    altRealizedPnl: number;         // ALT已实现盈亏金额
+    altUnrealizedPnl: number;       // ALT浮动盈亏金额
+    tradingFeeAmount: number;       // 手续费金额（负数）
+    fundingFeeAmount: number;       // 资金费率金额
     // 收益率（基于初始资本）
-    totalPnlRate: number;        // 总盈亏收益率
-    btcPnlRate: number;          // BTC做多收益率
-    altPnlRate: number;          // ALT做空收益率
-    tradingFeeRate: number;      // 手续费收益率
-    fundingFeeRate: number;      // 资金费率收益率
+    totalPnlRate: number;           // 总盈亏收益率
+    btcRealizedPnlRate: number;     // BTC已实现收益率
+    btcUnrealizedPnlRate: number;   // BTC浮动收益率
+    altRealizedPnlRate: number;     // ALT已实现收益率
+    altUnrealizedPnlRate: number;   // ALT浮动收益率
+    tradingFeeRate: number;         // 手续费收益率
+    fundingFeeRate: number;         // 资金费率收益率
   };
 }
 
