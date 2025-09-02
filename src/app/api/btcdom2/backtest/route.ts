@@ -1863,7 +1863,7 @@ export async function POST(request: NextRequest) {
       enableSnapshotLogs: rawParams.enableSnapshotLogs !== undefined ? rawParams.enableSnapshotLogs : (config.btcdom2?.enableSnapshotLogs ?? false),
       enableMetricsLogs: rawParams.enableMetricsLogs !== undefined ? rawParams.enableMetricsLogs : (config.btcdom2?.enableMetricsLogs ?? false),
     };
-    
+
     // 检查是否为优化模式（跳过图表数据生成以提升性能）
     const optimizeOnly = rawParams.optimizeOnly === true;
 
