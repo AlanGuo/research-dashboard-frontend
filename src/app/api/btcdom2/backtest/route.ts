@@ -282,6 +282,15 @@ class BTCDOM2StrategyEngine {
         const timeDiff = Math.abs(dataPointTime.getTime() - targetTime.getTime());
         return timeDiff <= 4 * 60 * 60 * 1000; // 允许4小时的误差范围
       };
+    } else if (timeframe === '1W') {
+      // 1W模式：找上一周的数据点
+      previousTime = new Date(currentTime.getTime() - 7 * 24 * 60 * 60 * 1000);
+      
+      // 1W模式下寻找最接近的前一周时间点
+      compareFunction = (dataPointTime: Date, targetTime: Date) => {
+        const timeDiff = Math.abs(dataPointTime.getTime() - targetTime.getTime());
+        return timeDiff <= 2 * 24 * 60 * 60 * 1000; // 允许2天的误差范围
+      };
     } else {
       // 1D模式：找前一天的数据点（保持原有逻辑）
       previousTime = new Date(currentTime);

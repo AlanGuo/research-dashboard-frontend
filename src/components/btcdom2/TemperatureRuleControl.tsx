@@ -201,10 +201,11 @@ export const TemperatureRuleControl = memo<TemperatureRuleControlProps>(({
                     <SelectContent>
                       <SelectItem value="8H">8小时 (8H)</SelectItem>
                       <SelectItem value="1D">1天 (1D)</SelectItem>
+                      <SelectItem value="1W">1周 (1W)</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    8H: 与上一个8小时对比，1D: 与上一天对比
+                    8H: 与上一个8小时对比，1D: 与上一天对比，1W: 与上一周对比
                   </p>
                 </div>
 
