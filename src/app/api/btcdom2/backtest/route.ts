@@ -1935,12 +1935,12 @@ export async function POST(request: NextRequest) {
       const snapshotEnd = performance.now();
       snapshotGenerationTimes.push(snapshotEnd - snapshotStart);
 
-      // 记录空仓状态日志
-      if (!snapshot.isActive) {
-        const timestamp = new Date(snapshot.timestamp).toISOString();
-        const reason = snapshot.rebalanceReason;
-        console.debug(`[空仓记录] 时间: ${timestamp}, 原因: ${reason}`);
-      }
+      // // 记录空仓状态日志
+      // if (!snapshot.isActive) {
+      //   const timestamp = new Date(snapshot.timestamp).toISOString();
+      //   const reason = snapshot.rebalanceReason;
+      //   console.debug(`[空仓记录] 时间: ${timestamp}, 原因: ${reason}`);
+      // }
 
       snapshots.push(snapshot);
       previousSnapshot = snapshot;
