@@ -662,7 +662,7 @@ class BTCDOM2StrategyEngine {
       const prevQuantity = prevBtcPosition?.quantity ?? 0;
       const prevEntryPrice = prevBtcPosition?.entryPrice ?? btcPrice;
       const previousBtcPrice = prevBtcPosition?.currentPrice ?? btcPrice;
-      
+
       const btcAmount = totalValue * this.params.btcRatio;
       const btcQuantity = btcAmount / btcPrice;
       
@@ -682,7 +682,6 @@ class BTCDOM2StrategyEngine {
         btcIsNewPosition = true;
         // 第一次开仓BTC买入支出（不包含手续费， 手续费统一算）
         btcPurchaseExpense = btcAmount;
-        
         // BTC初始开仓现金流日志
         this.log(`[BTC初始开仓现金流] 时间: ${timestamp}`, {
           symbol: 'BTCUSDT',
@@ -752,7 +751,9 @@ class BTCDOM2StrategyEngine {
           
           // 记录BTC买入支出（不包含手续费， 手续费统一算）
           btcPurchaseExpense = addValue;
-          
+
+          btcPnl = btcNewQuantity * (btcPrice - newEntryPrice);
+
           // BTC加仓现金流日志
           this.log(`[BTC加仓现金流] 时间: ${timestamp}`, {
             symbol: 'BTCUSDT',
@@ -781,8 +782,8 @@ class BTCDOM2StrategyEngine {
           const soldQuantity = Math.abs(quantityDiff); // 卖出的数量（正数）
           const soldValue = soldQuantity * btcPrice; // 实际卖出收入
           const soldTradingFee = validBtcTradingFee; // 减仓手续费
-          const soldPnl = soldQuantity * (btcPrice - prevEntryPrice); // BTC减仓盈亏：卖出数量 × (卖出价 - 成本价)
-          
+          const soldPnl = soldQuantity * (btcPrice - newEntryPrice); // BTC减仓盈亏：卖出数量 × (卖出价 - 成本价)
+          btcPnl = soldPnl;
           // 记录BTC卖出收入（不包含手续费，手续费后面统一处理）
           btcSaleRevenue = soldValue;
           
@@ -838,14 +839,6 @@ class BTCDOM2StrategyEngine {
         btcQuantityChange = { type: 'new', previousQuantity: 0, changePercent: 0 };
       }
       
-      // 完成仓位调整后，重新计算btcPnl
-      if (prevBtcPosition) {
-        // 使用调整后的最新持仓数量和最新的entryPrice来计算盈亏
-        btcPnl = btcNewQuantity * (btcPrice - newEntryPrice);
-      } else {
-        // 第一次开仓，盈亏为0
-        btcPnl = 0;
-      }
       const validBtcPnl = isNaN(btcPnl) ? 0 : btcPnl;
       
       btcPosition = {
@@ -911,7 +904,7 @@ class BTCDOM2StrategyEngine {
     }
     // 如果策略不活跃（温度计高温或无候选标的），目标持仓为空
 
-    // === 预先计算所有上期持仓的资金费率 ===
+    // === 预先计算所有上期持仓的资金费 ===
     if (previousSnapshot?.shortPositions) {
       for (const prevPosition of previousSnapshot.shortPositions) {
         const symbol = prevPosition.symbol;
@@ -1153,8 +1146,6 @@ class BTCDOM2StrategyEngine {
       }
     }
 
-    // 注：资金费用已在预先计算阶段累计到totalFundingFee中，此处无需重复累计
-
     // 设置ALT不活跃时的原因
     if (!altActive) {
       if (!canShortAlt) {
@@ -1259,7 +1250,7 @@ class BTCDOM2StrategyEngine {
     account_usdt_balance = previousAccountBalance + btcSaleRevenue - btcPurchaseExpense + altSoldRevenue;
 
     // 最终统一扣除费用
-    account_usdt_balance = account_usdt_balance - Math.abs(totalTradingFee) - Math.abs(totalFundingFee);
+    account_usdt_balance = account_usdt_balance - Math.abs(totalTradingFee) + totalFundingFee;
   
     // 新的 totalValue 计算方法：现金 + BTC市值 + 空单浮动盈亏
     const btcValue = btcPosition ? btcPosition.quantity * btcPosition.currentPrice : 0;
@@ -1391,7 +1382,7 @@ function calculatePerformanceMetrics(
       // 累计费用
       cumulativeTradingFee += snapshot.totalTradingFee || 0;
       cumulativeFundingFee += snapshot.totalFundingFee || 0;
-      
+
       // 计算当前期的浮动盈亏
       let currentBtcUnrealizedPnl = 0;
       let btcUnrealizedDetail = '';
@@ -1736,7 +1727,7 @@ function calculatePerformanceMetrics(
   }
 
   // 手续费和资金费率金额
-  const tradingFeeAmount = finalSnapshot.accumulatedTradingFee;
+  const tradingFeeAmount = finalSnapshot.accumulatedTradingFee || 0;
   const fundingFeeAmount = finalSnapshot.accumulatedFundingFee || 0;
 
   // 计算各项收益率（基于初始资本）
