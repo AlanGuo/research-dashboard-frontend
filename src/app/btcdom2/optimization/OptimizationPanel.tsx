@@ -10,7 +10,7 @@ import {
   CrossValidationConfig
 } from './types';
 import { ParameterOptimizer } from './optimizer';
-import { PositionAllocationStrategy } from '@/types/btcdom2';
+import { PositionAllocationStrategy, TemperatureDataPoint, TemperaturePeriodsResponse } from '@/types/btcdom2';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -120,14 +120,69 @@ export default function OptimizationPanel({
     });
   }, [config.allocationStrategyMode, config.fixedAllocationStrategy]);
 
+  // 监听外部配置变化，同步更新内部配置
+  useEffect(() => {
+    if (initialConfig) {
+      setConfig(prev => ({
+        ...prev,
+        baseParams: {
+          ...prev.baseParams,
+          ...initialConfig.baseParams
+        }
+      }));
+    }
+  }, [initialConfig]);
+
   // 任务状态
   const [progress, setProgress] = useState<OptimizationProgress | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [results, setResults] = useState<OptimizationResult[]>([]);
+  
+  // 温度计数据独立缓存
+  const [optimizationTemperatureData, setOptimizationTemperatureData] = useState<TemperatureDataPoint[]>([]);
 
   // UI状态
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [activeTab, setActiveTab] = useState<'optimize' | 'guide'>('optimize');
+
+  // 优化面板独立的温度计数据获取函数
+  const fetchOptimizationTemperatureData = useCallback(async (): Promise<TemperatureDataPoint[]> => {
+    if (!config.baseParams?.useTemperatureRule) {
+      return [];
+    }
+
+    // 构建查询参数（与回测面板保持一致）
+    const symbol = config.baseParams.temperatureSymbol || 'OTHERS';
+    const timeframe = config.baseParams.temperatureTimeframe || '1D';
+    const startDateISO = new Date(config.baseParams.startDate!).toISOString();
+    const endDateISO = new Date(config.baseParams.endDate!).toISOString();
+
+    try {
+      const temperatureResponse = await fetch(
+        `/api/btcdom2/temperature-periods?` +
+        `symbol=${encodeURIComponent(symbol)}&` +
+        `timeframe=${encodeURIComponent(timeframe)}&` +
+        `startDate=${encodeURIComponent(startDateISO)}&` +
+        `endDate=${encodeURIComponent(endDateISO)}`
+      );
+
+      const temperatureResult: TemperaturePeriodsResponse = await temperatureResponse.json();
+
+      if (!temperatureResponse.ok) {
+        throw new Error(`温度计数据获取HTTP错误: ${temperatureResponse.status}`);
+      }
+
+      if (!temperatureResult.success || !temperatureResult.data) {
+        throw new Error(temperatureResult.message || '温度计数据获取失败');
+      }
+
+      const temperatureData = temperatureResult.data.data;
+      return temperatureData;
+    } catch (error) {
+      console.error('[优化面板] 温度计数据获取失败:', error);
+      return [];
+    }
+  }, [config.baseParams]);
   
   // 结果显示状态
   const [sortBy, setSortBy] = useState<'objective' | 'composite'>('objective');
@@ -200,7 +255,21 @@ export default function OptimizationPanel({
     setResults([]);
 
     try {
-      const results = await optimizer.startOptimization(config, parameterRange);
+      // 1. 获取温度计数据
+      const temperatureData = await fetchOptimizationTemperatureData();
+      setOptimizationTemperatureData(temperatureData);
+
+      // 2. 更新配置，包含温度计数据
+      const configWithTemperatureData = {
+        ...config,
+        baseParams: {
+          ...config.baseParams!,
+          temperatureData: temperatureData
+        }
+      };
+
+      // 3. 启动优化
+      const results = await optimizer.startOptimization(configWithTemperatureData, parameterRange);
 
       if (results.length > 0) {
         setResults(results);
@@ -228,7 +297,7 @@ export default function OptimizationPanel({
     } finally {
       setIsRunning(false);
     }
-  }, [config, parameterRange, isRunning, optimizer, onOptimizationComplete, onBestParametersFound]);
+  }, [config, parameterRange, isRunning, optimizer, onOptimizationComplete, onBestParametersFound, fetchOptimizationTemperatureData]);
 
   // 停止优化
   const handleStopOptimization = useCallback(() => {

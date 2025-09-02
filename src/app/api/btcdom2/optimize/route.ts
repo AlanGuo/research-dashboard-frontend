@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import config from '@/config/index';
 import { 
   BTCDOM2StrategyParams, 
   PositionAllocationStrategy 
@@ -8,7 +9,7 @@ export async function POST(request: NextRequest) {
   try {
     const rawParams = await request.json();
 
-    // 设置默认值并构建完整参数
+    // 设置默认值并构建完整参数（与backtest路由保持一致）
     const params: BTCDOM2StrategyParams = {
       ...rawParams,
       longBtc: rawParams.longBtc !== undefined ? rawParams.longBtc : true,
@@ -17,8 +18,19 @@ export async function POST(request: NextRequest) {
       volumeWeight: rawParams.volumeWeight !== undefined ? rawParams.volumeWeight : 0.2,
       volatilityWeight: rawParams.volatilityWeight !== undefined ? rawParams.volatilityWeight : 0.1,
       fundingRateWeight: rawParams.fundingRateWeight !== undefined ? rawParams.fundingRateWeight : 0.3,
-      allocationStrategy: rawParams.allocationStrategy !== undefined ? rawParams.allocationStrategy : PositionAllocationStrategy.BY_VOLUME
+      allocationStrategy: rawParams.allocationStrategy !== undefined ? rawParams.allocationStrategy : PositionAllocationStrategy.BY_VOLUME,
+      // 温度计规则参数默认值
+      useTemperatureRule: rawParams.useTemperatureRule !== undefined ? rawParams.useTemperatureRule : false,
+      temperatureSymbol: rawParams.temperatureSymbol !== undefined ? rawParams.temperatureSymbol : 'OTHERS',
+      temperatureThreshold: rawParams.temperatureThreshold !== undefined ? rawParams.temperatureThreshold : 60,
+      temperatureTimeframe: rawParams.temperatureTimeframe !== undefined ? rawParams.temperatureTimeframe : '1D',
+      temperatureData: rawParams.temperatureData || [],
+      // 日志开关参数（优先使用请求参数，其次使用配置文件，最后使用默认值）
+      enableSnapshotLogs: rawParams.enableSnapshotLogs !== undefined ? rawParams.enableSnapshotLogs : (config.btcdom2?.enableSnapshotLogs ?? false),
+      enableMetricsLogs: rawParams.enableMetricsLogs !== undefined ? rawParams.enableMetricsLogs : (config.btcdom2?.enableMetricsLogs ?? false),
     };
+
+    // console.log('收到BTCDOM2优化回测请求，参数:', params);
 
     // 验证参数
     if (!params.startDate || !params.endDate || params.initialCapital <= 0) {

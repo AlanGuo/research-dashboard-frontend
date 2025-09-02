@@ -920,7 +920,13 @@ export default function BTCDOM2Dashboard() {
                     spotTradingFeeRate: params.spotTradingFeeRate,
                     futuresTradingFeeRate: params.futuresTradingFeeRate,
                     longBtc: params.longBtc,
-                    shortAlt: params.shortAlt
+                    shortAlt: params.shortAlt,
+                    // 温度计规则参数
+                    useTemperatureRule: params.useTemperatureRule,
+                    temperatureSymbol: params.temperatureSymbol,
+                    temperatureThreshold: params.temperatureThreshold,
+                    temperatureTimeframe: params.temperatureTimeframe,
+                    temperatureData: params.temperatureData
                   }
                 }}
                 onOptimizationComplete={handleOptimizationComplete}
