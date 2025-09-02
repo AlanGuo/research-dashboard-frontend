@@ -1692,12 +1692,10 @@ function calculatePerformanceMetrics(
   if (params.longBtc) {
     
     // 1. BTC已实现盈亏 - 累计所有历史BTC卖出的盈亏
-    let btcRealizedCount = 0;
     for (const snapshot of snapshots) {
       if (snapshot.btcSoldPosition) {
         const soldPnl = snapshot.btcSoldPosition.pnl;
         btcRealizedPnl += soldPnl;
-        btcRealizedCount++;
       }
     }
     
@@ -1717,7 +1715,6 @@ function calculatePerformanceMetrics(
   if (params.shortAlt) {
     
     // 1. ALT已实现盈亏 - 累计所有历史ALT平仓的盈亏
-    let altSoldTransactions = 0;
     for (const snapshot of snapshots) {
       if (snapshot.soldPositions) {
         const altSoldPnl = snapshot.soldPositions
@@ -1726,7 +1723,6 @@ function calculatePerformanceMetrics(
         
         if (altSoldPnl !== 0) {
           altRealizedPnl += altSoldPnl;
-          altSoldTransactions++;
         }
       }
     }

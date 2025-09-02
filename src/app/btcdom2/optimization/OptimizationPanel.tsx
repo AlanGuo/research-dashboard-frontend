@@ -28,6 +28,10 @@ interface OptimizationPanelProps {
     fundingRateWeight: number;
     maxShortPositions: number;
     allocationStrategy: PositionAllocationStrategy;
+    useTemperatureRule: boolean;
+    temperatureSymbol: string;
+    temperatureThreshold: number;
+    temperatureTimeframe: string;
   }) => void;
 }
 
@@ -138,9 +142,6 @@ export default function OptimizationPanel({
   const [isRunning, setIsRunning] = useState(false);
   const [results, setResults] = useState<OptimizationResult[]>([]);
   
-  // 温度计数据独立缓存
-  const [optimizationTemperatureData, setOptimizationTemperatureData] = useState<TemperatureDataPoint[]>([]);
-
   // UI状态
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [activeTab, setActiveTab] = useState<'optimize' | 'guide'>('optimize');
@@ -257,7 +258,6 @@ export default function OptimizationPanel({
     try {
       // 1. 获取温度计数据
       const temperatureData = await fetchOptimizationTemperatureData();
-      setOptimizationTemperatureData(temperatureData);
 
       // 2. 更新配置，包含温度计数据
       const configWithTemperatureData = {
@@ -284,7 +284,11 @@ export default function OptimizationPanel({
             volatilityWeight: bestParams.volatilityWeight,
             fundingRateWeight: bestParams.fundingRateWeight,
             maxShortPositions: bestParams.maxShortPositions,
-            allocationStrategy: bestParams.allocationStrategy
+            allocationStrategy: bestParams.allocationStrategy,
+            useTemperatureRule: config.baseParams?.useTemperatureRule ?? false,
+            temperatureSymbol: config.baseParams?.temperatureSymbol ?? 'OTHERS',
+            temperatureThreshold: config.baseParams?.temperatureThreshold ?? 60,
+            temperatureTimeframe: config.baseParams?.temperatureTimeframe ?? '1D'
           });
         }
 
@@ -306,19 +310,24 @@ export default function OptimizationPanel({
   }, [optimizer]);
 
   // 应用选中的参数
-  const handleApplyParameters = useCallback((result: OptimizationResult) => {
+  const handleApplyParameters = useCallback(async (result: OptimizationResult) => {
     if (onBestParametersFound) {
       const params = result.combination;
+      
       onBestParametersFound({
         priceChangeWeight: params.priceChangeWeight,
         volumeWeight: params.volumeWeight,
         volatilityWeight: params.volatilityWeight,
         fundingRateWeight: params.fundingRateWeight,
         maxShortPositions: params.maxShortPositions,
-        allocationStrategy: params.allocationStrategy
+        allocationStrategy: params.allocationStrategy,
+        useTemperatureRule: config.baseParams?.useTemperatureRule ?? false,
+        temperatureSymbol: config.baseParams?.temperatureSymbol ?? 'OTHERS',
+        temperatureThreshold: config.baseParams?.temperatureThreshold ?? 60,
+        temperatureTimeframe: config.baseParams?.temperatureTimeframe ?? '1D'
       });
     }
-  }, [onBestParametersFound]);
+  }, [onBestParametersFound, config]);
 
   // 渲染优化目标选择
   const renderObjectiveSelector = () => (

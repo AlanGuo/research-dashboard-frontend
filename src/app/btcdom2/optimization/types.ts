@@ -1,4 +1,4 @@
-import { PositionAllocationStrategy } from '@/types/btcdom2';
+import { PositionAllocationStrategy, TemperatureDataPoint } from '@/types/btcdom2';
 
 // 仓位配置策略模式
 export type AllocationStrategyMode = 'random' | 'fixed';
@@ -21,6 +21,7 @@ export interface OptimizationConfig {
     temperatureSymbol?: string;
     temperatureThreshold?: number;
     temperatureTimeframe?: string;
+    temperatureData?: TemperatureDataPoint[];
   };
   
   // 优化目标
