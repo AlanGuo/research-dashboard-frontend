@@ -428,6 +428,7 @@ class BTCDOM2StrategyEngine {
       };
     }
 
+
     // 计算波动率spread
     stats.volatility.spread = Math.max((stats.volatility.max - stats.volatility.min) / 4, 0.01);
 
@@ -542,14 +543,15 @@ class BTCDOM2StrategyEngine {
       allCandidates.push(candidate);
     }
 
-    // 限制候选者数量以提高效率
+    // 修复：先按综合评分排序所有候选者
+    allCandidates.sort((a, b) => b.totalScore - a.totalScore);
+
+    // 限制候选者数量以提高效率（现在是在排序后应用）
     const maxCandidates = this.params.maxShortPositions * 2;
 
-    // 将结果添加到数组池
+    // 将排序后的结果添加到数组池
+    ARRAY_POOL.tempCandidates.length = 0; // 清空数组池
     ARRAY_POOL.tempCandidates.push(...allCandidates.slice(0, maxCandidates));
-
-    // 在temp数组中排序，避免额外的过滤操作
-    ARRAY_POOL.tempCandidates.sort((a, b) => b.totalScore - a.totalScore);
 
     // 创建最终结果，只复制需要的数量
     const eligibleCandidates = [...ARRAY_POOL.tempCandidates];
@@ -581,9 +583,7 @@ class BTCDOM2StrategyEngine {
       }
     }
 
-    // 只对符合条件的候选者排序
-    eligibleCandidates.sort((a, b) => b.totalScore - a.totalScore);
-
+    // 注意：候选者已经在前面按评分排序过了，这里直接选择前N个
     const finalSelectedCandidates = eligibleCandidates.slice(0, this.params.maxShortPositions);
 
     const selectionReason = finalSelectedCandidates.length > 0
@@ -596,6 +596,7 @@ class BTCDOM2StrategyEngine {
       totalCandidates: eligibleCandidates.length + rejectedCandidates.length,
       selectionReason
     };
+
 
     // 将结果存入缓存
     CANDIDATE_SELECTION_CACHE.set(cacheKey, result);
