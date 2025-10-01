@@ -728,14 +728,20 @@ class BTCDOM2StrategyEngine {
       let btcTradingQuantity: number;
       let btcNewQuantity: number = validBtcQuantity;
       let btcQuantityChange: { type: 'new' | 'increase' | 'decrease' | 'same' | 'sold'; previousQuantity?: number; changePercent?: number };
-      
+
       if (prevBtcPosition) {
         btcTradingQuantity = quantityDiff;
-        // console.log(`BTC数量检查: 上期=${prevQuantity}, 目标=${validBtcQuantity}, 差异=${quantityDiff}, 阈值检查=${!hasQuantityChange}`);
+
+        // 验证上期成本价有效性
+        if (!prevEntryPrice || isNaN(prevEntryPrice) || prevEntryPrice <= 0) {
+          console.error(`[BTC成本价异常] 在 ${timestamp} 的上期BTC持仓成本价丢失或无效: ${prevEntryPrice}, 降级使用当期价格: ${btcPrice}`);
+        }
+        const validPrevEntryPrice = (prevEntryPrice && !isNaN(prevEntryPrice) && prevEntryPrice > 0) ? prevEntryPrice : btcPrice;
+
         if (!hasQuantityChange) {
           // 数量基本没变，保持原均价
           btcNewQuantity = prevQuantity;
-          newEntryPrice = prevEntryPrice;
+          newEntryPrice = validPrevEntryPrice;
           periodTradingType = 'hold';
           btcQuantityChange = {
             type: 'same',
@@ -745,16 +751,24 @@ class BTCDOM2StrategyEngine {
         } else if (quantityDiff > 0) {
           // 加仓，计算加权平均成本价
           btcNewQuantity = prevQuantity + quantityDiff;
-          newEntryPrice = (prevQuantity * prevEntryPrice + quantityDiff * btcPrice) / btcNewQuantity;
+          newEntryPrice = (prevQuantity * validPrevEntryPrice + quantityDiff * btcPrice) / btcNewQuantity;
           periodTradingType = 'buy';
           btcQuantityChange = {
             type: 'increase',
             previousQuantity: prevQuantity,
             changePercent: prevQuantity > 0 ? (quantityDiff / prevQuantity) * 100 : 0
           };
-          if (this.params.enableSnapshotLogs) {
-            console.log(`BTC成本价计算: (${prevQuantity} * ${prevEntryPrice} + ${quantityDiff} * ${btcPrice}) / ${btcNewQuantity} = ${newEntryPrice}`);
-          }
+
+          // BTC加仓成本价计算日志
+          this.log(`[BTC加仓成本价计算] 在 ${timestamp}`, {
+            prevQuantity: prevQuantity,
+            prevEntryPrice: validPrevEntryPrice,
+            quantityDiff: quantityDiff,
+            btcPrice: btcPrice,
+            btcNewQuantity: btcNewQuantity,
+            calculation: `(${prevQuantity} × ${validPrevEntryPrice} + ${quantityDiff} × ${btcPrice}) / ${btcNewQuantity}`,
+            newEntryPrice: newEntryPrice
+          });
           // BTC现货加仓：需要扣除现金购买BTC
           const addValue = quantityDiff * btcPrice; // 加仓投入金额
           const addTradingFee = validBtcTradingFee; // 加仓手续费
@@ -779,7 +793,7 @@ class BTCDOM2StrategyEngine {
           });
         } else {
           // 减仓，保持原均价（部分卖出不影响剩余持仓的成本价）
-          newEntryPrice = prevEntryPrice;
+          newEntryPrice = validPrevEntryPrice;
           btcNewQuantity = prevQuantity + quantityDiff; // quantityDiff为负数
           periodTradingType = 'sell';
           btcQuantityChange = {
@@ -893,22 +907,28 @@ class BTCDOM2StrategyEngine {
       // 构建目标持仓映射
       selectedCandidates.forEach((candidate, index) => {
         const allocation = allocations[index];
-        
+
         // 价格优先级：期货价格 > 现货价格
-        let price = 1; // 默认价格
+        let currentPrice = 1; // 默认价格
         if (candidate.futurePriceAtTime && candidate.futurePriceAtTime > 0) {
-          price = candidate.futurePriceAtTime;
+          currentPrice = candidate.futurePriceAtTime;
         } else if (candidate.priceAtTime && candidate.priceAtTime > 0) {
-          price = candidate.priceAtTime;
+          currentPrice = candidate.priceAtTime;
         }
 
-        const targetQuantity = allocation > 0 && price > 0 ? allocation / price : 0;
-        
+        // 关键修复：计算目标数量时应该使用持仓均价，而不是当前价格
+        // 如果是持续持仓，使用上期的持仓均价；如果是新开仓，使用当前价格
+        const prevPosition = previousSnapshot?.shortPositions?.find(p => p.symbol === candidate.symbol);
+        const entryPrice = prevPosition?.entryPrice && prevPosition.entryPrice > 0 ? prevPosition.entryPrice : currentPrice;
+
+        // 目标数量 = 目标金额 / 持仓均价
+        const targetQuantity = allocation > 0 && entryPrice > 0 ? allocation / entryPrice : 0;
+
         targetPositions.set(candidate.symbol, {
           candidate,
           targetAllocation: allocation,
           targetQuantity,
-          price
+          price: currentPrice  // 保存当前价格用于其他计算
         });
       });
     }
@@ -1068,16 +1088,26 @@ class BTCDOM2StrategyEngine {
           let periodTradingType: 'buy' | 'sell' | 'hold';
           let shortQuantityChange: { type: 'new' | 'increase' | 'decrease' | 'same' | 'sold'; previousQuantity?: number; changePercent?: number };
 
+          // 获取上期成本价，如果丢失则告警并使用当期价格作为降级处理
+          const prevEntryPrice = prevPosition.entryPrice;
+          if (!prevEntryPrice || isNaN(prevEntryPrice) || prevEntryPrice <= 0) {
+            console.error(`[ALT成本价异常] ${symbol} 在 ${timestamp} 的上期持仓成本价丢失或无效: ${prevEntryPrice}, 降级使用当期价格: ${price}`);
+          }
+          const validPrevEntryPrice = (prevEntryPrice && !isNaN(prevEntryPrice) && prevEntryPrice > 0) ? prevEntryPrice : price;
+
           if (Math.abs(quantityDiff) < 0.0001) {
-            newEntryPrice = prevPosition.entryPrice ?? price;
+            // Hold: 数量基本不变，保持原成本价
+            newEntryPrice = validPrevEntryPrice;
             periodTradingType = 'hold';
             shortQuantityChange = { type: 'same', previousQuantity: prevQuantity, changePercent: 0 };
           } else if (quantityDiff > 0) {
-            newEntryPrice = (prevQuantity * (prevPosition.entryPrice ?? price) + quantityDiff * price) / targetQuantity;
+            // 加仓: 计算加权平均成本价
+            newEntryPrice = (prevQuantity * validPrevEntryPrice + quantityDiff * price) / targetQuantity;
             periodTradingType = 'sell';
             shortQuantityChange = { type: 'increase', previousQuantity: prevQuantity, changePercent: prevQuantity > 0 ? (quantityDiff / prevQuantity) * 100 : 0 };
           } else {
-            newEntryPrice = prevPosition.entryPrice ?? price;
+            // 减仓: 保持原成本价（部分卖出不影响剩余持仓成本）
+            newEntryPrice = validPrevEntryPrice;
             periodTradingType = 'buy';
             shortQuantityChange = { type: 'decrease', previousQuantity: prevQuantity, changePercent: prevQuantity > 0 ? (quantityDiff / prevQuantity) * 100 : 0 };
           }
@@ -1125,7 +1155,7 @@ class BTCDOM2StrategyEngine {
     for (const [symbol, targetPosition] of targetPositions) {
       if (!processedSymbols.has(symbol)) {
         const { candidate, targetAllocation, targetQuantity, price } = targetPosition;
-        
+
         // 新开仓
         const tradingFee = this.calculateTradingFee(targetAllocation, false);
         totalTradingFee += tradingFee;
