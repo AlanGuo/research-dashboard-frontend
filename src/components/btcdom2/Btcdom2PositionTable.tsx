@@ -65,10 +65,35 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
     return validValue > 0 ? `+${percentValue}%` : `${percentValue}%`;
   };
 
-  // 格式化价格（不带正负号前缀）
+  // 格式化价格（不带正负号前缀）- 智能精度
   const formatPrice = (amount: number | null) => {
     const validAmount = amount ?? 0;
-    return `$${validAmount}`;
+
+    if (validAmount === 0) return '$0.00';
+
+    const absAmount = Math.abs(validAmount);
+
+    // 根据价格大小智能选择小数位数
+    let decimals: number;
+
+    if (absAmount >= 1000) {
+      // 高价币种(≥$1000): 2位小数
+      decimals = 2;
+    } else if (absAmount >= 1) {
+      // 中价币种(≥$1): 4位小数
+      decimals = 4;
+    } else if (absAmount >= 0.01) {
+      // 低价币种(≥$0.01): 4位小数
+      decimals = 4;
+    } else if (absAmount >= 0.0001) {
+      // 极低价币种(≥$0.0001): 6位小数
+      decimals = 6;
+    } else {
+      // 超低价币种(<$0.0001): 8位小数
+      decimals = 8;
+    }
+
+    return `$${validAmount.toFixed(decimals)}`;
   };
 
   // 格式化金额（不带正负号前缀）
@@ -454,6 +479,7 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                 <TableHead className="w-28">资产</TableHead>
                 <TableHead className="w-20">方向</TableHead>
                 <TableHead className="text-right">金额</TableHead>
+                <TableHead className="text-right">入场价格</TableHead>
                 <TableHead className="text-right">数量</TableHead>
                 <TableHead className="text-right">交易数量</TableHead>
                 <TableHead className="text-right">手续费</TableHead>
@@ -523,6 +549,9 @@ export function BTCDOM2PositionTable({ snapshot, params, periodNumber, backtestR
                         </span>
                       )}
                     </div>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {formatPrice(position.entryPrice)}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
