@@ -43,7 +43,7 @@ interface BTCDOM2ChartProps {
 export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
   // 图表可见性状态
   const [visibility, setVisibility] = useState({
-    btcPrice: true,
+    btcPrice: false,
     btcReturn: true,
     btcdomReturn: true,
     strategyReturn: true,
@@ -342,20 +342,6 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
         <div className="flex justify-center gap-6 mb-4 flex-wrap">
           <div
             className={`flex items-center gap-2 cursor-pointer select-none transition-all duration-200 hover:scale-105 px-2 py-1 rounded ${
-              visibility.btcPrice ? 'opacity-100' : 'opacity-50'
-            }`}
-            onClick={() => toggleVisibility('btcPrice')}
-          >
-            <div
-              className="w-3 h-3 rounded"
-              style={{ backgroundColor: '#f7931a' }}
-            />
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              BTC价格 ($)
-            </span>
-          </div>
-          <div
-            className={`flex items-center gap-2 cursor-pointer select-none transition-all duration-200 hover:scale-105 px-2 py-1 rounded ${
               visibility.btcReturn ? 'opacity-100' : 'opacity-50'
             }`}
             onClick={() => toggleVisibility('btcReturn')}
@@ -447,12 +433,6 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
                 }}
               />
               <YAxis
-                yAxisId="left"
-                tick={{ fontSize: 12 }}
-                stroke="#f7931a"
-                label={{ value: 'BTC价格 ($)', angle: -90, position: 'insideLeft' }}
-              />
-              <YAxis
                 yAxisId="right"
                 orientation="right"
                 tick={{ fontSize: 12 }}
@@ -479,17 +459,6 @@ export function BTCDOM2Chart({ data, performance }: BTCDOM2ChartProps) {
                 />
               )}
 
-              {visibility.btcPrice && (
-                <Line
-                  yAxisId="left"
-                  type="monotone"
-                  dataKey="btcPrice"
-                  stroke="#f7931a"
-                  strokeWidth={2}
-                  dot={false}
-                  name="BTC价格 ($)"
-                />
-              )}
               {visibility.btcReturn && (
                 <Line
                   yAxisId="right"
