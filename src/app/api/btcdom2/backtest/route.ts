@@ -393,8 +393,114 @@ class BTCDOM2StrategyEngine {
         }
     }
 
-    // 最终确保所有分配值都是有效的数字
-    return allocations.map(allocation => isNaN(allocation) || allocation < 0 ? 0 : allocation);
+    // 先对分配结果进行清洗
+    const sanitizedAllocations = allocations.map(allocation => (isNaN(allocation) || allocation < 0) ? 0 : allocation);
+
+    // 应用单标的最大仓位限制（如有配置）
+    return this.applyMaxAllocationCap(candidates, sanitizedAllocations, validTotalAmount);
+  }
+
+  // 应用单标的最大仓位占比限制，并将溢出部分按策略重新分配
+  private applyMaxAllocationCap(candidates: ShortCandidate[], allocations: number[], totalAmount: number): number[] {
+    const maxPercent = this.params.maxSinglePositionPercent ?? 0.2;
+
+    if (!isFinite(maxPercent) || maxPercent <= 0) {
+      return allocations;
+    }
+
+    const maxAmount = totalAmount * maxPercent;
+    if (!isFinite(maxAmount) || maxAmount <= 0) {
+      return allocations;
+    }
+
+    const cappedAllocations = allocations.map(value => (isNaN(value) || value < 0) ? 0 : value);
+    const EPSILON = 1e-8;
+
+    let overflow = 0;
+    cappedAllocations.forEach((allocation, index) => {
+      if (allocation > maxAmount) {
+        overflow += allocation - maxAmount;
+        cappedAllocations[index] = maxAmount;
+      }
+    });
+
+    if (overflow <= EPSILON) {
+      return cappedAllocations;
+    }
+
+    const weights = candidates.map(candidate => Math.max(this.getAllocationWeight(candidate), 0));
+    const maxIterations = candidates.length * 2;
+    let iteration = 0;
+    let remainingOverflow = overflow;
+
+    // 使用集合跟踪仍可接受资金的标的索引
+    const recipientSet = new Set<number>();
+    cappedAllocations.forEach((allocation, index) => {
+      if (allocation + EPSILON < maxAmount) {
+        recipientSet.add(index);
+      }
+    });
+
+    while (remainingOverflow > EPSILON && recipientSet.size > 0 && iteration < maxIterations) {
+      const recipients = Array.from(recipientSet).filter(index => cappedAllocations[index] + EPSILON < maxAmount);
+      if (recipients.length === 0) {
+        break;
+      }
+
+      let totalShare = recipients.reduce((sum, index) => sum + weights[index], 0);
+      const useEqualShare = totalShare <= EPSILON;
+      if (useEqualShare) {
+        totalShare = recipients.length;
+      }
+
+      let distributedThisRound = 0;
+
+      for (const index of recipients) {
+        const share = useEqualShare ? 1 / totalShare : (weights[index] / totalShare);
+        if (!isFinite(share) || share <= 0) {
+          recipientSet.delete(index);
+          continue;
+        }
+
+        const desiredAllocation = remainingOverflow * share;
+        const remainingCap = maxAmount - cappedAllocations[index];
+        const allocationIncrease = Math.min(desiredAllocation, remainingCap);
+
+        if (allocationIncrease > EPSILON) {
+          cappedAllocations[index] += allocationIncrease;
+          distributedThisRound += allocationIncrease;
+
+          if (cappedAllocations[index] >= maxAmount - EPSILON) {
+            recipientSet.delete(index);
+          }
+        } else {
+          recipientSet.delete(index);
+        }
+      }
+
+      if (distributedThisRound <= EPSILON) {
+        break;
+      }
+
+      remainingOverflow = Math.max(0, remainingOverflow - distributedThisRound);
+      iteration++;
+    }
+
+    // 如果还有剩余溢出，默认保留为未分配资金（保留在账户中）
+    return cappedAllocations;
+  }
+
+  // 计算候选标的在当前分配策略下的权重
+  private getAllocationWeight(candidate: ShortCandidate): number {
+    switch (this.params.allocationStrategy) {
+      case PositionAllocationStrategy.BY_COMPOSITE_SCORE:
+        return candidate.totalScore ?? 0;
+      case PositionAllocationStrategy.EQUAL_ALLOCATION:
+        return 1;
+      case PositionAllocationStrategy.BY_VOLUME:
+      default:
+        return candidate.marketShare ?? 0;
+    }
   }
 
   // 筛选做空候选标的
@@ -1880,6 +1986,9 @@ export async function POST(request: NextRequest) {
       volatilityWeight: rawParams.volatilityWeight !== undefined ? rawParams.volatilityWeight : 0.1,
       fundingRateWeight: rawParams.fundingRateWeight !== undefined ? rawParams.fundingRateWeight : 0.3,
       allocationStrategy: rawParams.allocationStrategy !== undefined ? rawParams.allocationStrategy : PositionAllocationStrategy.BY_VOLUME,
+      maxSinglePositionPercent: rawParams.maxSinglePositionPercent !== undefined
+        ? Math.min(Math.max(rawParams.maxSinglePositionPercent, 0), 1)
+        : 0.2,
       // 温度计规则参数默认值
       useTemperatureRule: rawParams.useTemperatureRule !== undefined ? rawParams.useTemperatureRule : false,
       temperatureSymbol: rawParams.temperatureSymbol !== undefined ? rawParams.temperatureSymbol : 'OTHERS',

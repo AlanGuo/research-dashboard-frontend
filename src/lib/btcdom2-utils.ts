@@ -79,6 +79,7 @@ export function getBTCDOM2Config(): BTCDOM2StrategyParams {
     longBtc: getConfigValue('btcdom2.longBtc', true),
     shortAlt: getConfigValue('btcdom2.shortAlt', true),
     allocationStrategy: getConfigValue('btcdom2.allocationStrategy', 'BY_VOLUME') as PositionAllocationStrategy,
+    maxSinglePositionPercent: getConfigValue('btcdom2.maxSinglePositionPercent', 0.2),
     useTemperatureRule: getConfigValue('btcdom2.useTemperatureRule', true),
     temperatureSymbol: getConfigValue('btcdom2.temperatureSymbol', 'OTHERS'),
     temperatureThreshold: getConfigValue('btcdom2.temperatureThreshold', 65),
@@ -149,6 +150,12 @@ export function validateBTCDOM2Params(params: Record<string, unknown>): { valid:
   if (typeof params.btcRatio === 'number' && (params.btcRatio < 0 || params.btcRatio > 1)) {
     errors.push('BTC占比必须在0-1之间');
   }
+
+  if (typeof params.maxSinglePositionPercent === 'number') {
+    if (params.maxSinglePositionPercent <= 0 || params.maxSinglePositionPercent > 1) {
+      errors.push('单个标的最大仓位占比必须在0-1之间');
+    }
+  }
   
   return {
     valid: errors.length === 0,
@@ -171,6 +178,7 @@ export function formatBTCDOM2Params(params: BTCDOM2StrategyParams): string {
     `手续费: 现货${(params.spotTradingFeeRate * 100).toFixed(3)}% | 期货${(params.futuresTradingFeeRate * 100).toFixed(3)}%`,
     `策略: ${params.longBtc ? '做多BTC' : ''}${params.longBtc && params.shortAlt ? ' + ' : ''}${params.shortAlt ? '做空ALT' : ''}`,
     `分配策略: ${params.allocationStrategy}`,
+    `单标的最大仓位: ${((params.maxSinglePositionPercent ?? 0.2) * 100).toFixed(0)}%`,
     `温度计规则: ${params.useTemperatureRule ? `启用 (${params.temperatureSymbol} > ${params.temperatureThreshold})` : '禁用'}`
   ];
   

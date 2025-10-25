@@ -33,6 +33,7 @@ import { TradingFeesControl } from '@/components/btcdom2/TradingFeesControl';
 import { InitialCapitalControl } from '@/components/btcdom2/InitialCapitalControl';
 import { DateRangeControl } from '@/components/btcdom2/DateRangeControl';
 import { AllocationStrategyControl } from '@/components/btcdom2/AllocationStrategyControl';
+import { MaxSinglePositionPercentControl } from '@/components/btcdom2/MaxSinglePositionPercentControl';
 import { TemperatureRuleControl } from '@/components/btcdom2/TemperatureRuleControl';
 import { AlertCircle, Play, Settings, TrendingUp, TrendingDown, Clock, Loader2, Eye, Info, Bitcoin, ArrowDown, Zap } from 'lucide-react';
 
@@ -60,6 +61,7 @@ export default function BTCDOM2Dashboard() {
       longBtc: defaultConfig.longBtc,
       shortAlt: defaultConfig.shortAlt,
       allocationStrategy: defaultConfig.allocationStrategy as PositionAllocationStrategy, // 类型转换
+      maxSinglePositionPercent: defaultConfig.maxSinglePositionPercent ?? 0.2,
       useTemperatureRule: defaultConfig.useTemperatureRule,
       temperatureSymbol: defaultConfig.temperatureSymbol,
       temperatureThreshold: defaultConfig.temperatureThreshold,
@@ -385,6 +387,10 @@ export default function BTCDOM2Dashboard() {
   // 期货手续费处理函数
   const handleFuturesTradingFeeRateChange = useCallback((value: number) => {
     setParams(prev => ({ ...prev, futuresTradingFeeRate: value }));
+  }, []);
+
+  const handleMaxSinglePositionPercentChange = useCallback((value: number) => {
+    setParams(prev => ({ ...prev, maxSinglePositionPercent: value }));
   }, []);
 
   // 开始日期处理函数
@@ -777,6 +783,11 @@ export default function BTCDOM2Dashboard() {
                   <MaxShortPositionsControl
                     value={params.maxShortPositions}
                     onValueChange={handleMaxShortPositionsChange}
+                    disabled={loading}
+                  />
+                  <MaxSinglePositionPercentControl
+                    value={params.maxSinglePositionPercent ?? 0.2}
+                    onValueChange={handleMaxSinglePositionPercentChange}
                     disabled={loading}
                   />
                 </div>

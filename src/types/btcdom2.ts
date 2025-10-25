@@ -24,6 +24,7 @@ export interface BTCDOM2StrategyParams {
   longBtc: boolean;           // 是否做多BTC (默认true)
   shortAlt: boolean;          // 是否做空ALT (默认true)
   allocationStrategy: PositionAllocationStrategy; // 仓位分配策略
+  maxSinglePositionPercent?: number; // 单个标的最大仓位占比（0-1之间的小数，默认0.2）
   granularityHours?: number;  // 回测粒度（小时），默认8小时
   optimizeOnly?: boolean;     // 是否为优化模式（跳过图表数据生成以提升性能）
   

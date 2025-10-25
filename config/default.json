@@ -23,6 +23,7 @@
     "longBtc": true,
     "shortAlt": true,
     "allocationStrategy": "BY_VOLUME",
+    "maxSinglePositionPercent": 1.0,
     "useTemperatureRule": true,
     "temperatureSymbol": "OTHERS",
     "temperatureTimeframe": "1D",

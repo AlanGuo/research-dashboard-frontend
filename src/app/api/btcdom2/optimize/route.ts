@@ -19,6 +19,9 @@ export async function POST(request: NextRequest) {
       volatilityWeight: rawParams.volatilityWeight !== undefined ? rawParams.volatilityWeight : 0.1,
       fundingRateWeight: rawParams.fundingRateWeight !== undefined ? rawParams.fundingRateWeight : 0.3,
       allocationStrategy: rawParams.allocationStrategy !== undefined ? rawParams.allocationStrategy : PositionAllocationStrategy.BY_VOLUME,
+      maxSinglePositionPercent: rawParams.maxSinglePositionPercent !== undefined
+        ? Math.min(Math.max(rawParams.maxSinglePositionPercent, 0), 1)
+        : 0.2,
       // 温度计规则参数默认值
       useTemperatureRule: rawParams.useTemperatureRule !== undefined ? rawParams.useTemperatureRule : false,
       temperatureSymbol: rawParams.temperatureSymbol !== undefined ? rawParams.temperatureSymbol : 'OTHERS',
